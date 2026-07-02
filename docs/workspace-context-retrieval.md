@@ -23,6 +23,7 @@ Before this feature, it did not have a way to inspect and retrieve relevant proj
 workspace files
   -> safe text-file scan
   -> workspace-index.json
+  -> incremental change summary
   -> lexical search
   -> context pack
 ```
@@ -38,6 +39,7 @@ The index stores:
 - text content
 - redaction status
 - redaction count
+- incremental status metadata
 
 The search returns:
 
@@ -85,6 +87,8 @@ Index the current workspace:
 npm run spruce -- context index
 ```
 
+Running the same command again reuses unchanged documents when the previous index is compatible and reports added, changed, unchanged, deleted, and skipped files.
+
 Search indexed context:
 
 ```bash
@@ -108,7 +112,6 @@ npm run spruce -- context pack "approval tickets"
 This feature does not yet provide:
 
 - semantic embedding search
-- incremental indexing
 - file watchers
 - complete `.gitignore` compatibility
 - perfect secret detection

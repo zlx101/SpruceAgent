@@ -13,6 +13,58 @@
     "skippedCount": { "type": "integer", "minimum": 0 },
     "redactedDocumentCount": { "type": "integer", "minimum": 0 },
     "maxBytes": { "type": "integer", "minimum": 1 },
+    "incremental": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "previousIndexedAt": { "type": ["string", "null"], "format": "date-time" },
+        "reusedDocumentCount": { "type": "integer", "minimum": 0 },
+        "addedCount": { "type": "integer", "minimum": 0 },
+        "changedCount": { "type": "integer", "minimum": 0 },
+        "unchangedCount": { "type": "integer", "minimum": 0 },
+        "deletedCount": { "type": "integer", "minimum": 0 },
+        "skippedCount": { "type": "integer", "minimum": 0 },
+        "changes": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "added": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "changed": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "unchanged": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "deleted": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "skipped": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["path", "reason"],
+                "additionalProperties": true,
+                "properties": {
+                  "path": { "type": "string" },
+                  "reason": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "limits": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
     "documents": {
       "type": "array",
       "items": {

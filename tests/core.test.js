@@ -391,6 +391,35 @@ test("workspace index respects ignore rules and redacts secrets", () => {
   assert.doesNotMatch(results[0].snippet, /sk-1234567890abcdef1234567890/);
 });
 
+test("workspace index reuses unchanged documents and reports changes", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, "stable.md"), "ContextOS stable document.", "utf8");
+  fs.writeFileSync(path.join(dir, "change.md"), "ContextOS first version.", "utf8");
+  fs.writeFileSync(path.join(dir, "remove.md"), "ContextOS will remove this.", "utf8");
+
+  const first = buildWorkspaceIndex(store);
+  const stableBefore = getIndexedDocument(store, "stable.md");
+  fs.writeFileSync(path.join(dir, "change.md"), "ContextOS changed version.", "utf8");
+  fs.unlinkSync(path.join(dir, "remove.md"));
+  fs.writeFileSync(path.join(dir, "added.md"), "ContextOS added document.", "utf8");
+
+  const second = buildWorkspaceIndex(store);
+  const stableAfter = getIndexedDocument(store, "stable.md");
+  const paths = second.documents.map((document) => document.path);
+
+  assert.equal(first.incremental.previousIndexedAt, null);
+  assert.equal(second.incremental.previousIndexedAt, first.indexedAt);
+  assert.ok(second.incremental.changes.unchanged.includes("stable.md"));
+  assert.ok(second.incremental.changes.changed.includes("change.md"));
+  assert.ok(second.incremental.changes.added.includes("added.md"));
+  assert.ok(second.incremental.changes.deleted.includes("remove.md"));
+  assert.equal(second.incremental.reusedDocumentCount, 1);
+  assert.equal(stableAfter.content, stableBefore.content);
+  assert.equal(stableAfter.hash, stableBefore.hash);
+  assert.equal(paths.includes("remove.md"), false);
+});
+
 test("workspace context search returns scored snippets", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   const store = ensureStore(createStore(dir));

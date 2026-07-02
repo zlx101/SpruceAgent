@@ -82,8 +82,19 @@ const secretPatterns = [
 export function buildWorkspaceIndex(store, options = {}) {
   const maxBytes = Number(options.maxBytes ?? 256 * 1024);
   const ignoreRules = loadIgnoreRules(store.cwd);
+  const previousIndex = options.incremental === false ? null : readWorkspaceIndex(store);
+  const previousDocuments = new Map((previousIndex?.documents ?? []).map((document) => [document.path, document]));
+  const reuseEnabled = canReusePreviousDocuments(previousIndex, maxBytes);
+  const seenDocumentPaths = new Set();
   const documents = [];
   const skipped = [];
+  const changes = {
+    added: [],
+    changed: [],
+    unchanged: [],
+    deleted: [],
+    skipped: [],
+  };
 
   walk(store.cwd, (filePath) => {
     const relativePath = normalizePath(path.relative(store.cwd, filePath));
@@ -93,47 +104,80 @@ export function buildWorkspaceIndex(store, options = {}) {
     const sensitiveReason = classifySensitivePath(relativePath);
     if (sensitiveReason) {
       skipped.push({ path: relativePath, reason: sensitiveReason });
+      changes.skipped.push({ path: relativePath, reason: sensitiveReason });
       return;
     }
 
     const ignoreRule = findMatchingIgnoreRule(relativePath, ignoreRules);
     if (ignoreRule) {
       skipped.push({ path: relativePath, reason: "ignored_by_rule", rule: ignoreRule.raw });
+      changes.skipped.push({ path: relativePath, reason: "ignored_by_rule", rule: ignoreRule.raw });
       return;
     }
 
     if (!defaultTextExtensions.has(extension)) {
       skipped.push({ path: relativePath, reason: "unsupported_extension" });
+      changes.skipped.push({ path: relativePath, reason: "unsupported_extension" });
       return;
     }
 
     if (stat.size > maxBytes) {
       skipped.push({ path: relativePath, reason: "too_large", bytes: stat.size });
+      changes.skipped.push({ path: relativePath, reason: "too_large", bytes: stat.size });
       return;
     }
 
-    const buffer = fs.readFileSync(filePath);
-    if (isLikelyBinary(buffer)) {
-      skipped.push({ path: relativePath, reason: "binary" });
+    const previous = previousDocuments.get(relativePath);
+    if (reuseEnabled && previous && isSameFileStat(previous, stat)) {
+      documents.push(previous);
+      seenDocumentPaths.add(relativePath);
+      changes.unchanged.push(relativePath);
       return;
     }
 
-    const content = buffer.toString("utf8");
-    const redaction = redactSecrets(content);
-    documents.push({
-      path: relativePath,
-      extension,
-      bytes: stat.size,
-      mtimeMs: stat.mtimeMs,
-      hash: hashContent(buffer),
-      lineCount: countLines(redaction.content),
-      content: redaction.content,
-      redacted: redaction.count > 0,
-      redactionCount: redaction.count,
-    });
+    const document = createIndexedDocument(filePath, relativePath, stat, extension);
+    if (document.skipped) {
+      skipped.push(document.skipped);
+      changes.skipped.push(document.skipped);
+      return;
+    }
+    documents.push(document);
+    seenDocumentPaths.add(relativePath);
+    if (previous) {
+      changes.changed.push(relativePath);
+    } else {
+      changes.added.push(relativePath);
+    }
   });
 
+  for (const previousPath of previousDocuments.keys()) {
+    if (!seenDocumentPaths.has(previousPath)) {
+      changes.deleted.push(previousPath);
+    }
+  }
+
   const redactedDocumentCount = documents.filter((document) => document.redacted).length;
+  const incremental = {
+    enabled: options.incremental !== false,
+    previousIndexedAt: previousIndex?.indexedAt ?? null,
+    reusedDocumentCount: changes.unchanged.length,
+    addedCount: changes.added.length,
+    changedCount: changes.changed.length,
+    unchangedCount: changes.unchanged.length,
+    deletedCount: changes.deleted.length,
+    skippedCount: changes.skipped.length,
+    changes: {
+      added: changes.added.sort(),
+      changed: changes.changed.sort(),
+      unchanged: changes.unchanged.sort(),
+      deleted: changes.deleted.sort(),
+      skipped: changes.skipped.sort((a, b) => a.path.localeCompare(b.path)),
+    },
+    limits: [
+      "Incremental Index v0 reuses documents only when size, mtime, and index safety settings match.",
+      "Deleted means the previous document is no longer present in the active index; it may be deleted, ignored, or now skipped by safety rules.",
+    ],
+  };
   const index = {
     version: 1,
     indexedAt: nowIso(),
@@ -142,6 +186,7 @@ export function buildWorkspaceIndex(store, options = {}) {
     skippedCount: skipped.length,
     redactedDocumentCount,
     maxBytes,
+    incremental,
     documents: documents.sort((a, b) => a.path.localeCompare(b.path)),
     skipped: skipped.sort((a, b) => a.path.localeCompare(b.path)),
     safety: {
@@ -338,6 +383,41 @@ function walk(dir, onFile) {
       onFile(path.join(dir, entry.name));
     }
   }
+}
+
+function canReusePreviousDocuments(previousIndex, maxBytes) {
+  if (!previousIndex) return false;
+  if (Number(previousIndex.maxBytes) !== Number(maxBytes)) return false;
+  const previousPatterns = previousIndex.safety?.redactionPatterns ?? [];
+  const currentPatterns = secretPatterns.map((item) => item.name);
+  return JSON.stringify(previousPatterns) === JSON.stringify(currentPatterns);
+}
+
+function isSameFileStat(document, stat) {
+  return Number(document.bytes) === Number(stat.size) && Number(document.mtimeMs) === Number(stat.mtimeMs);
+}
+
+function createIndexedDocument(filePath, relativePath, stat, extension) {
+  const buffer = fs.readFileSync(filePath);
+  if (isLikelyBinary(buffer)) {
+    return {
+      skipped: { path: relativePath, reason: "binary" },
+    };
+  }
+
+  const content = buffer.toString("utf8");
+  const redaction = redactSecrets(content);
+  return {
+    path: relativePath,
+    extension,
+    bytes: stat.size,
+    mtimeMs: stat.mtimeMs,
+    hash: hashContent(buffer),
+    lineCount: countLines(redaction.content),
+    content: redaction.content,
+    redacted: redaction.count > 0,
+    redactionCount: redaction.count,
+  };
 }
 
 function loadIgnoreRules(root) {

@@ -469,6 +469,7 @@ function handleContext(action, args) {
       skippedCount: index.skippedCount,
       redactedDocumentCount: index.redactedDocumentCount,
       maxBytes: index.maxBytes,
+      incremental: index.incremental,
       safety: index.safety,
     });
     return;

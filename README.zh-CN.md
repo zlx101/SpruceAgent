@@ -52,6 +52,7 @@ SpruceAgent 目前处于开源 alpha 与核心基础设施阶段。
 - [审批票据系统](docs/approval-ticket-system.md)
 - [工作区上下文检索](docs/workspace-context-retrieval.md)
 - [ContextOS Index Safety v0](docs/contextos-index-safety-v0.md)
+- [ContextOS Incremental Index v0](docs/contextos-incremental-index-v0.md)
 - [ContextOS Source Map v0](docs/contextos-source-map-v0.md)
 - [Agent Run Loop v0](docs/agent-run-loop-v0.md)
 - [SkillForge v0](docs/skillforge-v0.md)
