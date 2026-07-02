@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   addMemory,
   archiveWorkflow,
+  assessWorkspaceIndexFreshness,
   approveSkill,
   approveTicket,
   buildWorkspaceIndex,
@@ -420,6 +421,29 @@ test("workspace index reuses unchanged documents and reports changes", () => {
   assert.equal(paths.includes("remove.md"), false);
 });
 
+test("workspace freshness detects missing, fresh, and stale indexes", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+
+  const missing = assessWorkspaceIndexFreshness(store);
+  assert.equal(missing.status, "missing");
+
+  fs.writeFileSync(path.join(dir, "context.md"), "ContextOS fresh evidence.", "utf8");
+  buildWorkspaceIndex(store);
+  const fresh = assessWorkspaceIndexFreshness(store);
+  assert.equal(fresh.status, "fresh");
+  assert.equal(fresh.summary.stale, 0);
+
+  fs.writeFileSync(path.join(dir, "context.md"), "ContextOS changed evidence.", "utf8");
+  fs.writeFileSync(path.join(dir, "added.md"), "ContextOS added evidence.", "utf8");
+  const stale = assessWorkspaceIndexFreshness(store);
+  assert.equal(stale.status, "stale");
+  assert.equal(stale.summary.changed, 1);
+  assert.equal(stale.summary.added, 1);
+  assert.ok(stale.changes.changed.includes("context.md"));
+  assert.ok(stale.changes.added.includes("added.md"));
+});
+
 test("workspace context search returns scored snippets", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   const store = ensureStore(createStore(dir));
@@ -486,8 +510,10 @@ test("agent run dry-run creates trace and plan without tool execution", async ()
   assert.equal(run.status, "dry_run");
   assert.equal(run.results.length, 0);
   assert.equal(run.knownFacts.llmConnected, false);
+  assert.equal(run.contextFreshness.status, "fresh");
   assert.ok(run.plan.steps.some((step) => step.id === "step_read_top_context"));
   assert.ok(events.some((event) => event.type === "agent.plan"));
+  assert.ok(events.some((event) => event.type === "context.staleness"));
   assert.equal(events.some((event) => event.type === "tool.result"), false);
 });
 
@@ -508,6 +534,27 @@ test("agent run reads top context and writes summary memory", async () => {
   assert.match(run.summary, /TrustKernel/);
   assert.equal(run.memory.scope, "session");
   assert.ok(events.some((event) => event.type === "agent.completed"));
+});
+
+test("agent run blocks execution when fresh context is required and index is stale", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, "trust.md"), "TrustKernel old context.", "utf8");
+  buildWorkspaceIndex(store);
+  fs.writeFileSync(path.join(dir, "trust.md"), "TrustKernel changed context.", "utf8");
+
+  const run = await runAgent(store, {
+    goal: "Use TrustKernel context",
+    contextQuery: "TrustKernel",
+    requireFreshContext: true,
+  });
+
+  const events = readTraceEvents(store, run.traceId);
+  assert.equal(run.status, "blocked");
+  assert.equal(run.contextFreshness.status, "stale");
+  assert.equal(run.contextFreshness.summary.changed, 1);
+  assert.equal(run.results.length, 0);
+  assert.equal(events.some((event) => event.type === "tool.result"), false);
 });
 
 test("agent run without index reports a warning instead of inventing context", async () => {
@@ -1059,9 +1106,35 @@ test("workflow runs context, tool, and memory steps", async () => {
   const run = await runWorkflow(store, workflow.id);
 
   assert.equal(run.status, "completed");
+  assert.equal(run.contextFreshness.status, "fresh");
   assert.ok(run.results.some((result) => result.kind === "context" && result.status === "succeeded"));
   assert.ok(run.results.some((result) => result.toolName === "file.read" && result.status === "succeeded"));
   assert.ok(run.results.some((result) => result.kind === "memory" && result.memory));
+});
+
+test("workflow run blocks execution when fresh context is required and index is stale", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, "README.md"), "Workflow stale context.", "utf8");
+  buildWorkspaceIndex(store);
+  fs.writeFileSync(path.join(dir, "README.md"), "Workflow changed context.", "utf8");
+  const workflow = createWorkflow(store, {
+    name: "Blocked Workflow",
+    steps: [
+      { kind: "context", query: "Workflow", limit: 1 },
+      { kind: "tool", toolName: "file.read", input: { path: "README.md" } },
+    ],
+  });
+
+  const run = await runWorkflow(store, workflow.id, {
+    requireFreshContext: true,
+  });
+
+  const events = readTraceEvents(store, run.traceId);
+  assert.equal(run.status, "blocked");
+  assert.equal(run.contextFreshness.status, "stale");
+  assert.equal(run.results.length, 0);
+  assert.equal(events.some((event) => event.type === "tool.result"), false);
 });
 
 test("workflow inbox and detail reconstruct workflow run traces", async () => {
@@ -1298,6 +1371,7 @@ test("gateway route contract exposes stable route ids", () => {
   assert.ok(routeIds.includes("workbench"));
   assert.ok(routeIds.includes("showcase"));
   assert.ok(routeIds.includes("status"));
+  assert.ok(routeIds.includes("context.freshness"));
   assert.ok(routeIds.includes("inbox"));
   assert.ok(routeIds.includes("inbox.contract"));
   assert.ok(routeIds.includes("runs.get"));
@@ -1699,6 +1773,34 @@ test("gateway client can launch a dry-run agent run", async () => {
     assert.equal(detail.status, "dry_run");
     assert.equal(detail.summary.goal, "Workbench launcher dry run");
     assert.equal(detail.summary.toolResultCount, 0);
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
+
+test("gateway client reads context freshness and can require fresh context", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, "README.md"), "Gateway freshness context.", "utf8");
+  buildWorkspaceIndex(store);
+  fs.writeFileSync(path.join(dir, "README.md"), "Gateway stale context.", "utf8");
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const client = createGatewayClient({
+    baseUrl: `http://${gateway.host}:${gateway.port}`,
+    token: gateway.token,
+  });
+
+  try {
+    const freshness = await client.contextFreshness();
+    const run = await client.runAgent({
+      goal: "Require fresh gateway context",
+      contextQuery: "Gateway",
+      requireFreshContext: true,
+    });
+
+    assert.equal(freshness.status, "stale");
+    assert.equal(run.status, "blocked");
+    assert.equal(run.contextFreshness.status, "stale");
   } finally {
     await closeServer(gateway.server);
   }

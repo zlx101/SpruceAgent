@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   addMemory,
   archiveWorkflow,
+  assessWorkspaceIndexFreshness,
   approveSkill,
   appendTraceEvent,
   approveTicket,
@@ -281,6 +282,7 @@ async function handleRun(firstArg, args) {
     plannerAllowedTools: flags.plannerAllowedTools ? splitCsv(flags.plannerAllowedTools) : undefined,
     requestCandidateApprovals: Boolean(flags.requestCandidateApprovals),
     executeCandidatePlan: Boolean(flags.executeCandidatePlan),
+    requireFreshContext: Boolean(flags.requireFreshContext),
     actor: flags.actor ?? "local-user",
     channel: "cli",
   });
@@ -485,6 +487,14 @@ function handleContext(action, args) {
     return;
   }
 
+  if (action === "freshness") {
+    const flags = parseFlags(args);
+    printJson(assessWorkspaceIndexFreshness(store, {
+      maxChanges: flags.maxChanges,
+    }));
+    return;
+  }
+
   if (action === "pack") {
     const flags = parseFlags(args);
     const query = flags._.join(" ").trim();
@@ -502,7 +512,7 @@ function handleContext(action, args) {
     return;
   }
 
-  throw new Error("usage: spruce context <index|search|pack|show>");
+  throw new Error("usage: spruce context <index|freshness|search|pack|show>");
 }
 
 function handleSkill(action, args) {
@@ -909,6 +919,7 @@ async function handleWorkflow(action, args) {
       goal: flags.goal,
       trustMode: flags.trustMode ?? "approve",
       dryRun: Boolean(flags.dryRun),
+      requireFreshContext: Boolean(flags.requireFreshContext),
       actor: flags.actor ?? "local-user",
       channel: "cli",
     }));
@@ -1210,6 +1221,7 @@ Usage:
   ${executable} doctor
   ${executable} status
   ${executable} run "Summarize TrustKernel" --context "TrustKernel"
+  ${executable} run "Summarize TrustKernel" --context "TrustKernel" --requireFreshContext
   ${executable} run "Summarize TrustKernel" --context "TrustKernel" --skill <skillId>
   ${executable} run "Draft with mock LLM" --context "TrustKernel" --llm mock --dryRun
   ${executable} run "Promote draft" --context "TrustKernel" --llm mock --promotePlan --dryRun
@@ -1235,6 +1247,7 @@ Usage:
   ${executable} approval approve <approvalId>
   ${executable} tool run file.write --path notes.txt --content "hello" --approvalId <approvalId>
   ${executable} context index
+  ${executable} context freshness
   ${executable} context search "TrustKernel"
   ${executable} context show README.md
   ${executable} policy check --tool shell.execute --command "git status"
@@ -1257,7 +1270,7 @@ Usage:
   ${executable} workflow list [--status active|archived|all]
   ${executable} workflow versions <workflowId>
   ${executable} workflow restore <workflowId> <revision>
-  ${executable} workflow run <workflowId>
+  ${executable} workflow run <workflowId> [--requireFreshContext]
   ${executable} workflow resume <traceId> [--stepId <stepId>] [--approvalId <approvalId>]
   ${executable} workflow inbox
   ${executable} workflow detail <traceId>

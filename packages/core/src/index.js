@@ -96,6 +96,7 @@ export {
   rejectTicket,
 } from "./approvals.js";
 export {
+  assessWorkspaceIndexFreshness,
   buildWorkspaceIndex,
   createContextPack,
   createSourceMap,

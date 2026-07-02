@@ -24,6 +24,7 @@ workspace files
   -> safe text-file scan
   -> workspace-index.json
   -> incremental change summary
+  -> staleness guard
   -> lexical search
   -> context pack
 ```
@@ -88,6 +89,12 @@ npm run spruce -- context index
 ```
 
 Running the same command again reuses unchanged documents when the previous index is compatible and reports added, changed, unchanged, deleted, and skipped files.
+
+Check whether the current workspace still matches the latest index:
+
+```bash
+npm run spruce -- context freshness
+```
 
 Search indexed context:
 

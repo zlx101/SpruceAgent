@@ -99,31 +99,10 @@ export function buildWorkspaceIndex(store, options = {}) {
   walk(store.cwd, (filePath) => {
     const relativePath = normalizePath(path.relative(store.cwd, filePath));
     const stat = fs.statSync(filePath);
-    const extension = path.extname(filePath).toLowerCase();
-
-    const sensitiveReason = classifySensitivePath(relativePath);
-    if (sensitiveReason) {
-      skipped.push({ path: relativePath, reason: sensitiveReason });
-      changes.skipped.push({ path: relativePath, reason: sensitiveReason });
-      return;
-    }
-
-    const ignoreRule = findMatchingIgnoreRule(relativePath, ignoreRules);
-    if (ignoreRule) {
-      skipped.push({ path: relativePath, reason: "ignored_by_rule", rule: ignoreRule.raw });
-      changes.skipped.push({ path: relativePath, reason: "ignored_by_rule", rule: ignoreRule.raw });
-      return;
-    }
-
-    if (!defaultTextExtensions.has(extension)) {
-      skipped.push({ path: relativePath, reason: "unsupported_extension" });
-      changes.skipped.push({ path: relativePath, reason: "unsupported_extension" });
-      return;
-    }
-
-    if (stat.size > maxBytes) {
-      skipped.push({ path: relativePath, reason: "too_large", bytes: stat.size });
-      changes.skipped.push({ path: relativePath, reason: "too_large", bytes: stat.size });
+    const classification = classifyFileForIndex(filePath, relativePath, stat, maxBytes, ignoreRules);
+    if (classification.skipped) {
+      skipped.push(classification.skipped);
+      changes.skipped.push(classification.skipped);
       return;
     }
 
@@ -135,7 +114,7 @@ export function buildWorkspaceIndex(store, options = {}) {
       return;
     }
 
-    const document = createIndexedDocument(filePath, relativePath, stat, extension);
+    const document = createIndexedDocument(filePath, relativePath, stat, classification.extension);
     if (document.skipped) {
       skipped.push(document.skipped);
       changes.skipped.push(document.skipped);
@@ -205,6 +184,86 @@ export function readWorkspaceIndex(store) {
   const filePath = indexPath(store);
   if (!fs.existsSync(filePath)) return null;
   return readJson(filePath);
+}
+
+export function assessWorkspaceIndexFreshness(store, options = {}) {
+  const checkedAt = nowIso();
+  const index = readWorkspaceIndex(store);
+  if (!index) {
+    return {
+      version: "0.1.0",
+      checkedAt,
+      status: "missing",
+      indexedAt: null,
+      summary: {
+        added: 0,
+        changed: 0,
+        deleted: 0,
+        stale: 0,
+      },
+      changes: {
+        added: [],
+        changed: [],
+        deleted: [],
+      },
+      truncated: false,
+      limits: [
+        "No workspace index exists; run context index before context-grounded execution.",
+      ],
+    };
+  }
+
+  const maxBytes = Number(index.maxBytes ?? 256 * 1024);
+  const ignoreRules = loadIgnoreRules(store.cwd);
+  const indexedDocuments = new Map((index.documents ?? []).map((document) => [document.path, document]));
+  const seen = new Set();
+  const added = [];
+  const changed = [];
+
+  walk(store.cwd, (filePath) => {
+    const relativePath = normalizePath(path.relative(store.cwd, filePath));
+    const stat = fs.statSync(filePath);
+    const classification = classifyFileForIndex(filePath, relativePath, stat, maxBytes, ignoreRules);
+    if (classification.skipped) return;
+
+    const previous = indexedDocuments.get(relativePath);
+    seen.add(relativePath);
+    if (!previous) {
+      added.push(relativePath);
+      return;
+    }
+    if (!isSameFileStat(previous, stat)) {
+      changed.push(relativePath);
+    }
+  });
+
+  const deleted = [...indexedDocuments.keys()].filter((relativePath) => !seen.has(relativePath));
+  const maxChanges = Number(options.maxChanges ?? 50);
+  const staleCount = added.length + changed.length + deleted.length;
+
+  return {
+    version: "0.1.0",
+    checkedAt,
+    status: staleCount ? "stale" : "fresh",
+    indexedAt: index.indexedAt,
+    summary: {
+      added: added.length,
+      changed: changed.length,
+      deleted: deleted.length,
+      stale: staleCount,
+    },
+    changes: {
+      added: added.sort().slice(0, maxChanges),
+      changed: changed.sort().slice(0, maxChanges),
+      deleted: deleted.sort().slice(0, maxChanges),
+    },
+    truncated: staleCount > maxChanges,
+    limits: [
+      "Staleness Guard v0 compares active workspace files against the latest ContextOS index by path, size, and mtime.",
+      "A fresh report does not prove semantic correctness; it means indexed file metadata still matches the workspace.",
+      "Added files are only reported when they are eligible for indexing under current safety rules.",
+    ],
+  };
 }
 
 export function getIndexedDocument(store, relativePath) {
@@ -418,6 +477,29 @@ function createIndexedDocument(filePath, relativePath, stat, extension) {
     redacted: redaction.count > 0,
     redactionCount: redaction.count,
   };
+}
+
+function classifyFileForIndex(filePath, relativePath, stat, maxBytes, ignoreRules) {
+  const extension = path.extname(filePath).toLowerCase();
+  const sensitiveReason = classifySensitivePath(relativePath);
+  if (sensitiveReason) {
+    return { skipped: { path: relativePath, reason: sensitiveReason } };
+  }
+
+  const ignoreRule = findMatchingIgnoreRule(relativePath, ignoreRules);
+  if (ignoreRule) {
+    return { skipped: { path: relativePath, reason: "ignored_by_rule", rule: ignoreRule.raw } };
+  }
+
+  if (!defaultTextExtensions.has(extension)) {
+    return { skipped: { path: relativePath, reason: "unsupported_extension" } };
+  }
+
+  if (stat.size > maxBytes) {
+    return { skipped: { path: relativePath, reason: "too_large", bytes: stat.size } };
+  }
+
+  return { extension };
 }
 
 function loadIgnoreRules(root) {

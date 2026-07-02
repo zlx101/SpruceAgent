@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/context-staleness.schema.json",
+  "title": "SpruceAgent ContextOS Staleness Report",
+  "type": "object",
+  "required": ["version", "checkedAt", "status", "indexedAt", "summary", "changes", "truncated", "limits"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "string" },
+    "checkedAt": { "type": "string", "format": "date-time" },
+    "status": {
+      "type": "string",
+      "enum": ["missing", "fresh", "stale"]
+    },
+    "indexedAt": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "summary": {
+      "type": "object",
+      "required": ["added", "changed", "deleted", "stale"],
+      "additionalProperties": false,
+      "properties": {
+        "added": { "type": "integer", "minimum": 0 },
+        "changed": { "type": "integer", "minimum": 0 },
+        "deleted": { "type": "integer", "minimum": 0 },
+        "stale": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "changes": {
+      "type": "object",
+      "required": ["added", "changed", "deleted"],
+      "additionalProperties": false,
+      "properties": {
+        "added": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "changed": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "deleted": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "truncated": { "type": "boolean" },
+    "limits": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

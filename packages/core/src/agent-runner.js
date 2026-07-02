@@ -1,5 +1,5 @@
 import { addMemory } from "./memory.js";
-import { createContextPack, readWorkspaceIndex } from "./context.js";
+import { assessWorkspaceIndexFreshness, createContextPack, readWorkspaceIndex } from "./context.js";
 import { executeTool } from "./executor.js";
 import { requestCandidateApprovals } from "./candidate-approvals.js";
 import { executeCandidatePlan } from "./candidate-executor.js";
@@ -49,6 +49,31 @@ export async function runAgent(store, input) {
     limit: input.contextLimit ?? 5,
   });
   appendTraceEvent(store, trace.id, "agent.context", contextPack);
+  const contextFreshness = assessWorkspaceIndexFreshness(store);
+  appendTraceEvent(store, trace.id, "context.staleness", contextFreshness);
+
+  if (input.requireFreshContext && contextFreshness.status !== "fresh") {
+    const result = {
+      id: trace.id,
+      status: "blocked",
+      goal,
+      traceId: trace.id,
+      knownFacts,
+      context: contextPack,
+      contextFreshness,
+      skill: selectedSkill,
+      plan: null,
+      llm: null,
+      candidatePlan: null,
+      results: [],
+      limits: [
+        "Execution was blocked because requireFreshContext was set and ContextOS reported a stale or missing index.",
+        ...v0Limits(Boolean(llmProvider)),
+      ],
+    };
+    appendTraceEvent(store, trace.id, "agent.completed", result);
+    return result;
+  }
 
   const plan = createRuleBasedPlan({ goal, contextPack, dryRun, selectedSkill, executeSkill });
   appendTraceEvent(store, trace.id, "agent.plan", plan);
@@ -81,6 +106,7 @@ export async function runAgent(store, input) {
       traceId: trace.id,
       knownFacts,
       context: contextPack,
+      contextFreshness,
       skill: selectedSkill,
       plan,
       llm,
@@ -164,6 +190,7 @@ export async function runAgent(store, input) {
     traceId: trace.id,
     knownFacts,
     context: contextPack,
+    contextFreshness,
     skill: selectedSkill,
     plan,
     llm,

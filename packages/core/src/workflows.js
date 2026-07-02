@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { addMemory } from "./memory.js";
-import { createContextPack } from "./context.js";
+import { assessWorkspaceIndexFreshness, createContextPack } from "./context.js";
 import { executeTool } from "./executor.js";
 import { createId, nowIso } from "./id.js";
 import { getApprovedSkill } from "./skills.js";
@@ -180,6 +180,25 @@ export async function runWorkflow(store, workflowId, input = {}) {
     name: workflow.name,
     stepCount: workflow.steps.length,
   });
+  const contextFreshness = assessWorkspaceIndexFreshness(store);
+  appendTraceEvent(store, trace.id, "context.staleness", contextFreshness);
+
+  if (input.requireFreshContext && contextFreshness.status !== "fresh") {
+    const result = {
+      id: trace.id,
+      status: "blocked",
+      workflow,
+      traceId: trace.id,
+      contextFreshness,
+      results: [],
+      limits: [
+        "Execution was blocked because requireFreshContext was set and ContextOS reported a stale or missing index.",
+        ...v0Limits(),
+      ],
+    };
+    appendTraceEvent(store, trace.id, "workflow.completed", result);
+    return result;
+  }
 
   if (input.dryRun) {
     const result = {
@@ -187,6 +206,7 @@ export async function runWorkflow(store, workflowId, input = {}) {
       status: "dry_run",
       workflow,
       traceId: trace.id,
+      contextFreshness,
       results: [],
       limits: v0Limits(),
     };
@@ -213,6 +233,7 @@ export async function runWorkflow(store, workflowId, input = {}) {
     status,
     workflow,
     traceId: trace.id,
+    contextFreshness,
     results,
     limits: v0Limits(),
   };

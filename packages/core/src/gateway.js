@@ -4,7 +4,7 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { approveTicket, getApprovalTicket, listApprovalTickets, rejectTicket } from "./approvals.js";
-import { buildWorkspaceIndex, readWorkspaceIndex, searchWorkspaceContext } from "./context.js";
+import { assessWorkspaceIndexFreshness, buildWorkspaceIndex, readWorkspaceIndex, searchWorkspaceContext } from "./context.js";
 import { evaluateTrace, getEvaluation, listEvaluations } from "./evaluations.js";
 import {
   evaluateSkillCandidate,
@@ -114,6 +114,13 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/status",
       authRequired: true,
       description: "Read local workspace and gateway status.",
+    },
+    {
+      id: "context.freshness",
+      method: "GET",
+      path: "/v1/context/freshness",
+      authRequired: true,
+      description: "Check whether the current workspace still matches the latest ContextOS index.",
     },
     {
       id: "inbox",
@@ -893,8 +900,17 @@ async function routeRequest(store, request, url, body) {
       indexedAt: index.indexedAt,
       documentCount: index.documentCount,
       skippedCount: index.skippedCount,
+      redactedDocumentCount: index.redactedDocumentCount,
       maxBytes: index.maxBytes,
+      incremental: index.incremental,
+      safety: index.safety,
     });
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/context/freshness") {
+    return ok(assessWorkspaceIndexFreshness(store, {
+      maxChanges: url.searchParams.get("maxChanges") ?? undefined,
+    }));
   }
 
   if (request.method === "POST" && url.pathname === "/v1/context/search") {
@@ -924,6 +940,7 @@ async function routeRequest(store, request, url, body) {
       requestCandidateApprovals: Boolean(body.requestCandidateApprovals),
       executeCandidatePlan: Boolean(body.executeCandidatePlan),
       candidateApprovalIds: body.candidateApprovalIds,
+      requireFreshContext: Boolean(body.requireFreshContext),
       actor: body.actor ?? "gateway-user",
       channel: "gateway",
     }));
@@ -1099,6 +1116,7 @@ async function routeRequest(store, request, url, body) {
       goal: body.goal,
       trustMode: body.trustMode ?? "approve",
       dryRun: Boolean(body.dryRun),
+      requireFreshContext: Boolean(body.requireFreshContext),
       actor: body.actor ?? "gateway-user",
       channel: "gateway",
     }));

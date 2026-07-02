@@ -25,6 +25,7 @@ const REQUIRED_PATHS = [
   "docs/open-source-alpha-quickstart.md",
   "docs/contextos-index-safety-v0.md",
   "docs/contextos-incremental-index-v0.md",
+  "docs/contextos-staleness-guard-v0.md",
   "docs/public-showcase-v0.md",
   "docs/release-checklist.md",
 ];
