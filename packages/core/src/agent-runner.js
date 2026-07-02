@@ -6,7 +6,7 @@ import { executeCandidatePlan } from "./candidate-executor.js";
 import { getApprovedSkill } from "./skills.js";
 import { createLlmProvider, draftLlmPlan } from "./llm.js";
 import { promoteLlmDraftToCandidatePlan } from "./planner.js";
-import { runPreflight } from "./preflight.js";
+import { assessRunRisk, runPreflight } from "./preflight.js";
 import { appendTraceEvent, startTrace } from "./trace.js";
 
 export async function runAgent(store, input) {
@@ -75,6 +75,7 @@ export async function runAgent(store, input) {
       plan: null,
       llm: null,
       candidatePlan: null,
+      riskPreflight: null,
       results: [],
       limits: [
         "Execution was blocked because preflight found one or more required runtime gates unsatisfied.",
@@ -107,6 +108,13 @@ export async function runAgent(store, input) {
   if (candidatePlan) {
     appendTraceEvent(store, trace.id, "planner.promotion", candidatePlan);
   }
+  const riskPreflight = assessRunRisk(store, {
+    kind: "agent.run.risk_preflight",
+    trustMode,
+    plan,
+    candidatePlan: dryRun || input.requestCandidateApprovals || input.executeCandidatePlan ? candidatePlan : null,
+  });
+  appendTraceEvent(store, trace.id, "run.risk_preflight", riskPreflight);
 
   if (dryRun) {
     const result = {
@@ -122,8 +130,34 @@ export async function runAgent(store, input) {
       plan,
       llm,
       candidatePlan,
+      riskPreflight,
       results: [],
       limits: v0Limits(Boolean(llmProvider)),
+    };
+    appendTraceEvent(store, trace.id, "agent.completed", result);
+    return result;
+  }
+
+  if (!riskPreflight.canProceed) {
+    const result = {
+      id: trace.id,
+      status: "blocked",
+      goal,
+      traceId: trace.id,
+      knownFacts,
+      preflight,
+      context: contextPack,
+      contextFreshness,
+      skill: selectedSkill,
+      plan,
+      llm,
+      candidatePlan,
+      riskPreflight,
+      results: [],
+      limits: [
+        "Execution was blocked because risk preflight found a denied or blocked planned action.",
+        ...v0Limits(Boolean(llmProvider)),
+      ],
     };
     appendTraceEvent(store, trace.id, "agent.completed", result);
     return result;
@@ -207,6 +241,7 @@ export async function runAgent(store, input) {
     plan,
     llm,
     candidatePlan,
+    riskPreflight,
     candidateApprovals,
     candidateExecution,
     results,

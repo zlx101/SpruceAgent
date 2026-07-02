@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   addMemory,
   archiveWorkflow,
+  assessRunRisk,
   assessWorkspaceIndexFreshness,
   approveSkill,
   approveTicket,
@@ -474,6 +475,46 @@ test("run preflight can warn, block, and refresh ContextOS", () => {
   assert.equal(refreshed.actions[0].id, "context.index");
 });
 
+test("run risk preflight previews tool policy without executing steps", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const risk = assessRunRisk(store, {
+    trustMode: "approve",
+    plan: {
+      steps: [
+        { id: "read", kind: "tool", toolName: "file.read", input: { path: "README.md" } },
+        { id: "write", kind: "tool", toolName: "file.write", input: { path: "out.md", content: "x" } },
+        { id: "note", kind: "memory", toolName: null, input: {} },
+      ],
+    },
+  });
+
+  assert.equal(risk.status, "warning");
+  assert.equal(risk.canProceed, true);
+  assert.equal(risk.summary.allow, 1);
+  assert.equal(risk.summary.requires_approval, 1);
+  assert.equal(risk.summary.not_executable, 1);
+  assert.equal(fs.existsSync(path.join(dir, "out.md")), false);
+});
+
+test("run risk preflight blocks denied workflow actions", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const risk = assessRunRisk(store, {
+    trustMode: "observe",
+    workflow: {
+      steps: [
+        { id: "write", kind: "tool", toolName: "file.write", input: { path: "out.md", content: "x" } },
+      ],
+    },
+  });
+
+  assert.equal(risk.status, "blocked");
+  assert.equal(risk.canProceed, false);
+  assert.equal(risk.summary.deny, 1);
+  assert.equal(risk.blockers[0].id, "write");
+});
+
 test("workspace context search returns scored snippets", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   const store = ensureStore(createStore(dir));
@@ -541,9 +582,12 @@ test("agent run dry-run creates trace and plan without tool execution", async ()
   assert.equal(run.results.length, 0);
   assert.equal(run.knownFacts.llmConnected, false);
   assert.equal(run.preflight.status, "passed");
+  assert.equal(run.riskPreflight.status, "passed");
+  assert.equal(run.riskPreflight.summary.allow, 1);
   assert.equal(run.contextFreshness.status, "fresh");
   assert.ok(run.plan.steps.some((step) => step.id === "step_read_top_context"));
   assert.ok(events.some((event) => event.type === "agent.plan"));
+  assert.ok(events.some((event) => event.type === "run.risk_preflight"));
   assert.ok(events.some((event) => event.type === "context.staleness"));
   assert.equal(events.some((event) => event.type === "tool.result"), false);
 });
@@ -609,11 +653,50 @@ test("agent run can refresh stale context before requiring fresh context", async
   assert.equal(run.status, "dry_run");
   assert.equal(run.preflight.status, "passed");
   assert.equal(run.preflight.context.refreshed, true);
+  assert.equal(run.riskPreflight.status, "passed");
   assert.equal(run.contextFreshness.status, "fresh");
   assert.equal(run.context.resultCount, 1);
   assert.equal(run.context.results[0].path, "trust.md");
   assert.match(run.context.results[0].snippet, /refreshed context/);
   assert.ok(events.some((event) => event.type === "run.preflight"));
+});
+
+test("agent run does not block on non-executed candidate plan risk", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, "README.md"), "Fallback execution should still read context.", "utf8");
+  buildWorkspaceIndex(store);
+  const provider = {
+    id: "non-executed-candidate-risk-test",
+    model: "non-executed-candidate-risk-test-v0",
+    async draftPlan() {
+      return {
+        planDraft: {
+          proposedSteps: [
+            {
+              id: "unknown",
+              kind: "tool",
+              description: "Unknown tool should not block fallback unless candidate execution is requested.",
+              toolName: "unknown.tool",
+              input: {},
+            },
+          ],
+        },
+      };
+    },
+  };
+
+  const run = await runAgent(store, {
+    goal: "Read fallback context",
+    contextQuery: "Fallback",
+    llmProvider: provider,
+    promotePlan: true,
+  });
+
+  assert.equal(run.status, "completed");
+  assert.equal(run.candidatePlan.status, "blocked");
+  assert.equal(run.riskPreflight.status, "passed");
+  assert.ok(run.results.some((result) => result.toolName === "file.read" && result.status === "succeeded"));
 });
 
 test("agent run without index reports a warning instead of inventing context", async () => {
@@ -1166,6 +1249,8 @@ test("workflow runs context, tool, and memory steps", async () => {
 
   assert.equal(run.status, "completed");
   assert.equal(run.preflight.status, "passed");
+  assert.equal(run.riskPreflight.status, "passed");
+  assert.equal(run.riskPreflight.summary.allow, 1);
   assert.equal(run.contextFreshness.status, "fresh");
   assert.ok(run.results.some((result) => result.kind === "context" && result.status === "succeeded"));
   assert.ok(run.results.some((result) => result.toolName === "file.read" && result.status === "succeeded"));
@@ -1193,6 +1278,7 @@ test("workflow run blocks execution when fresh context is required and index is 
   const events = readTraceEvents(store, run.traceId);
   assert.equal(run.status, "blocked");
   assert.equal(run.preflight.status, "blocked");
+  assert.equal(run.riskPreflight.status, "passed");
   assert.equal(run.contextFreshness.status, "stale");
   assert.equal(run.results.length, 0);
   assert.equal(events.some((event) => event.type === "tool.result"), false);
@@ -1221,11 +1307,38 @@ test("workflow run can refresh stale context before requiring fresh context", as
   assert.equal(run.status, "completed");
   assert.equal(run.preflight.status, "passed");
   assert.equal(run.preflight.context.refreshed, true);
+  assert.equal(run.riskPreflight.status, "passed");
   assert.equal(run.contextFreshness.status, "fresh");
   assert.equal(run.results[0].status, "succeeded");
   assert.equal(run.results[0].context.results[0].path, "README.md");
   assert.match(run.results[0].context.results[0].snippet, /refreshed context/);
   assert.ok(events.some((event) => event.type === "run.preflight"));
+  assert.ok(events.some((event) => event.type === "run.risk_preflight"));
+});
+
+test("workflow run blocks denied risk before executing tools", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, "README.md"), "Workflow denied risk.", "utf8");
+  buildWorkspaceIndex(store);
+  const workflow = createWorkflow(store, {
+    name: "Denied Workflow",
+    steps: [
+      { id: "write", kind: "tool", toolName: "file.write", input: { path: "blocked.md", content: "no" } },
+    ],
+  });
+
+  const run = await runWorkflow(store, workflow.id, {
+    trustMode: "observe",
+  });
+
+  const events = readTraceEvents(store, run.traceId);
+  assert.equal(run.status, "blocked");
+  assert.equal(run.riskPreflight.status, "blocked");
+  assert.equal(run.riskPreflight.summary.deny, 1);
+  assert.equal(run.results.length, 0);
+  assert.equal(fs.existsSync(path.join(dir, "blocked.md")), false);
+  assert.equal(events.some((event) => event.type === "tool.result"), false);
 });
 
 test("workflow inbox and detail reconstruct workflow run traces", async () => {
@@ -1494,6 +1607,7 @@ test("gateway route contract exposes stable route ids", () => {
   assert.ok(routeIds.includes("skill_replay.results.get"));
   assert.ok(routeIds.includes("tools.run"));
   assert.ok(routeIds.includes("workflows.create"));
+  assert.ok(routeIds.includes("preflight.risk"));
   assert.ok(routeIds.includes("workflows.update"));
   assert.ok(routeIds.includes("workflows.archive"));
   assert.ok(routeIds.includes("workflows.versions"));
@@ -1900,6 +2014,33 @@ test("gateway client reads context freshness and can require fresh context", asy
     assert.equal(preflight.context.refreshed, true);
     assert.equal(run.status, "completed");
     assert.equal(run.contextFreshness.status, "fresh");
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
+
+test("gateway client previews run risk without executing planned tools", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const client = createGatewayClient({
+    baseUrl: `http://${gateway.host}:${gateway.port}`,
+    token: gateway.token,
+  });
+
+  try {
+    const risk = await client.riskPreflight({
+      trustMode: "approve",
+      plan: {
+        steps: [
+          { id: "write", kind: "tool", toolName: "file.write", input: { path: "gateway-risk.md", content: "x" } },
+        ],
+      },
+    });
+
+    assert.equal(risk.status, "warning");
+    assert.equal(risk.summary.requires_approval, 1);
+    assert.equal(fs.existsSync(path.join(dir, "gateway-risk.md")), false);
   } finally {
     await closeServer(gateway.server);
   }

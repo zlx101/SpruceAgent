@@ -104,7 +104,7 @@ export {
   readWorkspaceIndex,
   searchWorkspaceContext,
 } from "./context.js";
-export { runPreflight } from "./preflight.js";
+export { assessRunRisk, runPreflight } from "./preflight.js";
 export { runAgent } from "./agent-runner.js";
 export { getPlannerPromotionContract, promoteLlmDraftToCandidatePlan } from "./planner.js";
 export { executeCandidatePlan, getCandidateExecutionContract } from "./candidate-executor.js";

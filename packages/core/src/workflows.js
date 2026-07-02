@@ -4,7 +4,7 @@ import { addMemory } from "./memory.js";
 import { createContextPack } from "./context.js";
 import { executeTool } from "./executor.js";
 import { createId, nowIso } from "./id.js";
-import { runPreflight } from "./preflight.js";
+import { assessRunRisk, runPreflight } from "./preflight.js";
 import { getApprovedSkill } from "./skills.js";
 import { appendTraceEvent, startTrace } from "./trace.js";
 import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
@@ -188,6 +188,12 @@ export async function runWorkflow(store, workflowId, input = {}) {
     contextMaxBytes: input.contextMaxBytes,
   });
   appendTraceEvent(store, trace.id, "run.preflight", preflight);
+  const riskPreflight = assessRunRisk(store, {
+    kind: "workflow.run.risk_preflight",
+    trustMode: input.trustMode ?? "approve",
+    workflow,
+  });
+  appendTraceEvent(store, trace.id, "run.risk_preflight", riskPreflight);
   const contextFreshness = preflight.context.final;
   appendTraceEvent(store, trace.id, "context.staleness", contextFreshness);
 
@@ -198,6 +204,7 @@ export async function runWorkflow(store, workflowId, input = {}) {
       workflow,
       traceId: trace.id,
       preflight,
+      riskPreflight,
       contextFreshness,
       results: [],
       limits: [
@@ -216,9 +223,29 @@ export async function runWorkflow(store, workflowId, input = {}) {
       workflow,
       traceId: trace.id,
       preflight,
+      riskPreflight,
       contextFreshness,
       results: [],
       limits: v0Limits(),
+    };
+    appendTraceEvent(store, trace.id, "workflow.completed", result);
+    return result;
+  }
+
+  if (!riskPreflight.canProceed) {
+    const result = {
+      id: trace.id,
+      status: "blocked",
+      workflow,
+      traceId: trace.id,
+      preflight,
+      riskPreflight,
+      contextFreshness,
+      results: [],
+      limits: [
+        "Execution was blocked because risk preflight found a denied or blocked workflow action.",
+        ...v0Limits(),
+      ],
     };
     appendTraceEvent(store, trace.id, "workflow.completed", result);
     return result;
@@ -244,6 +271,7 @@ export async function runWorkflow(store, workflowId, input = {}) {
     workflow,
     traceId: trace.id,
     preflight,
+    riskPreflight,
     contextFreshness,
     results,
     limits: v0Limits(),

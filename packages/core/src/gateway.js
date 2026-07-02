@@ -44,7 +44,7 @@ import { getRunDetail, getRunDetailContract } from "./run-detail.js";
 import { getRunInbox, getRunInboxContract } from "./run-inbox.js";
 import { getLlmAdapterContract } from "./llm.js";
 import { runAgent } from "./agent-runner.js";
-import { runPreflight } from "./preflight.js";
+import { assessRunRisk, runPreflight } from "./preflight.js";
 import { readJson, writeJson } from "./storage.js";
 import { listTools } from "./tools.js";
 import { listTraces } from "./trace.js";
@@ -325,6 +325,13 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/preflight",
       authRequired: true,
       description: "Run deterministic local readiness checks before agent or workflow execution.",
+    },
+    {
+      id: "preflight.risk",
+      method: "POST",
+      path: "/v1/preflight/risk",
+      authRequired: true,
+      description: "Preview TrustKernel policy risk for planned agent, workflow, or candidate steps.",
     },
     {
       id: "context.index",
@@ -908,6 +915,17 @@ async function routeRequest(store, request, url, body) {
       contextMaxBytes: body.contextMaxBytes ?? body.maxBytes,
       maxChanges: body.maxChanges,
       incremental: body.incremental,
+    }));
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/preflight/risk") {
+    return ok(assessRunRisk(store, {
+      kind: body.kind ?? "gateway.risk_preflight",
+      trustMode: body.trustMode ?? "approve",
+      plan: body.plan,
+      workflow: body.workflow,
+      steps: body.steps,
+      candidatePlan: body.candidatePlan,
     }));
   }
 
