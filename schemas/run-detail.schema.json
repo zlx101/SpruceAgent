@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/run-detail.schema.json",
+  "title": "SpruceAgent Run Detail",
+  "type": "object",
+  "required": [
+    "version",
+    "traceId",
+    "status",
+    "summary",
+    "run",
+    "candidateSteps",
+    "approvals",
+    "toolResults",
+    "resumeEvents",
+    "evaluations",
+    "timeline",
+    "events",
+    "limits"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "string" },
+    "traceId": { "type": "string", "pattern": "^trace_[a-z0-9_]+$" },
+    "status": {
+      "type": "string",
+      "enum": ["completed", "dry_run", "requires_approval", "failed", "completed_with_blockers"]
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "goal",
+        "runStatus",
+        "continuationStatus",
+        "eventCount",
+        "approvalCount",
+        "pendingApprovalCount",
+        "candidateStepCount",
+        "toolResultCount",
+        "evaluationCount"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "goal": { "type": "string" },
+        "runStatus": { "type": "string" },
+        "continuationStatus": { "type": ["string", "null"] },
+        "eventCount": { "type": "integer", "minimum": 0 },
+        "approvalCount": { "type": "integer", "minimum": 0 },
+        "pendingApprovalCount": { "type": "integer", "minimum": 0 },
+        "candidateStepCount": { "type": "integer", "minimum": 0 },
+        "toolResultCount": { "type": "integer", "minimum": 0 },
+        "evaluationCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "candidateSteps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "promotionStatus", "executable", "approvals", "latestApprovalStatus"],
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string" },
+          "description": { "type": ["string", "null"] },
+          "promotionStatus": {
+            "type": ["string", "null"],
+            "enum": ["ready", "requires_approval", "blocked", "not_promotable", null]
+          },
+          "executable": { "type": ["boolean", "null"] },
+          "toolName": { "type": ["string", "null"] },
+          "reason": { "type": ["string", "null"] },
+          "approvals": {
+            "type": "array",
+            "items": { "type": "object" }
+          },
+          "latestApprovalStatus": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "approvals": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "toolResults": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "resumeEvents": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "evaluations": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "timeline": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "createdAt", "label", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "label": { "type": "string" },
+          "status": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": { "$ref": "trace-event.schema.json" }
+    },
+    "limits": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

@@ -1,0 +1,1640 @@
+const state = {
+  gatewayUrl: localStorage.getItem("spruce.gatewayUrl") || window.location.origin,
+  token: localStorage.getItem("spruce.gatewayToken") || "",
+  inbox: null,
+  skills: [],
+  candidateSkills: [],
+  skillEvaluations: [],
+  skillEvaluationDetail: null,
+  workflows: [],
+  workflowVersions: null,
+  workflowDraft: null,
+  workflowInbox: null,
+  detail: null,
+  busy: false,
+};
+
+const nodes = {
+  form: document.querySelector("#connection-form"),
+  runForm: document.querySelector("#run-form"),
+  workflowForm: document.querySelector("#workflow-form"),
+  workflowBuilderForm: document.querySelector("#workflow-builder-form"),
+  gatewayUrl: document.querySelector("#gateway-url"),
+  token: document.querySelector("#gateway-token"),
+  runGoal: document.querySelector("#run-goal"),
+  runContext: document.querySelector("#run-context"),
+  runTrust: document.querySelector("#run-trust"),
+  runLlm: document.querySelector("#run-llm"),
+  runModel: document.querySelector("#run-model"),
+  runDryRun: document.querySelector("#run-dry-run"),
+  runPromote: document.querySelector("#run-promote"),
+  runRequestApprovals: document.querySelector("#run-request-approvals"),
+  runExecuteCandidate: document.querySelector("#run-execute-candidate"),
+  runSubmit: document.querySelector("#run-submit"),
+  workflowName: document.querySelector("#workflow-name"),
+  workflowSummary: document.querySelector("#workflow-summary"),
+  workflowSkill: document.querySelector("#workflow-skill"),
+  workflowContext: document.querySelector("#workflow-context"),
+  workflowMemory: document.querySelector("#workflow-memory"),
+  workflowTags: document.querySelector("#workflow-tags"),
+  workflowStepsJson: document.querySelector("#workflow-steps-json"),
+  workflowSubmit: document.querySelector("#workflow-submit"),
+  workflowBuilderGoal: document.querySelector("#workflow-builder-goal"),
+  workflowBuilderContext: document.querySelector("#workflow-builder-context"),
+  workflowBuilderSkill: document.querySelector("#workflow-builder-skill"),
+  workflowBuilderLlm: document.querySelector("#workflow-builder-llm"),
+  workflowBuilderModel: document.querySelector("#workflow-builder-model"),
+  workflowBuilderName: document.querySelector("#workflow-builder-name"),
+  workflowBuilderSubmit: document.querySelector("#workflow-builder-submit"),
+  workflowBuilderSave: document.querySelector("#workflow-builder-save"),
+  workflowDraftAddContext: document.querySelector("#workflow-draft-add-context"),
+  workflowDraftAddSkill: document.querySelector("#workflow-draft-add-skill"),
+  workflowDraftAddMemory: document.querySelector("#workflow-draft-add-memory"),
+  workflowDraftList: document.querySelector("#workflow-draft-list"),
+  workflowSourceMap: document.querySelector("#workflow-source-map"),
+  workflowBuilderPreview: document.querySelector("#workflow-builder-preview"),
+  refreshButton: document.querySelector("#refresh-button"),
+  statusLine: document.querySelector("#status-line"),
+  launchState: document.querySelector("#launch-state"),
+  workflowEditorState: document.querySelector("#workflow-editor-state"),
+  workflowBuilderState: document.querySelector("#workflow-builder-state"),
+  skillState: document.querySelector("#skill-state"),
+  workflowState: document.querySelector("#workflow-state"),
+  workflowVersionState: document.querySelector("#workflow-version-state"),
+  workflowRunState: document.querySelector("#workflow-run-state"),
+  pendingCount: document.querySelector("#pending-count"),
+  resumableCount: document.querySelector("#resumable-count"),
+  recentCount: document.querySelector("#recent-count"),
+  approvalState: document.querySelector("#approval-state"),
+  resumeState: document.querySelector("#resume-state"),
+  recentState: document.querySelector("#recent-state"),
+  pendingList: document.querySelector("#pending-list"),
+  skillList: document.querySelector("#skill-list"),
+  candidateSkillState: document.querySelector("#candidate-skill-state"),
+  candidateSkillList: document.querySelector("#candidate-skill-list"),
+  skillEvaluationState: document.querySelector("#skill-evaluation-state"),
+  skillEvaluationList: document.querySelector("#skill-evaluation-list"),
+  skillEvaluationPanel: document.querySelector("#skill-evaluation-panel"),
+  workflowList: document.querySelector("#workflow-list"),
+  workflowVersionList: document.querySelector("#workflow-version-list"),
+  workflowRunList: document.querySelector("#workflow-run-list"),
+  resumableList: document.querySelector("#resumable-list"),
+  recentList: document.querySelector("#recent-list"),
+  detailState: document.querySelector("#detail-state"),
+  detailPanel: document.querySelector("#detail-panel"),
+  emptyTemplate: document.querySelector("#empty-template"),
+};
+
+nodes.gatewayUrl.value = state.gatewayUrl;
+nodes.token.value = state.token;
+
+nodes.form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  state.gatewayUrl = nodes.gatewayUrl.value.trim().replace(/\/+$/, "") || window.location.origin;
+  state.token = nodes.token.value.trim();
+  localStorage.setItem("spruce.gatewayUrl", state.gatewayUrl);
+  localStorage.setItem("spruce.gatewayToken", state.token);
+  await refresh();
+});
+
+nodes.refreshButton.addEventListener("click", refresh);
+
+nodes.runForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await submitRun();
+});
+
+nodes.workflowForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await createWorkflowFromWorkbench();
+});
+
+nodes.workflowBuilderForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await draftWorkflowFromWorkbench();
+});
+
+nodes.workflowBuilderSave.addEventListener("click", async () => {
+  await saveWorkflowDraftFromWorkbench();
+});
+
+nodes.workflowDraftAddContext.addEventListener("click", () => addWorkflowDraftStep("context"));
+nodes.workflowDraftAddSkill.addEventListener("click", () => addWorkflowDraftStep("skill"));
+nodes.workflowDraftAddMemory.addEventListener("click", () => addWorkflowDraftStep("memory"));
+
+nodes.workflowDraftList.addEventListener("input", (event) => {
+  const target = event.target.closest("[data-draft-field]");
+  if (!target) return;
+  updateWorkflowDraftStepField(Number(target.dataset.stepIndex), target.dataset.draftField, target.value);
+});
+
+nodes.workflowDraftList.addEventListener("change", (event) => {
+  const target = event.target.closest("[data-draft-field]");
+  if (!target) return;
+  updateWorkflowDraftStepField(Number(target.dataset.stepIndex), target.dataset.draftField, target.value, { rerender: true });
+});
+
+nodes.workflowDraftList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-draft-action]");
+  if (!button) return;
+  const index = Number(button.dataset.stepIndex);
+  if (button.dataset.draftAction === "remove") removeWorkflowDraftStep(index);
+  if (button.dataset.draftAction === "up") moveWorkflowDraftStep(index, -1);
+  if (button.dataset.draftAction === "down") moveWorkflowDraftStep(index, 1);
+});
+
+nodes.skillList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action]");
+  if (!button) return;
+  if (button.dataset.action === "skill-plan") {
+    await runSkill(button.dataset.skillId, { execute: false });
+  }
+  if (button.dataset.action === "skill-execute") {
+    await runSkill(button.dataset.skillId, { execute: true });
+  }
+  if (button.dataset.action === "skill-evaluate") {
+    await evaluateSkillFromWorkbench(button.dataset.skillId);
+  }
+  if (button.dataset.action === "skill-promote") {
+    await promoteSkillFromWorkbench(button.dataset.skillId);
+  }
+  if (button.dataset.action === "skill-evaluation-view") {
+    await loadSkillEvaluation(button.dataset.evaluationId);
+  }
+});
+
+nodes.workflowList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action]");
+  if (!button) return;
+  if (button.dataset.action === "workflow-dry-run") {
+    await runWorkflowFromWorkbench(button.dataset.workflowId, { dryRun: true });
+  }
+  if (button.dataset.action === "workflow-run") {
+    await runWorkflowFromWorkbench(button.dataset.workflowId, { dryRun: false });
+  }
+  if (button.dataset.action === "workflow-versions") {
+    await loadWorkflowVersions(button.dataset.workflowId);
+  }
+  if (button.dataset.action === "workflow-archive") {
+    await archiveWorkflowFromWorkbench(button.dataset.workflowId);
+  }
+});
+
+nodes.workflowVersionList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action]");
+  if (!button) return;
+  if (button.dataset.action === "workflow-restore") {
+    await restoreWorkflowVersionFromWorkbench(button.dataset.workflowId, button.dataset.revision);
+  }
+});
+
+nodes.workflowRunList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action]");
+  if (!button) return;
+  if (button.dataset.action === "workflow-details") {
+    await loadWorkflowDetail(button.dataset.traceId);
+  }
+  if (button.dataset.action === "workflow-resume") {
+    await resumeWorkflowRunFromWorkbench(button.dataset.traceId);
+  }
+});
+
+nodes.pendingList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action]");
+  if (!button) return;
+  const approvalId = button.dataset.approvalId;
+  if (!approvalId) return;
+  if (button.dataset.action === "approve") {
+    await post(`/v1/approvals/${encodeURIComponent(approvalId)}/approve`, {
+      reason: "approved from workbench",
+    });
+    await refresh();
+  }
+  if (button.dataset.action === "reject") {
+    await post(`/v1/approvals/${encodeURIComponent(approvalId)}/reject`, {
+      reason: "rejected from workbench",
+    });
+    await refresh();
+  }
+});
+
+nodes.resumableList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action='resume']");
+  if (!button) return;
+  await post(`/v1/runs/${encodeURIComponent(button.dataset.traceId)}/resume`, {
+    stepId: button.dataset.stepId || undefined,
+    approvalId: button.dataset.approvalId || undefined,
+  });
+  await refresh();
+});
+
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action='details']");
+  if (!button) return;
+  await loadDetail(button.dataset.traceId);
+});
+
+render();
+if (state.token) {
+  refresh();
+}
+
+async function refresh() {
+  if (state.busy) return;
+  state.busy = true;
+  setStatus("Loading");
+  try {
+    const [inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox] = await Promise.all([
+      get("/v1/inbox"),
+      get("/v1/skills?status=approved"),
+      get("/v1/skills?status=candidates"),
+      get("/v1/skill-evaluations"),
+      get("/v1/workflows"),
+      get("/v1/workflows/inbox"),
+    ]);
+    state.inbox = inbox;
+    state.skills = skills;
+    state.candidateSkills = candidateSkills;
+    state.skillEvaluations = skillEvaluations;
+    state.workflows = workflows;
+    state.workflowInbox = workflowInbox;
+    render();
+    setStatus(`Connected - ${state.inbox.status.replace(/_/g, " ")}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+  }
+}
+
+async function get(path) {
+  return request("GET", path);
+}
+
+async function post(path, body) {
+  return request("POST", path, body);
+}
+
+async function draftWorkflowFromWorkbench() {
+  if (state.busy) return;
+  const input = buildWorkflowBuilderInput();
+  if (!input.goal) {
+    nodes.workflowBuilderState.textContent = "Goal required";
+    setStatus("Workflow builder goal required", true);
+    return;
+  }
+  state.busy = true;
+  nodes.workflowBuilderSubmit.disabled = true;
+  nodes.workflowBuilderSave.disabled = true;
+  nodes.workflowBuilderState.textContent = "Drafting";
+  setStatus("Drafting workflow");
+  try {
+    const draft = await post("/v1/workflow-builder/draft", input);
+    state.workflowDraft = draft;
+    renderWorkflowDraft(draft);
+    nodes.workflowBuilderSave.disabled = false;
+    nodes.workflowBuilderState.textContent = draft.status;
+    setStatus(`Workflow draft ready - ${draft.workflow.name}`);
+  } catch (error) {
+    nodes.workflowBuilderState.textContent = "Failed";
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+    nodes.workflowBuilderSubmit.disabled = false;
+  }
+}
+
+async function saveWorkflowDraftFromWorkbench() {
+  if (state.busy || !state.workflowDraft) return;
+  state.busy = true;
+  nodes.workflowBuilderSave.disabled = true;
+  nodes.workflowBuilderState.textContent = "Saving";
+  setStatus("Saving workflow draft");
+  try {
+    const saved = await post("/v1/workflow-builder/save", {
+      draft: state.workflowDraft,
+    });
+    state.workflowDraft = saved;
+    state.workflows = await get("/v1/workflows");
+    render();
+    renderWorkflowDraft(saved);
+    nodes.workflowBuilderState.textContent = shortId(saved.workflow.id);
+    setStatus(`Workflow saved - ${saved.workflow.name}`);
+    document.querySelector("#workflows")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    nodes.workflowBuilderState.textContent = "Failed";
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+  }
+}
+
+function addWorkflowDraftStep(kind) {
+  if (!state.workflowDraft || state.workflowDraft.status === "saved") return;
+  state.workflowDraft.workflow.steps.push(createDraftStep(kind));
+  markWorkflowDraftEdited();
+  renderWorkflowDraft(state.workflowDraft);
+}
+
+function removeWorkflowDraftStep(index) {
+  if (!state.workflowDraft || state.workflowDraft.status === "saved") return;
+  state.workflowDraft.workflow.steps.splice(index, 1);
+  markWorkflowDraftEdited();
+  renderWorkflowDraft(state.workflowDraft);
+}
+
+function moveWorkflowDraftStep(index, direction) {
+  if (!state.workflowDraft || state.workflowDraft.status === "saved") return;
+  const nextIndex = index + direction;
+  const steps = state.workflowDraft.workflow.steps;
+  if (nextIndex < 0 || nextIndex >= steps.length) return;
+  const [step] = steps.splice(index, 1);
+  steps.splice(nextIndex, 0, step);
+  markWorkflowDraftEdited();
+  renderWorkflowDraft(state.workflowDraft);
+}
+
+function updateWorkflowDraftStepField(index, field, value, options = {}) {
+  if (!state.workflowDraft || state.workflowDraft.status === "saved") return;
+  const step = state.workflowDraft.workflow.steps[index];
+  if (!step) return;
+  if (field === "kind") {
+    state.workflowDraft.workflow.steps[index] = {
+      ...createDraftStep(value),
+      id: step.id,
+    };
+  } else if (field === "limit") {
+    step.limit = Number(value || 5);
+  } else if (field === "tags") {
+    step.tags = splitCsv(value);
+  } else {
+    step[field] = value;
+  }
+  markWorkflowDraftEdited();
+  if (options.rerender || field === "kind") {
+    renderWorkflowDraft(state.workflowDraft);
+  } else {
+    updateWorkflowDraftPreview(state.workflowDraft);
+  }
+}
+
+function createDraftStep(kind) {
+  if (kind === "skill") {
+    return {
+      kind: "skill",
+      skillId: state.skills[0]?.id ?? "",
+    };
+  }
+  if (kind === "memory") {
+    return {
+      kind: "memory",
+      content: "Record workflow progress.",
+      tags: ["workflow-builder", "manual"],
+    };
+  }
+  return {
+    kind: "context",
+    query: nodes.workflowBuilderContext.value.trim() || nodes.workflowBuilderGoal.value.trim() || "project context",
+    limit: 5,
+  };
+}
+
+function markWorkflowDraftEdited() {
+  if (!state.workflowDraft) return;
+  state.workflowDraft.status = "drafted";
+  state.workflowDraft.review = {
+    ...(state.workflowDraft.review ?? {}),
+    saved: false,
+    edited: true,
+    stepCount: state.workflowDraft.workflow.steps.length,
+  };
+  state.workflowDraft.workflow.metadata = {
+    ...(state.workflowDraft.workflow.metadata ?? {}),
+    draftEditedAt: new Date().toISOString(),
+  };
+  nodes.workflowBuilderState.textContent = "edited";
+}
+
+async function loadWorkflowVersions(workflowId, options = {}) {
+  if (!workflowId) return;
+  setStatus("Loading workflow versions");
+  try {
+    const versions = await get(`/v1/workflows/${encodeURIComponent(workflowId)}/versions`);
+    state.workflowVersions = {
+      workflowId,
+      versions,
+    };
+    renderWorkflowVersions(state.workflowVersions);
+    nodes.workflowVersionState.textContent = `${shortId(workflowId)} - ${versions.length}`;
+    setStatus(`Loaded workflow versions - ${shortId(workflowId)}`);
+    if (options.scroll !== false) {
+      document.querySelector("#workflow-versions")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  } catch (error) {
+    nodes.workflowVersionState.textContent = "Failed";
+    setStatus(error.message, true);
+  }
+}
+
+async function archiveWorkflowFromWorkbench(workflowId) {
+  if (state.busy || !workflowId) return;
+  state.busy = true;
+  setStatus("Archiving workflow");
+  try {
+    const archived = await post(`/v1/workflows/${encodeURIComponent(workflowId)}/archive`, {
+      actor: "workbench-user",
+      reason: "archived from workbench",
+    });
+    state.workflows = await get("/v1/workflows");
+    render();
+    await loadWorkflowVersions(workflowId, { scroll: true });
+    setStatus(`Workflow archived - ${archived.name}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+  }
+}
+
+async function restoreWorkflowVersionFromWorkbench(workflowId, revision) {
+  if (state.busy || !workflowId || !revision) return;
+  state.busy = true;
+  setStatus("Restoring workflow version");
+  try {
+    const restored = await post(`/v1/workflows/${encodeURIComponent(workflowId)}/versions/${encodeURIComponent(revision)}/restore`, {
+      actor: "workbench-user",
+      reason: `restored revision ${revision} from workbench`,
+    });
+    state.workflows = await get("/v1/workflows");
+    render();
+    await loadWorkflowVersions(workflowId, { scroll: true });
+    setStatus(`Workflow restored - revision ${restored.revision}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+  }
+}
+
+async function submitRun() {
+  if (state.busy) return;
+  const input = buildRunInput();
+  if (!input.goal) {
+    setStatus("Goal required", true);
+    nodes.launchState.textContent = "Goal required";
+    return;
+  }
+  state.busy = true;
+  nodes.runSubmit.disabled = true;
+  nodes.launchState.textContent = "Running";
+  setStatus("Launching run");
+  try {
+    const run = await post("/v1/runs", input);
+    nodes.launchState.textContent = shortId(run.traceId);
+    setStatus(`Run created - ${shortId(run.traceId)}`);
+    state.inbox = await get("/v1/inbox");
+    render();
+    await loadDetail(run.traceId, { scroll: true });
+  } catch (error) {
+    nodes.launchState.textContent = "Failed";
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+    nodes.runSubmit.disabled = false;
+  }
+}
+
+async function runSkill(skillId, options = {}) {
+  if (state.busy || !skillId) return;
+  const skill = state.skills.find((item) => item.id === skillId);
+  const execute = Boolean(options.execute);
+  const input = pruneEmpty({
+    goal: nodes.runGoal.value.trim() || `${execute ? "Execute" : "Plan with"} skill: ${skill?.name ?? skillId}`,
+    contextQuery: nodes.runContext.value.trim(),
+    trustMode: nodes.runTrust.value,
+    dryRun: !execute,
+    skillId,
+    executeSkill: execute,
+    actor: "workbench-user",
+  });
+  state.busy = true;
+  nodes.launchState.textContent = execute ? "Executing skill" : "Planning skill";
+  setStatus(nodes.launchState.textContent);
+  try {
+    const run = await post("/v1/runs", input);
+    state.inbox = await get("/v1/inbox");
+    render();
+    await loadDetail(run.traceId, { scroll: true });
+  } catch (error) {
+    nodes.launchState.textContent = "Failed";
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+  }
+}
+
+async function evaluateSkillFromWorkbench(skillId) {
+  if (state.busy || !skillId) return;
+  state.busy = true;
+  setStatus("Evaluating skill");
+  try {
+    const report = await post(`/v1/skills/${encodeURIComponent(skillId)}/evaluations`, {});
+    state.skillEvaluations = await get("/v1/skill-evaluations");
+    state.skillEvaluationDetail = report;
+    render();
+    setStatus(`Skill evaluation ${report.status} - ${shortId(report.id)}`);
+    document.querySelector("#skillforge")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+  }
+}
+
+async function promoteSkillFromWorkbench(skillId) {
+  if (state.busy || !skillId) return;
+  state.busy = true;
+  setStatus("Promoting skill");
+  try {
+    const promotion = await post(`/v1/skills/${encodeURIComponent(skillId)}/promote`, {
+      useLatestEvaluation: true,
+      reason: "promoted from workbench",
+    });
+    const [skills, candidateSkills, skillEvaluations] = await Promise.all([
+      get("/v1/skills?status=approved"),
+      get("/v1/skills?status=candidates"),
+      get("/v1/skill-evaluations"),
+    ]);
+    state.skills = skills;
+    state.candidateSkills = candidateSkills;
+    state.skillEvaluations = skillEvaluations;
+    state.skillEvaluationDetail = promotion.evaluation;
+    render();
+    setStatus(`Skill promoted - ${shortId(promotion.skill.id)} r${promotion.skill.revision}`);
+    document.querySelector("#skillforge")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+  }
+}
+
+async function loadSkillEvaluation(evaluationId) {
+  if (!evaluationId) return;
+  setStatus("Loading skill evaluation");
+  try {
+    state.skillEvaluationDetail = await get(`/v1/skill-evaluations/${encodeURIComponent(evaluationId)}`);
+    renderSkillEvaluationPanel(state.skillEvaluationDetail);
+    setStatus(`Loaded skill evaluation - ${shortId(evaluationId)}`);
+    document.querySelector("#skillforge")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+async function runWorkflowFromWorkbench(workflowId, options = {}) {
+  if (state.busy || !workflowId) return;
+  const workflow = state.workflows.find((item) => item.id === workflowId);
+  state.busy = true;
+  nodes.launchState.textContent = options.dryRun ? "Dry-running workflow" : "Running workflow";
+  setStatus(nodes.launchState.textContent);
+  try {
+    const result = await post(`/v1/workflows/${encodeURIComponent(workflowId)}/run`, pruneEmpty({
+      goal: nodes.runGoal.value.trim() || `Run workflow: ${workflow?.name ?? workflowId}`,
+      trustMode: nodes.runTrust.value,
+      dryRun: Boolean(options.dryRun),
+      actor: "workbench-user",
+    }));
+    state.inbox = await get("/v1/inbox");
+    state.workflowInbox = await get("/v1/workflows/inbox");
+    render();
+    nodes.launchState.textContent = shortId(result.traceId);
+    setStatus(`Workflow ${result.status} - ${shortId(result.traceId)}`);
+    await loadWorkflowDetail(result.traceId, { scroll: true });
+  } catch (error) {
+    nodes.launchState.textContent = "Failed";
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+  }
+}
+
+async function resumeWorkflowRunFromWorkbench(traceId) {
+  if (state.busy || !traceId) return;
+  state.busy = true;
+  nodes.launchState.textContent = "Resuming workflow";
+  setStatus("Resuming workflow");
+  try {
+    const result = await post(`/v1/workflows/runs/${encodeURIComponent(traceId)}/resume`, {
+      trustMode: nodes.runTrust.value,
+      actor: "workbench-user",
+    });
+    state.inbox = await get("/v1/inbox");
+    state.workflowInbox = await get("/v1/workflows/inbox");
+    render();
+    nodes.launchState.textContent = shortId(traceId);
+    setStatus(`Workflow resume ${result.status} - ${shortId(traceId)}`);
+    await loadWorkflowDetail(traceId, { scroll: true });
+  } catch (error) {
+    nodes.launchState.textContent = "Failed";
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+  }
+}
+
+async function createWorkflowFromWorkbench() {
+  if (state.busy) return;
+  let input;
+  try {
+    input = buildWorkflowInput();
+  } catch (error) {
+    nodes.workflowEditorState.textContent = "Invalid";
+    setStatus(error.message, true);
+    return;
+  }
+  if (!input.name) {
+    nodes.workflowEditorState.textContent = "Name required";
+    setStatus("Workflow name required", true);
+    return;
+  }
+  if (!input.steps.length) {
+    nodes.workflowEditorState.textContent = "Steps required";
+    setStatus("Workflow needs at least one step", true);
+    return;
+  }
+
+  state.busy = true;
+  nodes.workflowSubmit.disabled = true;
+  nodes.workflowEditorState.textContent = "Creating";
+  setStatus("Creating workflow");
+  try {
+    const workflow = await post("/v1/workflows", input);
+    state.workflows = await get("/v1/workflows");
+    render();
+    nodes.workflowEditorState.textContent = shortId(workflow.id);
+    setStatus(`Workflow created - ${workflow.name}`);
+    document.querySelector("#workflows")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    nodes.workflowEditorState.textContent = "Failed";
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+    nodes.workflowSubmit.disabled = false;
+  }
+}
+
+function buildWorkflowInput() {
+  const steps = [];
+  const contextQuery = nodes.workflowContext.value.trim();
+  if (contextQuery) {
+    steps.push({
+      kind: "context",
+      query: contextQuery,
+      limit: 5,
+    });
+  }
+  if (nodes.workflowSkill.value) {
+    steps.push({
+      kind: "skill",
+      skillId: nodes.workflowSkill.value,
+    });
+  }
+  const memory = nodes.workflowMemory.value.trim();
+  if (memory) {
+    steps.push({
+      kind: "memory",
+      content: memory,
+      tags: splitCsv(nodes.workflowTags.value || "workflow"),
+    });
+  }
+  const rawSteps = nodes.workflowStepsJson.value.trim();
+  if (rawSteps) {
+    const parsed = JSON.parse(rawSteps);
+    if (!Array.isArray(parsed)) throw new Error("JSON steps must be an array");
+    steps.push(...parsed);
+  }
+  return {
+    name: nodes.workflowName.value.trim(),
+    summary: nodes.workflowSummary.value.trim(),
+    steps,
+    createdFrom: "workbench",
+  };
+}
+
+function buildWorkflowBuilderInput() {
+  return pruneEmpty({
+    goal: nodes.workflowBuilderGoal.value.trim(),
+    contextQuery: nodes.workflowBuilderContext.value.trim(),
+    skillId: nodes.workflowBuilderSkill.value,
+    name: nodes.workflowBuilderName.value.trim(),
+    llmProvider: nodes.workflowBuilderLlm.value || "mock",
+    llmModel: nodes.workflowBuilderModel.value.trim(),
+    includeMemoryStep: true,
+  });
+}
+
+function buildRunInput() {
+  return pruneEmpty({
+    goal: nodes.runGoal.value.trim(),
+    contextQuery: nodes.runContext.value.trim(),
+    trustMode: nodes.runTrust.value,
+    dryRun: nodes.runDryRun.checked,
+    llmProvider: nodes.runLlm.value,
+    llmModel: nodes.runModel.value.trim(),
+    promotePlan: nodes.runPromote.checked,
+    requestCandidateApprovals: nodes.runRequestApprovals.checked,
+    executeCandidatePlan: nodes.runExecuteCandidate.checked,
+    actor: "workbench-user",
+  });
+}
+
+function pruneEmpty(input) {
+  return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== "" && value !== false));
+}
+
+async function request(method, path, body) {
+  if (!state.token) throw new Error("Token required");
+  const response = await fetch(`${state.gatewayUrl}${path}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${state.token}`,
+      ...(body ? { "content-type": "application/json" } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.message || `Request failed: ${response.status}`);
+  }
+  return payload;
+}
+
+function render() {
+  const inbox = state.inbox || {
+    summary: {
+      pendingApprovalCount: 0,
+      resumableRunCount: 0,
+      recentRunCount: 0,
+    },
+    pendingApprovals: [],
+    resumableRuns: [],
+    recentRuns: [],
+  };
+
+  const skills = state.skills || [];
+  const candidateSkills = state.candidateSkills || [];
+  const skillEvaluations = state.skillEvaluations || [];
+  const workflows = state.workflows || [];
+  const workflowInbox = state.workflowInbox || {
+    summary: {
+      workflowRunCount: 0,
+      pendingApprovalCount: 0,
+    },
+    workflowRuns: [],
+  };
+
+  nodes.pendingCount.textContent = inbox.summary.pendingApprovalCount;
+  nodes.resumableCount.textContent = inbox.summary.resumableRunCount;
+  nodes.recentCount.textContent = inbox.summary.recentRunCount;
+  nodes.skillState.textContent = `${skills.length}`;
+  nodes.candidateSkillState.textContent = `${candidateSkills.length} candidates`;
+  nodes.skillEvaluationState.textContent = `${skillEvaluations.length} reports`;
+  nodes.workflowState.textContent = `${workflows.length}`;
+  nodes.workflowRunState.textContent = `${workflowInbox.summary.workflowRunCount}`;
+  nodes.approvalState.textContent = `${inbox.pendingApprovals.length}`;
+  nodes.resumeState.textContent = `${inbox.resumableRuns.length}`;
+  nodes.recentState.textContent = `${inbox.recentRuns.length}`;
+
+  renderSkills(skills);
+  renderCandidateSkills(candidateSkills);
+  renderSkillEvaluations(skillEvaluations);
+  renderSkillEvaluationPanel(state.skillEvaluationDetail);
+  renderWorkflowSkillOptions(skills);
+  renderWorkflowDraft(state.workflowDraft);
+  renderWorkflows(workflows);
+  renderWorkflowVersions(state.workflowVersions);
+  renderWorkflowRuns(workflowInbox.workflowRuns);
+  renderPending(inbox.pendingApprovals);
+  renderResumable(inbox.resumableRuns);
+  renderRecent(inbox.recentRuns);
+  renderDetail(state.detail);
+}
+
+function renderWorkflowSkillOptions(skills) {
+  const selected = nodes.workflowSkill.value;
+  const builderSelected = nodes.workflowBuilderSkill.value;
+  nodes.workflowSkill.replaceChildren();
+  nodes.workflowBuilderSkill.replaceChildren();
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = "None";
+  nodes.workflowSkill.appendChild(empty.cloneNode(true));
+  nodes.workflowBuilderSkill.appendChild(empty);
+  for (const skill of skills) {
+    const option = document.createElement("option");
+    option.value = skill.id;
+    option.textContent = skill.name || skill.id;
+    nodes.workflowSkill.appendChild(option.cloneNode(true));
+    nodes.workflowBuilderSkill.appendChild(option);
+  }
+  if (skills.some((skill) => skill.id === selected)) {
+    nodes.workflowSkill.value = selected;
+  }
+  if (skills.some((skill) => skill.id === builderSelected)) {
+    nodes.workflowBuilderSkill.value = builderSelected;
+  }
+}
+
+function renderWorkflowRuns(items) {
+  replaceList(nodes.workflowRunList, items, (item) => itemNode({
+    title: item.workflowName || item.goal || item.traceId,
+    meta: [
+      [statusClass(item.status), item.status],
+      ["trace", shortId(item.traceId)],
+      ["steps", `${item.stepCount} steps`],
+      ["pending", item.pendingApprovalCount],
+      ["updated", formatTime(item.updatedAt)],
+    ],
+    actions: [
+      workflowDetailButton(item.traceId),
+      ...(item.canResume ? [workflowResumeButton(item.traceId)] : []),
+    ],
+  }));
+}
+
+function renderSkills(items) {
+  replaceList(nodes.skillList, items, (item) => itemNode({
+    title: item.name || item.id,
+    meta: [
+      [statusClass(item.status), item.status],
+      ["steps", `${item.steps?.length ?? 0} steps`],
+      ["typed", `${item.executableSteps?.length ?? 0} executable`],
+      ["updated", formatTime(item.updatedAt)],
+    ],
+    actions: [
+      libraryButton("skill-plan", item.id, "&#8981;", "Plan"),
+      libraryButton("skill-execute", item.id, "&#9654;", "Execute"),
+    ],
+  }));
+}
+
+function renderCandidateSkills(items) {
+  replaceList(nodes.candidateSkillList, items, (item) => itemNode({
+    title: item.name || item.id,
+    meta: [
+      [statusClass(item.status), item.status],
+      ["steps", `${item.steps?.length ?? 0} steps`],
+      ["source", `${item.sourceTraceIds?.length ?? 0} traces`],
+      ["updated", formatTime(item.updatedAt)],
+    ],
+    actions: [
+      libraryButton("skill-evaluate", item.id, "&#9878;", "Evaluate"),
+      libraryButton("skill-promote", item.id, "&#8593;", "Promote"),
+    ],
+  }));
+}
+
+function renderSkillEvaluations(items) {
+  replaceList(nodes.skillEvaluationList, items, (item) => itemNode({
+    title: item.skillId || item.id,
+    meta: [
+      [statusClass(item.status), item.status],
+      ["score", item.reliabilityScore],
+      ["skill", item.skillStatus],
+      ["created", formatTime(item.createdAt)],
+    ],
+    actions: [
+      libraryButton("skill-evaluation-view", item.id, "&#128065;", "View"),
+    ],
+  }));
+}
+
+function renderSkillEvaluationPanel(report) {
+  if (!report) {
+    nodes.skillEvaluationPanel.textContent = "{}";
+    return;
+  }
+  nodes.skillEvaluationPanel.textContent = JSON.stringify({
+    id: report.id,
+    status: report.status,
+    skillId: report.skillId,
+    summary: report.summary,
+    findings: report.findings,
+    recommendedNextActions: report.recommendedNextActions,
+    policyPreviews: report.policyPreviews,
+    limits: report.limits,
+  }, null, 2);
+}
+
+function renderWorkflows(items) {
+  replaceList(nodes.workflowList, items, (item) => itemNode({
+    title: item.name || item.id,
+    meta: [
+      [statusClass(item.status), item.status],
+      ["steps", `${item.steps?.length ?? 0} steps`],
+      ["revision", item.revision ?? 1],
+      ["updated", formatTime(item.updatedAt)],
+    ],
+    actions: [
+      libraryButton("workflow-dry-run", item.id, "&#8981;", "Dry Run"),
+      libraryButton("workflow-run", item.id, "&#9654;", "Run"),
+      libraryButton("workflow-versions", item.id, "&#8635;", "Versions"),
+      libraryButton("workflow-archive", item.id, "&#128452;", "Archive"),
+    ],
+  }));
+}
+
+function renderWorkflowVersions(input) {
+  if (!input) {
+    nodes.workflowVersionState.textContent = "No workflow selected";
+    replaceList(nodes.workflowVersionList, [], () => null);
+    return;
+  }
+  const versions = input.versions || [];
+  nodes.workflowVersionState.textContent = `${shortId(input.workflowId)} - ${versions.length}`;
+  replaceList(nodes.workflowVersionList, versions, (item) => itemNode({
+    title: item.name || item.id,
+    meta: [
+      [statusClass(item.status), item.status],
+      ["revision", item.revision ?? 1],
+      ["steps", `${item.steps?.length ?? 0} steps`],
+      ["updated", formatTime(item.updatedAt)],
+    ],
+    actions: [
+      workflowRestoreButton(input.workflowId, item.revision),
+    ],
+  }));
+}
+
+function renderWorkflowDraft(draft) {
+  renderWorkflowDraftSteps(draft);
+  renderSourceMap(draft?.sourceMap, nodes.workflowSourceMap);
+  updateWorkflowDraftPreview(draft);
+  const editable = Boolean(draft && draft.status !== "saved");
+  nodes.workflowBuilderSave.disabled = !editable;
+  nodes.workflowDraftAddContext.disabled = !editable;
+  nodes.workflowDraftAddSkill.disabled = !editable;
+  nodes.workflowDraftAddMemory.disabled = !editable;
+}
+
+function renderWorkflowDraftSteps(draft) {
+  nodes.workflowDraftList.replaceChildren();
+  if (!draft) {
+    nodes.workflowDraftList.appendChild(emptyInline("Draft a workflow to review steps"));
+    return;
+  }
+  const steps = draft.workflow?.steps || [];
+  if (!steps.length) {
+    nodes.workflowDraftList.appendChild(emptyInline("No draft steps"));
+    return;
+  }
+  steps.forEach((step, index) => {
+    nodes.workflowDraftList.appendChild(workflowDraftStepNode(step, index, steps.length));
+  });
+}
+
+function renderSourceMapBlock(sourceMap) {
+  const block = detailBlock("Source Map");
+  const list = document.createElement("div");
+  list.className = "source-map-list";
+  renderSourceMap(sourceMap, list);
+  block.appendChild(list);
+  return block;
+}
+
+function renderSourceMap(sourceMap, container) {
+  container.replaceChildren();
+  const sources = sourceMap?.sources || [];
+  if (!sources.length) {
+    container.appendChild(emptyInline("No source map"));
+    return;
+  }
+  const summary = document.createElement("div");
+  summary.className = "source-map-summary";
+  for (const [kind, value] of [
+    ["sources", sourceMap.summary?.sourceCount ?? sources.length],
+    ["workspace", sourceMap.summary?.byType?.workspace ?? 0],
+    ["memory", sourceMap.summary?.byType?.memory ?? 0],
+    ["skill", sourceMap.summary?.byType?.skill ?? 0],
+    ["llm", sourceMap.summary?.byType?.llm ?? 0],
+  ]) {
+    summary.appendChild(pillNode(`${kind}: ${value}`));
+  }
+  container.appendChild(summary);
+  for (const source of sources) {
+    const item = document.createElement("article");
+    item.className = "source-item";
+    const title = document.createElement("div");
+    title.className = "item-title";
+    title.textContent = source.title || source.path || source.type;
+    const meta = document.createElement("div");
+    meta.className = "item-meta";
+    for (const [kind, value] of [
+      [source.type, source.type],
+      ["confidence", source.confidence],
+      ["freshness", source.freshness],
+      ["score", source.score ?? "-"],
+      ["hash", source.hash ? shortId(source.hash) : "-"],
+    ]) {
+      meta.appendChild(pillNode(value, kind));
+    }
+    const snippet = document.createElement("div");
+    snippet.className = "source-snippet";
+    snippet.textContent = source.snippet || source.path || "-";
+    item.append(title, meta, snippet);
+    container.appendChild(item);
+  }
+}
+
+function workflowDraftStepNode(step, index, total) {
+  const item = document.createElement("article");
+  item.className = "draft-step";
+
+  const heading = document.createElement("div");
+  heading.className = "draft-step-heading";
+  const title = document.createElement("div");
+  title.className = "item-title";
+  title.textContent = `Step ${index + 1}`;
+  const actions = document.createElement("div");
+  actions.className = "item-actions";
+  actions.append(
+    draftActionButton("up", index, "&#8593;", "Up", index === 0),
+    draftActionButton("down", index, "&#8595;", "Down", index === total - 1),
+    draftActionButton("remove", index, "&#10005;", "Remove", total === 1, "danger"),
+  );
+  heading.append(title, actions);
+
+  const fields = document.createElement("div");
+  fields.className = "draft-step-fields";
+  fields.appendChild(draftKindField(step, index));
+  if (step.kind === "skill") {
+    fields.appendChild(draftInputField("Skill ID", "skillId", step.skillId, index));
+  } else if (step.kind === "memory") {
+    fields.appendChild(draftTextAreaField("Content", "content", step.content, index));
+    fields.appendChild(draftInputField("Tags", "tags", (step.tags || []).join(", "), index));
+  } else {
+    fields.appendChild(draftInputField("Query", "query", step.query, index));
+    fields.appendChild(draftInputField("Limit", "limit", step.limit ?? 5, index, "number"));
+  }
+
+  item.append(heading, fields);
+  return item;
+}
+
+function draftKindField(step, index) {
+  const label = document.createElement("label");
+  const span = document.createElement("span");
+  span.textContent = "Kind";
+  const select = document.createElement("select");
+  select.dataset.stepIndex = String(index);
+  select.dataset.draftField = "kind";
+  for (const value of ["context", "skill", "memory"]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    select.appendChild(option);
+  }
+  select.value = step.kind || "context";
+  label.append(span, select);
+  return label;
+}
+
+function draftInputField(labelText, field, value, index, type = "text") {
+  const label = document.createElement("label");
+  const span = document.createElement("span");
+  span.textContent = labelText;
+  const input = document.createElement("input");
+  input.type = type;
+  input.value = value ?? "";
+  input.dataset.stepIndex = String(index);
+  input.dataset.draftField = field;
+  label.append(span, input);
+  return label;
+}
+
+function draftTextAreaField(labelText, field, value, index) {
+  const label = document.createElement("label");
+  label.className = "field-wide";
+  const span = document.createElement("span");
+  span.textContent = labelText;
+  const textarea = document.createElement("textarea");
+  textarea.rows = 2;
+  textarea.value = value ?? "";
+  textarea.dataset.stepIndex = String(index);
+  textarea.dataset.draftField = field;
+  label.append(span, textarea);
+  return label;
+}
+
+function draftActionButton(action, index, iconHtml, label, disabled = false, variant = "") {
+  const button = document.createElement("button");
+  button.className = `item-action secondary ${variant}`.trim();
+  button.type = "button";
+  button.dataset.draftAction = action;
+  button.dataset.stepIndex = String(index);
+  button.disabled = disabled;
+  button.innerHTML = `<span aria-hidden="true">${iconHtml}</span><span>${label}</span>`;
+  return button;
+}
+
+function updateWorkflowDraftPreview(draft) {
+  nodes.workflowBuilderPreview.textContent = JSON.stringify(draft
+    ? {
+        status: draft.status,
+        workflow: draft.workflow,
+        sourceMap: draft.sourceMap,
+        review: draft.review,
+        llm: draft.llm
+          ? {
+              provider: draft.llm.provider,
+              model: draft.llm.model,
+              status: draft.llm.status,
+              planDraft: draft.llm.planDraft,
+            }
+          : null,
+      }
+    : {}, null, 2);
+}
+
+function renderPending(items) {
+  replaceList(nodes.pendingList, items, (item) => {
+    const title = item.run?.goal || item.reason || item.approvalId;
+    return itemNode({
+      title,
+      meta: [
+        ["pending", item.kind || "approval"],
+        [item.riskLevel || "risk", item.toolName],
+        ["trace", shortId(item.traceId)],
+        ["step", item.stepId || "-"],
+      ],
+      actions: [
+        detailButton(item.traceId),
+        actionButton("approve", item.approvalId, "&#10003;", "Approve"),
+        actionButton("reject", item.approvalId, "&#10005;", "Reject", "danger"),
+      ],
+    });
+  });
+}
+
+function renderResumable(items) {
+  replaceList(nodes.resumableList, items, (item) => {
+    const firstStep = item.approvedSteps[0] || {};
+    return itemNode({
+      title: item.goal || item.traceId,
+      meta: [
+        ["ready", `${item.approvedStepCount} approved`],
+        ["trace", shortId(item.traceId)],
+        ["updated", formatTime(item.updatedAt)],
+      ],
+      actions: [
+        detailButton(item.traceId),
+        resumeButton(item.traceId, firstStep.stepId, firstStep.approvalId),
+      ],
+    });
+  });
+}
+
+function renderRecent(items) {
+  replaceList(nodes.recentList, items, (item) => itemNode({
+    title: item.goal || item.traceId,
+    meta: [
+      [statusClass(item.status), item.status],
+      ["trace", shortId(item.traceId)],
+      ["pending", item.pendingApprovalCount],
+      ["ready", item.approvedCandidateApprovalCount],
+      ["updated", formatTime(item.updatedAt)],
+    ],
+    actions: item.canResume
+      ? [detailButton(item.traceId), resumeButton(item.traceId, "", "")]
+      : [detailButton(item.traceId)],
+  }));
+}
+
+async function loadDetail(traceId, options = {}) {
+  if (!traceId) return;
+  setStatus("Loading run detail");
+  try {
+    state.detail = await get(`/v1/runs/${encodeURIComponent(traceId)}`);
+    renderDetail(state.detail);
+    setStatus(`Loaded detail - ${shortId(traceId)}`);
+    if (options.scroll !== false) {
+      document.querySelector("#detail")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+async function loadWorkflowDetail(traceId, options = {}) {
+  if (!traceId) return;
+  setStatus("Loading workflow detail");
+  try {
+    state.detail = await get(`/v1/workflows/runs/${encodeURIComponent(traceId)}`);
+    state.detail.kind = "workflow";
+    renderDetail(state.detail);
+    setStatus(`Loaded workflow detail - ${shortId(traceId)}`);
+    if (options.scroll !== false) {
+      document.querySelector("#detail")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+function renderDetail(detail) {
+  nodes.detailPanel.replaceChildren();
+  if (!detail) {
+    nodes.detailState.textContent = "No run selected";
+    nodes.detailPanel.appendChild(nodes.emptyTemplate.content.cloneNode(true));
+    return;
+  }
+  if (detail.kind === "workflow") {
+    renderWorkflowDetail(detail);
+    return;
+  }
+  nodes.detailState.textContent = shortId(detail.traceId);
+  nodes.detailPanel.append(
+    renderDetailSummary(detail),
+    renderSourceMapBlock(detail.sourceMap),
+    renderCandidateSteps(detail.candidateSteps || []),
+    renderTimeline(detail.timeline || []),
+    renderToolResults(detail.toolResults || []),
+    renderRawRun(detail),
+  );
+}
+
+function renderWorkflowDetail(detail) {
+  nodes.detailState.textContent = `workflow ${shortId(detail.traceId)}`;
+  nodes.detailPanel.append(
+    renderWorkflowSummary(detail),
+    renderSourceMapBlock(detail.sourceMap),
+    renderWorkflowSteps(detail.steps || []),
+    renderTimeline(detail.timeline || []),
+    renderToolResults(detail.toolResults || []),
+    renderRawWorkflow(detail),
+  );
+}
+
+function renderWorkflowSummary(detail) {
+  const block = document.createElement("article");
+  block.className = "detail-summary";
+  const main = document.createElement("div");
+  const title = document.createElement("div");
+  title.className = "detail-title";
+  title.textContent = detail.summary.workflowName || detail.summary.goal || detail.traceId;
+  const meta = document.createElement("div");
+  meta.className = "item-meta";
+  for (const [kind, value] of [
+    [statusClass(detail.status), detail.status],
+    ["trace", shortId(detail.traceId)],
+    ["events", detail.summary.eventCount],
+  ]) {
+    const pill = document.createElement("span");
+    pill.className = `pill ${kind}`;
+    pill.textContent = String(value ?? "-");
+    meta.appendChild(pill);
+  }
+  const grid = document.createElement("div");
+  grid.className = "detail-grid";
+  for (const [label, value] of [
+    ["Steps", detail.summary.stepCount],
+    ["Results", detail.summary.resultCount],
+    ["Pending", detail.summary.pendingApprovalCount],
+    ["Tools", detail.summary.toolResultCount],
+  ]) {
+    const stat = document.createElement("div");
+    stat.className = "detail-stat";
+    stat.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+    grid.appendChild(stat);
+  }
+  main.append(title, meta, grid);
+  const actions = document.createElement("div");
+  actions.className = "item-actions";
+  if (detail.summary.resumableStepCount > 0) {
+    actions.appendChild(workflowResumeButton(detail.traceId));
+  }
+  block.append(main, actions);
+  return block;
+}
+
+function renderWorkflowSteps(steps) {
+  const block = detailBlock("Workflow Steps");
+  if (!steps.length) {
+    block.appendChild(emptyInline("No workflow steps"));
+    return block;
+  }
+  for (const step of steps) {
+    const row = document.createElement("div");
+    row.className = "step-row";
+    row.append(
+      textNode("div", step.kind || "-", "step-tool"),
+      textNode("div", step.id, "step-title"),
+      pillNode(step.status || "not_run", statusClass(step.status)),
+    );
+    block.appendChild(row);
+  }
+  return block;
+}
+
+function renderRawWorkflow(detail) {
+  const block = detailBlock("Raw Workflow");
+  const pre = document.createElement("pre");
+  pre.className = "json-view";
+  pre.textContent = JSON.stringify({
+    workflow: detail.workflow,
+    results: detail.results,
+    approvals: detail.approvals,
+    resumeEvents: detail.resumeEvents,
+    evaluations: detail.evaluations,
+  }, null, 2);
+  block.appendChild(pre);
+  return block;
+}
+
+function renderDetailSummary(detail) {
+  const block = document.createElement("article");
+  block.className = "detail-summary";
+  const main = document.createElement("div");
+  const title = document.createElement("div");
+  title.className = "detail-title";
+  title.textContent = detail.summary.goal || detail.traceId;
+  const meta = document.createElement("div");
+  meta.className = "item-meta";
+  for (const [kind, value] of [
+    [statusClass(detail.status), detail.status],
+    ["trace", shortId(detail.traceId)],
+    ["events", detail.summary.eventCount],
+  ]) {
+    const pill = document.createElement("span");
+    pill.className = `pill ${kind}`;
+    pill.textContent = String(value ?? "-");
+    meta.appendChild(pill);
+  }
+  const grid = document.createElement("div");
+  grid.className = "detail-grid";
+  for (const [label, value] of [
+    ["Approvals", detail.summary.approvalCount],
+    ["Pending", detail.summary.pendingApprovalCount],
+    ["Candidate", detail.summary.candidateStepCount],
+    ["Tools", detail.summary.toolResultCount],
+  ]) {
+    const stat = document.createElement("div");
+    stat.className = "detail-stat";
+    stat.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+    grid.appendChild(stat);
+  }
+  main.append(title, meta, grid);
+  const actions = document.createElement("div");
+  actions.className = "item-actions";
+  if (detail.summary.pendingApprovalCount === 0 && detail.approvals.some((approval) => approval.status === "approved")) {
+    actions.appendChild(resumeButton(detail.traceId, "", ""));
+  }
+  block.append(main, actions);
+  return block;
+}
+
+function renderCandidateSteps(steps) {
+  const block = detailBlock("Candidate Steps");
+  if (!steps.length) {
+    block.appendChild(emptyInline("No candidate steps"));
+    return block;
+  }
+  for (const step of steps) {
+    const row = document.createElement("div");
+    row.className = "step-row";
+    row.append(
+      textNode("div", step.toolName || "-", "step-tool"),
+      textNode("div", step.description || step.id, "step-title"),
+      pillNode(step.promotionStatus, statusClass(step.promotionStatus)),
+    );
+    block.appendChild(row);
+  }
+  return block;
+}
+
+function renderTimeline(events) {
+  const block = detailBlock("Timeline");
+  for (const event of events) {
+    const row = document.createElement("div");
+    row.className = "timeline-row";
+    row.append(
+      textNode("div", formatTime(event.createdAt), "timeline-time"),
+      textNode("div", event.label, "timeline-label"),
+      pillNode(event.status || event.type, statusClass(event.status)),
+    );
+    block.appendChild(row);
+  }
+  return block;
+}
+
+function renderToolResults(results) {
+  const block = detailBlock("Tool Results");
+  if (!results.length) {
+    block.appendChild(emptyInline("No tool results"));
+    return block;
+  }
+  for (const result of results) {
+    const row = document.createElement("div");
+    row.className = "step-row";
+    row.append(
+      textNode("div", result.toolName || "-", "step-tool"),
+      textNode("div", result.error?.message || result.output?.path || "tool result", "step-title"),
+      pillNode(result.status, statusClass(result.status)),
+    );
+    block.appendChild(row);
+  }
+  return block;
+}
+
+function renderRawRun(detail) {
+  const block = detailBlock("Raw Run");
+  const pre = document.createElement("pre");
+  pre.className = "json-view";
+  pre.textContent = JSON.stringify({
+    run: detail.run,
+    approvals: detail.approvals,
+    resumeEvents: detail.resumeEvents,
+    evaluations: detail.evaluations,
+  }, null, 2);
+  block.appendChild(pre);
+  return block;
+}
+
+function detailBlock(titleText) {
+  const block = document.createElement("article");
+  block.className = "detail-block";
+  const title = document.createElement("h3");
+  title.textContent = titleText;
+  block.appendChild(title);
+  return block;
+}
+
+function replaceList(node, items, renderItem) {
+  node.replaceChildren();
+  if (!items.length) {
+    node.appendChild(nodes.emptyTemplate.content.cloneNode(true));
+    return;
+  }
+  for (const item of items) {
+    node.appendChild(renderItem(item));
+  }
+}
+
+function itemNode(input) {
+  const item = document.createElement("article");
+  item.className = "work-item";
+
+  const body = document.createElement("div");
+  const title = document.createElement("div");
+  title.className = "item-title";
+  title.textContent = input.title;
+  const meta = document.createElement("div");
+  meta.className = "item-meta";
+  for (const [kind, value] of input.meta) {
+    const pill = document.createElement("span");
+    pill.className = `pill ${kind}`;
+    pill.textContent = String(value ?? "-");
+    meta.appendChild(pill);
+  }
+  body.append(title, meta);
+
+  const actions = document.createElement("div");
+  actions.className = "item-actions";
+  for (const action of input.actions) actions.appendChild(action);
+
+  item.append(body, actions);
+  return item;
+}
+
+function actionButton(action, approvalId, iconHtml, label, variant = "") {
+  const button = document.createElement("button");
+  button.className = `item-action ${variant}`.trim();
+  button.type = "button";
+  button.dataset.action = action;
+  button.dataset.approvalId = approvalId;
+  button.innerHTML = `<span aria-hidden="true">${iconHtml}</span><span>${label}</span>`;
+  return button;
+}
+
+function resumeButton(traceId, stepId, approvalId) {
+  const button = document.createElement("button");
+  button.className = "item-action";
+  button.type = "button";
+  button.dataset.action = "resume";
+  button.dataset.traceId = traceId;
+  if (stepId) button.dataset.stepId = stepId;
+  if (approvalId) button.dataset.approvalId = approvalId;
+  button.innerHTML = '<span aria-hidden="true">&#9654;</span><span>Resume</span>';
+  return button;
+}
+
+function detailButton(traceId) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "details";
+  button.dataset.traceId = traceId;
+  button.innerHTML = '<span aria-hidden="true">&#9432;</span><span>Details</span>';
+  return button;
+}
+
+function workflowDetailButton(traceId) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "workflow-details";
+  button.dataset.traceId = traceId;
+  button.innerHTML = '<span aria-hidden="true">&#9432;</span><span>Details</span>';
+  return button;
+}
+
+function workflowResumeButton(traceId) {
+  const button = document.createElement("button");
+  button.className = "item-action";
+  button.type = "button";
+  button.dataset.action = "workflow-resume";
+  button.dataset.traceId = traceId;
+  button.innerHTML = '<span aria-hidden="true">&#9654;</span><span>Resume</span>';
+  return button;
+}
+
+function workflowRestoreButton(workflowId, revision) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "workflow-restore";
+  button.dataset.workflowId = workflowId;
+  button.dataset.revision = revision;
+  button.innerHTML = '<span aria-hidden="true">&#8634;</span><span>Restore</span>';
+  return button;
+}
+
+function libraryButton(action, id, iconHtml, label) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = action;
+  if (action.startsWith("skill-evaluation")) button.dataset.evaluationId = id;
+  if (action.startsWith("skill-")) button.dataset.skillId = id;
+  if (action.startsWith("workflow-")) button.dataset.workflowId = id;
+  button.innerHTML = `<span aria-hidden="true">${iconHtml}</span><span>${label}</span>`;
+  return button;
+}
+
+function textNode(tagName, text, className) {
+  const node = document.createElement(tagName);
+  if (className) node.className = className;
+  node.textContent = String(text ?? "-");
+  return node;
+}
+
+function pillNode(text, className = "") {
+  const pill = document.createElement("span");
+  pill.className = `pill ${className}`.trim();
+  pill.textContent = String(text ?? "-");
+  return pill;
+}
+
+function emptyInline(text) {
+  const empty = nodes.emptyTemplate.content.cloneNode(true);
+  empty.querySelector(".empty-text").textContent = text;
+  return empty;
+}
+
+function shortId(value) {
+  if (!value) return "-";
+  const text = String(value);
+  return text.length <= 18 ? text : `${text.slice(0, 10)}...${text.slice(-6)}`;
+}
+
+function statusClass(value) {
+  if (["completed", "dry_run", "approved", "passed"].includes(value)) return "completed";
+  if (["failed", "blocked", "completed_with_blockers"].includes(value)) return "failed";
+  if (["requires_approval", "action_required", "candidate", "needs_review"].includes(value)) return "pending";
+  return "";
+}
+
+function formatTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString([], {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function splitCsv(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function setStatus(message, isError = false) {
+  nodes.statusLine.textContent = message;
+  nodes.statusLine.classList.toggle("error", isError);
+}

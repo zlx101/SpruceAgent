@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/skill.schema.json",
+  "title": "SpruceAgent Skill",
+  "type": "object",
+  "required": ["id", "name", "version", "status", "summary", "steps", "createdAt", "updatedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^skill_[a-z0-9_]+$" },
+    "name": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "revision": { "type": "integer", "minimum": 1 },
+    "status": {
+      "type": "string",
+      "enum": ["candidate", "approved", "deprecated", "blocked"]
+    },
+    "summary": { "type": "string", "minLength": 1 },
+    "steps": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "executableSteps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "toolName", "input", "source"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "toolName": { "type": "string" },
+          "input": { "type": "object" },
+          "source": { "type": "string" }
+        }
+      }
+    },
+    "sourceTraceIds": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "eval": { "type": "object" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "metadata": { "type": "object" }
+  }
+}

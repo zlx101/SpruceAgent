@@ -1,0 +1,20 @@
+{
+  "name": "spruceagent",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "The open-source SuperAgent OS for future super individuals and super teams.",
+  "bin": {
+    "spruce": "apps/cli/bin/spruce.js"
+  },
+  "scripts": {
+    "spruce": "node apps/cli/bin/spruce.js",
+    "doctor": "node apps/cli/bin/spruce.js doctor",
+    "alpha:smoke": "node scripts/alpha-smoke.js",
+    "check": "node --check apps/cli/bin/spruce.js && node --check apps/desktop/app.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

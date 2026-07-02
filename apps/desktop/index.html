@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SpruceAgent Workbench</title>
+    <link rel="stylesheet" href="/workbench/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <img class="brand-mark" src="/workbench/assets/spruce-mark.svg" alt="">
+          <div>
+            <div class="brand-name">SpruceAgent</div>
+            <div class="brand-subtitle">Workbench</div>
+          </div>
+        </div>
+
+        <form id="connection-form" class="connection-panel">
+          <label>
+            <span>Gateway</span>
+            <input id="gateway-url" name="gatewayUrl" autocomplete="url" spellcheck="false">
+          </label>
+          <label>
+            <span>Token</span>
+            <input id="gateway-token" name="token" type="password" autocomplete="off" spellcheck="false">
+          </label>
+          <button class="primary-action" type="submit"><span aria-hidden="true">&#8635;</span><span>Connect</span></button>
+        </form>
+
+        <nav class="nav-list" aria-label="Workbench views">
+          <a href="#launch">Launch</a>
+          <a href="#workflow-editor">Editor</a>
+          <a href="#workflow-builder">Builder</a>
+          <a href="#skills">Skills</a>
+          <a href="#skillforge">SkillForge</a>
+          <a href="#workflows">Workflows</a>
+          <a href="#workflow-runs">Workflow Runs</a>
+          <a href="#approvals">Approvals</a>
+          <a href="#resumable">Resumable</a>
+          <a href="#recent">Recent</a>
+          <a href="#detail">Detail</a>
+        </nav>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <h1>Agent Workbench</h1>
+            <p id="status-line">Disconnected</p>
+          </div>
+          <div class="toolbar">
+            <button id="refresh-button" class="icon-button" type="button" title="Refresh" aria-label="Refresh">&#8635;</button>
+          </div>
+        </header>
+
+        <section class="summary-grid" aria-label="Run inbox summary">
+          <article class="metric">
+            <span class="metric-label">Pending</span>
+            <strong id="pending-count">0</strong>
+          </article>
+          <article class="metric">
+            <span class="metric-label">Ready</span>
+            <strong id="resumable-count">0</strong>
+          </article>
+          <article class="metric">
+            <span class="metric-label">Recent</span>
+            <strong id="recent-count">0</strong>
+          </article>
+        </section>
+
+        <section id="launch" class="work-section">
+          <div class="section-heading">
+            <h2>Launch Run</h2>
+            <span id="launch-state" class="section-state">Ready</span>
+          </div>
+          <form id="run-form" class="run-form">
+            <label class="field-wide">
+              <span>Goal</span>
+              <textarea id="run-goal" name="goal" rows="3" spellcheck="true" required></textarea>
+            </label>
+            <label>
+              <span>Context</span>
+              <input id="run-context" name="context" spellcheck="false">
+            </label>
+            <label>
+              <span>Trust</span>
+              <select id="run-trust" name="trustMode">
+                <option value="approve">Approve</option>
+                <option value="observe">Observe</option>
+              </select>
+            </label>
+            <label>
+              <span>LLM</span>
+              <select id="run-llm" name="llmProvider">
+                <option value="">None</option>
+                <option value="mock">Mock</option>
+                <option value="deepseek">DeepSeek</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="local">Local</option>
+                <option value="openai-compatible">OpenAI-compatible</option>
+              </select>
+            </label>
+            <label>
+              <span>Model</span>
+              <input id="run-model" name="llmModel" spellcheck="false">
+            </label>
+            <div class="run-options field-wide">
+              <label class="check-field">
+                <input id="run-dry-run" name="dryRun" type="checkbox" checked>
+                <span>Dry run</span>
+              </label>
+              <label class="check-field">
+                <input id="run-promote" name="promotePlan" type="checkbox">
+                <span>Promote</span>
+              </label>
+              <label class="check-field">
+                <input id="run-request-approvals" name="requestCandidateApprovals" type="checkbox">
+                <span>Request approvals</span>
+              </label>
+              <label class="check-field">
+                <input id="run-execute-candidate" name="executeCandidatePlan" type="checkbox">
+                <span>Execute candidate</span>
+              </label>
+            </div>
+            <div class="form-actions field-wide">
+              <button id="run-submit" class="primary-action" type="submit"><span aria-hidden="true">&#9654;</span><span>Run</span></button>
+            </div>
+          </form>
+        </section>
+
+        <section id="workflow-editor" class="work-section">
+          <div class="section-heading">
+            <h2>Workflow Editor</h2>
+            <span id="workflow-editor-state" class="section-state">Ready</span>
+          </div>
+          <form id="workflow-form" class="run-form">
+            <label>
+              <span>Name</span>
+              <input id="workflow-name" name="name" spellcheck="true" required>
+            </label>
+            <label>
+              <span>Summary</span>
+              <input id="workflow-summary" name="summary" spellcheck="true">
+            </label>
+            <label>
+              <span>Skill</span>
+              <select id="workflow-skill" name="skillId">
+                <option value="">None</option>
+              </select>
+            </label>
+            <label>
+              <span>Context query</span>
+              <input id="workflow-context" name="contextQuery" spellcheck="false">
+            </label>
+            <label>
+              <span>Memory note</span>
+              <input id="workflow-memory" name="memory" spellcheck="true">
+            </label>
+            <label>
+              <span>Memory tags</span>
+              <input id="workflow-tags" name="tags" spellcheck="false" placeholder="workflow,review">
+            </label>
+            <label class="field-wide">
+              <span>JSON steps</span>
+              <textarea id="workflow-steps-json" name="stepsJson" rows="4" spellcheck="false" placeholder='[{"kind":"context","query":"TrustKernel"}]'></textarea>
+            </label>
+            <div class="form-actions field-wide">
+              <button id="workflow-submit" class="primary-action" type="submit"><span aria-hidden="true">&#43;</span><span>Create</span></button>
+            </div>
+          </form>
+        </section>
+
+        <section id="workflow-builder" class="work-section">
+          <div class="section-heading">
+            <h2>Workflow Builder</h2>
+            <span id="workflow-builder-state" class="section-state">Ready</span>
+          </div>
+          <form id="workflow-builder-form" class="run-form">
+            <label>
+              <span>Goal</span>
+              <input id="workflow-builder-goal" name="goal" spellcheck="true" required>
+            </label>
+            <label>
+              <span>Context query</span>
+              <input id="workflow-builder-context" name="contextQuery" spellcheck="false">
+            </label>
+            <label>
+              <span>Skill</span>
+              <select id="workflow-builder-skill" name="skillId">
+                <option value="">None</option>
+              </select>
+            </label>
+            <label>
+              <span>LLM</span>
+              <select id="workflow-builder-llm" name="llmProvider">
+                <option value="mock">Mock</option>
+                <option value="deepseek">DeepSeek</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="local">Local</option>
+                <option value="openai-compatible">OpenAI-compatible</option>
+              </select>
+            </label>
+            <label>
+              <span>Model</span>
+              <input id="workflow-builder-model" name="llmModel" spellcheck="false">
+            </label>
+            <label>
+              <span>Name</span>
+              <input id="workflow-builder-name" name="name" spellcheck="true">
+            </label>
+            <div class="form-actions field-wide">
+              <button id="workflow-builder-submit" class="primary-action" type="submit"><span aria-hidden="true">&#9881;</span><span>Draft</span></button>
+              <button id="workflow-builder-save" class="secondary-action" type="button" disabled><span aria-hidden="true">&#43;</span><span>Save Draft</span></button>
+            </div>
+          </form>
+          <div class="draft-actions" aria-label="Draft step actions">
+            <button id="workflow-draft-add-context" class="secondary-action" type="button" disabled><span aria-hidden="true">&#8981;</span><span>Add Context</span></button>
+            <button id="workflow-draft-add-skill" class="secondary-action" type="button" disabled><span aria-hidden="true">&#9881;</span><span>Add Skill</span></button>
+            <button id="workflow-draft-add-memory" class="secondary-action" type="button" disabled><span aria-hidden="true">&#43;</span><span>Add Memory</span></button>
+          </div>
+          <div id="workflow-draft-list" class="draft-step-list"></div>
+          <div id="workflow-source-map" class="source-map-list"></div>
+          <pre id="workflow-builder-preview" class="json-view builder-preview">{}</pre>
+        </section>
+
+        <section id="skills" class="work-section">
+          <div class="section-heading">
+            <h2>Approved Skills</h2>
+            <span id="skill-state" class="section-state">0</span>
+          </div>
+          <div id="skill-list" class="item-list"></div>
+        </section>
+
+        <section id="skillforge" class="work-section">
+          <div class="section-heading">
+            <h2>SkillForge</h2>
+            <span id="candidate-skill-state" class="section-state">0 candidates</span>
+          </div>
+          <div id="candidate-skill-list" class="item-list"></div>
+          <div class="section-heading subheading">
+            <h2>Skill Evaluations</h2>
+            <span id="skill-evaluation-state" class="section-state">0 reports</span>
+          </div>
+          <div id="skill-evaluation-list" class="item-list"></div>
+          <pre id="skill-evaluation-panel" class="json-view evaluation-preview">{}</pre>
+        </section>
+
+        <section id="workflows" class="work-section">
+          <div class="section-heading">
+            <h2>Workflows</h2>
+            <span id="workflow-state" class="section-state">0</span>
+          </div>
+          <div id="workflow-list" class="item-list"></div>
+        </section>
+
+        <section id="workflow-versions" class="work-section">
+          <div class="section-heading">
+            <h2>Workflow Versions</h2>
+            <span id="workflow-version-state" class="section-state">No workflow selected</span>
+          </div>
+          <div id="workflow-version-list" class="item-list"></div>
+        </section>
+
+        <section id="workflow-runs" class="work-section">
+          <div class="section-heading">
+            <h2>Workflow Runs</h2>
+            <span id="workflow-run-state" class="section-state">0</span>
+          </div>
+          <div id="workflow-run-list" class="item-list"></div>
+        </section>
+
+        <section id="approvals" class="work-section">
+          <div class="section-heading">
+            <h2>Pending Approvals</h2>
+            <span id="approval-state" class="section-state">0</span>
+          </div>
+          <div id="pending-list" class="item-list"></div>
+        </section>
+
+        <section id="resumable" class="work-section">
+          <div class="section-heading">
+            <h2>Ready To Resume</h2>
+            <span id="resume-state" class="section-state">0</span>
+          </div>
+          <div id="resumable-list" class="item-list"></div>
+        </section>
+
+        <section id="recent" class="work-section">
+          <div class="section-heading">
+            <h2>Recent Runs</h2>
+            <span id="recent-state" class="section-state">0</span>
+          </div>
+          <div id="recent-list" class="item-list"></div>
+        </section>
+
+        <section id="detail" class="work-section detail-section">
+          <div class="section-heading">
+            <h2>Run Detail</h2>
+            <span id="detail-state" class="section-state">No run selected</span>
+          </div>
+          <div id="detail-panel" class="detail-panel">
+            <div class="empty-state">
+              <span class="empty-line"></span>
+              <span class="empty-text">Select Details on a run</span>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <template id="empty-template">
+      <div class="empty-state">
+        <span class="empty-line"></span>
+        <span class="empty-text">No items</span>
+      </div>
+    </template>
+
+    <script src="/workbench/app.js" type="module"></script>
+  </body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/skill-version.schema.json",
+  "title": "SpruceAgent Skill Version",
+  "type": "object",
+  "required": ["id", "skillId", "revision", "version", "status", "event", "actor", "reason", "evaluationId", "createdAt", "skill"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^skill_version_[a-z0-9_]+$" },
+    "skillId": { "type": "string", "pattern": "^skill_[a-z0-9_]+$" },
+    "revision": { "type": "integer", "minimum": 1 },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "status": { "type": "string" },
+    "event": { "type": "string", "enum": ["skill.approved", "skill.promoted", "skill.restored"] },
+    "actor": { "type": "string" },
+    "reason": { "type": "string" },
+    "evaluationId": {
+      "anyOf": [
+        { "type": "string", "pattern": "^skill_eval_[a-z0-9_]+$" },
+        { "type": "null" }
+      ]
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "skill": { "type": "object" }
+  }
+}

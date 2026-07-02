@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/trace-event.schema.json",
+  "title": "SpruceAgent Trace Event",
+  "type": "object",
+  "required": ["id", "traceId", "type", "createdAt", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^event_[a-z0-9_]+$" },
+    "traceId": { "type": "string", "pattern": "^trace_[a-z0-9_]+$" },
+    "type": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "payload": { "type": "object" }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/workspace-index.schema.json",
+  "title": "SpruceAgent Workspace Index",
+  "type": "object",
+  "required": ["version", "indexedAt", "root", "documentCount", "skippedCount", "maxBytes", "documents", "skipped"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "integer" },
+    "indexedAt": { "type": "string", "format": "date-time" },
+    "root": { "type": "string" },
+    "documentCount": { "type": "integer", "minimum": 0 },
+    "skippedCount": { "type": "integer", "minimum": 0 },
+    "maxBytes": { "type": "integer", "minimum": 1 },
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "extension", "bytes", "mtimeMs", "hash", "lineCount", "content"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string" },
+          "extension": { "type": "string" },
+          "bytes": { "type": "integer", "minimum": 0 },
+          "mtimeMs": { "type": "number" },
+          "hash": { "type": "string" },
+          "lineCount": { "type": "integer", "minimum": 0 },
+          "content": { "type": "string" }
+        }
+      }
+    },
+    "skipped": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "reason"],
+        "additionalProperties": true,
+        "properties": {
+          "path": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  }
+}

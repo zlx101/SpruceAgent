@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/skill-promotion.schema.json",
+  "title": "SpruceAgent Skill Promotion",
+  "type": "object",
+  "required": ["id", "version", "status", "skill", "evaluation", "gate", "versionSnapshot", "limits"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^promotion_skill_[a-z0-9_]+_\\d+$" },
+    "version": { "type": "string" },
+    "status": { "type": "string", "enum": ["promoted"] },
+    "skill": { "type": "object" },
+    "evaluation": { "type": "object" },
+    "gate": {
+      "type": "object",
+      "required": ["minimumScore", "reliabilityScore", "evaluationStatus", "passed"],
+      "additionalProperties": false,
+      "properties": {
+        "minimumScore": { "type": "number", "minimum": 0, "maximum": 100 },
+        "reliabilityScore": { "type": "number", "minimum": 0, "maximum": 100 },
+        "evaluationStatus": { "type": "string" },
+        "passed": { "type": "boolean" }
+      }
+    },
+    "versionSnapshot": {
+      "anyOf": [
+        { "type": "object" },
+        { "type": "null" }
+      ]
+    },
+    "limits": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

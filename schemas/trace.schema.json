@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/trace.schema.json",
+  "title": "SpruceAgent Trace",
+  "type": "object",
+  "required": ["id", "goal", "actor", "channel", "trustMode", "status", "createdAt", "updatedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^trace_[a-z0-9_]+$" },
+    "goal": { "type": "string", "minLength": 1 },
+    "actor": { "type": "string", "minLength": 1 },
+    "channel": { "type": "string", "minLength": 1 },
+    "trustMode": {
+      "type": "string",
+      "enum": ["observe", "draft", "approve", "delegate", "autonomous"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["running", "succeeded", "failed", "cancelled"]
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "metadata": { "type": "object" }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/workflow.schema.json",
+  "title": "SpruceAgent Workflow",
+  "type": "object",
+  "required": ["id", "name", "version", "revision", "status", "steps", "createdAt", "updatedAt", "archivedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^workflow_[a-z0-9_]+$" },
+    "name": { "type": "string" },
+    "version": { "type": "string" },
+    "revision": { "type": "integer", "minimum": 1 },
+    "status": { "type": "string", "enum": ["draft", "active", "deprecated", "archived"] },
+    "summary": { "type": "string" },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind"],
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string" },
+          "kind": { "type": "string", "enum": ["context", "tool", "skill", "memory"] }
+        }
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "archivedAt": { "type": ["string", "null"], "format": "date-time" },
+    "metadata": { "type": "object" }
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/skill-package.schema.json",
+  "title": "SpruceAgent Skill Package",
+  "type": "object",
+  "required": ["id", "version", "packageKind", "exportedAt", "exportedBy", "source", "skill", "evidence", "limits", "integrity"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^skill_pkg_[a-z0-9_]+$" },
+    "version": { "type": "string" },
+    "packageKind": { "type": "string", "enum": ["portable_skill_package"] },
+    "exportedAt": { "type": "string", "format": "date-time" },
+    "exportedBy": { "type": "string" },
+    "source": {
+      "type": "object",
+      "required": ["workspaceName", "originalSkillId", "skillStatus", "skillRevision"],
+      "additionalProperties": false,
+      "properties": {
+        "workspaceName": { "type": "string" },
+        "originalSkillId": { "type": "string", "pattern": "^skill_[a-z0-9_]+$" },
+        "skillStatus": { "type": "string" },
+        "skillRevision": {
+          "anyOf": [
+            { "type": "integer", "minimum": 1 },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "skill": {
+      "type": "object",
+      "required": ["name", "version", "summary", "steps", "sourceTraceIds", "metadata"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "summary": { "type": "string" },
+        "steps": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "sourceTraceIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "metadata": { "type": "object" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["versions", "evaluations", "replayFixtures", "replayResults"],
+      "additionalProperties": false,
+      "properties": {
+        "versions": { "type": "array" },
+        "evaluations": { "type": "array" },
+        "replayFixtures": { "type": "array" },
+        "replayResults": { "type": "array" }
+      }
+    },
+    "limits": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "integrity": {
+      "type": "object",
+      "required": ["algorithm", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["sha256"] },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    }
+  }
+}

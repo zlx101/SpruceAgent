@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/llm-adapter.schema.json",
+  "title": "SpruceAgent LLM Adapter Contract",
+  "type": "object",
+  "required": ["version", "interface", "defaultProvider", "supportedProviders", "outputKind", "safetyBoundary", "requestShape", "responseShape"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "string" },
+    "interface": { "type": "string", "const": "spruceagent.llm-adapter" },
+    "defaultProvider": { "type": "string" },
+    "supportedProviders": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "outputKind": { "type": "string", "const": "plan_draft" },
+    "safetyBoundary": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "requestShape": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "responseShape": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    }
+  }
+}

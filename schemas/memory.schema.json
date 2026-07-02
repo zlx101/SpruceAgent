@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/memory.schema.json",
+  "title": "SpruceAgent Memory",
+  "type": "object",
+  "required": ["id", "scope", "kind", "content", "tags", "createdAt"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^mem_[a-z0-9_]+$" },
+    "scope": {
+      "type": "string",
+      "enum": ["session", "project", "user", "team", "tool", "skill"]
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["note", "preference", "fact", "decision", "procedure", "constraint", "summary"]
+    },
+    "content": { "type": "string", "minLength": 1 },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "source": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "metadata": { "type": "object" }
+  }
+}

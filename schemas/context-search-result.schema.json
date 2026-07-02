@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/context-search-result.schema.json",
+  "title": "SpruceAgent Context Search Result",
+  "type": "object",
+  "required": ["path", "score", "bytes", "lineCount", "hash", "snippet"],
+  "additionalProperties": false,
+  "properties": {
+    "path": { "type": "string" },
+    "score": { "type": "number" },
+    "bytes": { "type": "integer", "minimum": 0 },
+    "lineCount": { "type": "integer", "minimum": 0 },
+    "hash": { "type": "string" },
+    "snippet": { "type": "string" }
+  }
+}

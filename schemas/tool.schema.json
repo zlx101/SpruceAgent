@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/tool.schema.json",
+  "title": "SpruceAgent Tool",
+  "type": "object",
+  "required": ["name", "description", "capability", "riskLevel", "inputSchema", "outputSchema"],
+  "additionalProperties": false,
+  "properties": {
+    "name": { "type": "string", "pattern": "^[a-z][a-z0-9_\\-]*$" },
+    "description": { "type": "string", "minLength": 1 },
+    "capability": {
+      "type": "string",
+      "enum": ["read", "write", "execute", "network", "identity", "memory", "skill"]
+    },
+    "riskLevel": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"]
+    },
+    "requiresApproval": { "type": "boolean", "default": false },
+    "inputSchema": { "type": "object" },
+    "outputSchema": { "type": "object" },
+    "metadata": { "type": "object" }
+  }
+}

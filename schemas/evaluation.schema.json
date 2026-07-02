@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/evaluation.schema.json",
+  "title": "SpruceAgent Evaluation",
+  "type": "object",
+  "required": ["id", "traceId", "targetKind", "status", "createdAt", "summary", "findings", "recommendedNextActions", "limits"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^evaluation_[a-z0-9_]+$" },
+    "traceId": { "type": "string", "pattern": "^trace_[a-z0-9_]+$" },
+    "targetKind": { "type": "string", "enum": ["trace", "workflow.run"] },
+    "workflowId": {
+      "anyOf": [
+        { "type": "string", "pattern": "^workflow_[a-z0-9_]+$" },
+        { "type": "null" }
+      ]
+    },
+    "status": { "type": "string", "enum": ["passed", "requires_approval", "needs_attention", "incomplete"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "summary": {
+      "type": "object",
+      "required": [
+        "eventCount",
+        "workflowStatus",
+        "stepCount",
+        "stepStatusCounts",
+        "toolCallCount",
+        "toolStatusCounts",
+        "approvalCount",
+        "policyDecisionCounts",
+        "riskCounts",
+        "reliabilityScore"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "eventCount": { "type": "integer", "minimum": 0 },
+        "workflowStatus": {
+          "anyOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
+        "stepCount": { "type": "integer", "minimum": 0 },
+        "stepStatusCounts": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+        "toolCallCount": { "type": "integer", "minimum": 0 },
+        "toolStatusCounts": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+        "approvalCount": { "type": "integer", "minimum": 0 },
+        "policyDecisionCounts": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+        "riskCounts": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+        "reliabilityScore": { "type": "integer", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "code", "message"],
+        "additionalProperties": true,
+        "properties": {
+          "severity": { "type": "string", "enum": ["info", "warning", "error"] },
+          "code": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    },
+    "recommendedNextActions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "limits": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

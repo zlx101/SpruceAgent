@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/approval.schema.json",
+  "title": "SpruceAgent Approval Ticket",
+  "type": "object",
+  "required": [
+    "id",
+    "status",
+    "toolName",
+    "input",
+    "decision",
+    "requester",
+    "reason",
+    "createdAt",
+    "updatedAt",
+    "expiresAt"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^approval_[a-z0-9_]+$" },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "approved", "rejected", "expired", "consumed"]
+    },
+    "toolName": { "type": "string" },
+    "input": { "type": "object" },
+    "decision": { "$ref": "policy.schema.json" },
+    "traceId": { "type": "string" },
+    "requester": { "type": "string" },
+    "reason": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "resolvedAt": { "type": ["string", "null"], "format": "date-time" },
+    "resolvedBy": { "type": ["string", "null"] },
+    "resolutionReason": { "type": "string" },
+    "metadata": { "type": "object" }
+  }
+}

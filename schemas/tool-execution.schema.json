@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/tool-execution.schema.json",
+  "title": "SpruceAgent Tool Execution Result",
+  "type": "object",
+  "required": ["toolName", "input", "decision", "status"],
+  "additionalProperties": false,
+  "properties": {
+    "toolName": { "type": "string" },
+    "input": { "type": "object" },
+    "decision": { "$ref": "policy.schema.json" },
+    "status": {
+      "type": "string",
+      "enum": ["succeeded", "failed", "blocked", "requires_approval"]
+    },
+    "reason": { "type": "string" },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": "string", "format": "date-time" },
+    "output": { "type": "object" },
+    "error": { "type": "object" }
+  }
+}

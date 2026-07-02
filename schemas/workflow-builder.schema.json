@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/workflow-builder.schema.json",
+  "title": "SpruceAgent Workflow Builder Draft",
+  "type": "object",
+  "required": ["version", "status", "goal", "context", "llm", "workflow", "review"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "string" },
+    "status": { "type": "string", "enum": ["drafted", "failed", "saved"] },
+    "goal": { "type": "string" },
+    "context": { "type": "object" },
+    "llm": { "type": ["object", "null"] },
+    "workflow": { "type": "object" },
+    "review": {
+      "type": "object",
+      "required": ["source", "contextPaths", "approvedSkill", "proposedStepCount", "saved", "limits"],
+      "additionalProperties": true,
+      "properties": {
+        "source": { "type": "object" },
+        "contextPaths": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "approvedSkill": { "type": ["object", "null"] },
+        "proposedStepCount": { "type": "integer", "minimum": 0 },
+        "saved": { "type": "boolean" },
+        "limits": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

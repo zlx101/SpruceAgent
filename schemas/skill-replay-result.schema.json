@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/skill-replay-result.schema.json",
+  "title": "SpruceAgent Skill Replay Result",
+  "type": "object",
+  "required": ["id", "version", "fixtureId", "skillId", "status", "createdAt", "summary", "checks", "limits"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^skill_replay_[a-z0-9_]+$" },
+    "version": { "type": "string" },
+    "fixtureId": { "type": "string", "pattern": "^skill_fixture_[a-z0-9_]+$" },
+    "skillId": { "type": "string", "pattern": "^skill_[a-z0-9_]+$" },
+    "status": { "type": "string", "enum": ["passed", "failed"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "summary": {
+      "type": "object",
+      "required": ["checkCount", "passedCount", "failedCount", "evaluationId", "reliabilityScore"],
+      "additionalProperties": false,
+      "properties": {
+        "checkCount": { "type": "integer", "minimum": 0 },
+        "passedCount": { "type": "integer", "minimum": 0 },
+        "failedCount": { "type": "integer", "minimum": 0 },
+        "evaluationId": {
+          "anyOf": [
+            { "type": "string", "pattern": "^skill_eval_[a-z0-9_]+$" },
+            { "type": "null" }
+          ]
+        },
+        "reliabilityScore": {
+          "anyOf": [
+            { "type": "number", "minimum": 0, "maximum": 100 },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["status", "code", "message"],
+        "additionalProperties": true,
+        "properties": {
+          "status": { "type": "string", "enum": ["passed", "failed"] },
+          "code": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    },
+    "limits": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

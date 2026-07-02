@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/agent-run.schema.json",
+  "title": "SpruceAgent Agent Run",
+  "type": "object",
+  "required": ["id", "status", "goal", "traceId", "knownFacts", "context", "plan", "results", "limits"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^trace_[a-z0-9_]+$" },
+    "status": {
+      "type": "string",
+      "enum": ["dry_run", "completed", "requires_approval", "failed"]
+    },
+    "goal": { "type": "string" },
+    "traceId": { "type": "string", "pattern": "^trace_[a-z0-9_]+$" },
+    "knownFacts": { "type": "object" },
+    "context": { "type": "object" },
+    "skill": { "type": ["object", "null"] },
+    "plan": { "type": "object" },
+    "llm": { "type": ["object", "null"] },
+    "candidatePlan": { "type": ["object", "null"] },
+    "candidateApprovals": { "type": ["object", "null"] },
+    "candidateExecution": { "type": ["object", "null"] },
+    "results": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "memory": { "type": "object" },
+    "summary": { "type": "string" },
+    "limits": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

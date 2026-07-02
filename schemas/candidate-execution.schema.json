@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/candidate-execution.schema.json",
+  "title": "SpruceAgent Candidate Execution",
+  "type": "object",
+  "required": ["version", "status", "resultCount", "summary", "results", "limits"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["completed", "requires_approval", "completed_with_blockers"]
+    },
+    "resultCount": { "type": "integer", "minimum": 0 },
+    "summary": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["stepId", "status"],
+        "additionalProperties": true,
+        "properties": {
+          "stepId": { "type": "string" },
+          "promotionStatus": {
+            "type": "string",
+            "enum": ["ready", "requires_approval", "blocked", "not_promotable"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["succeeded", "failed", "blocked", "requires_approval", "skipped"]
+          },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "limits": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

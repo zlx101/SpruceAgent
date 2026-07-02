@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">SpruceAgent mark</title>
+  <rect width="96" height="96" rx="20" fill="#12312b"/>
+  <path d="M48 13 24 50h16L20 78h23v9h10v-9h23L56 50h16L48 13Z" fill="#9fd4a8"/>
+  <path d="M48 13v74" stroke="#f1f7f2" stroke-width="4" stroke-linecap="round" opacity=".85"/>
+  <path d="M37 50h22M34 65h28" stroke="#12312b" stroke-width="4" stroke-linecap="round" opacity=".45"/>
+</svg>

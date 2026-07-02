@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/skill-replay-fixture.schema.json",
+  "title": "SpruceAgent Skill Replay Fixture",
+  "type": "object",
+  "required": ["id", "version", "skillId", "skillStatus", "skillRevision", "evaluationId", "name", "description", "createdAt", "expected", "limits"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^skill_fixture_[a-z0-9_]+$" },
+    "version": { "type": "string" },
+    "skillId": { "type": "string", "pattern": "^skill_[a-z0-9_]+$" },
+    "skillStatus": { "type": "string" },
+    "skillRevision": {
+      "anyOf": [
+        { "type": "integer", "minimum": 1 },
+        { "type": "null" }
+      ]
+    },
+    "evaluationId": { "type": "string", "pattern": "^skill_eval_[a-z0-9_]+$" },
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "expected": {
+      "type": "object",
+      "required": ["skillName", "stepCount", "executableSteps", "minimumScore", "evaluationStatus", "policyDecisionCounts", "riskCounts", "sourceTraceIds", "sourceTraceCount"],
+      "additionalProperties": false,
+      "properties": {
+        "skillName": { "type": "string" },
+        "stepCount": { "type": "integer", "minimum": 0 },
+        "executableSteps": { "type": "array" },
+        "minimumScore": { "type": "number", "minimum": 0, "maximum": 100 },
+        "evaluationStatus": { "type": "string" },
+        "policyDecisionCounts": { "type": "object" },
+        "riskCounts": { "type": "object" },
+        "sourceTraceIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "sourceTraceCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "limits": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

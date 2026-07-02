@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/gateway.schema.json",
+  "title": "SpruceAgent GatewayMesh Local API",
+  "type": "object",
+  "required": ["version", "basePath", "localOnly", "auth", "routes"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "string" },
+    "basePath": { "type": "string", "const": "/v1" },
+    "localOnly": { "type": "boolean", "const": true },
+    "auth": {
+      "type": "object",
+      "required": ["type", "requiredForV1"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "const": "bearer-token" },
+        "requiredForV1": { "type": "boolean", "const": true }
+      }
+    },
+    "routes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "method", "path", "authRequired", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "method": { "type": "string", "enum": ["GET", "POST", "PATCH"] },
+          "path": { "type": "string" },
+          "authRequired": { "type": "boolean" },
+          "description": { "type": "string" }
+        }
+      }
+    }
+  }
+}

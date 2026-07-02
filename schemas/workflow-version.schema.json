@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/workflow-version.schema.json",
+  "title": "SpruceAgent Workflow Version Entry",
+  "type": "object",
+  "required": ["action", "revision", "savedAt", "reason", "workflow"],
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["update", "archive", "restore", "current"]
+    },
+    "revision": { "type": "integer", "minimum": 1 },
+    "savedAt": { "type": "string", "format": "date-time" },
+    "actor": { "type": ["string", "null"] },
+    "reason": { "type": "string" },
+    "workflow": {
+      "$ref": "https://spruceagent.dev/schemas/workflow.schema.json"
+    }
+  }
+}

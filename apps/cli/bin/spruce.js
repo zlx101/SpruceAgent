@@ -1,0 +1,1279 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import path from "node:path";
+import {
+  addMemory,
+  archiveWorkflow,
+  approveSkill,
+  appendTraceEvent,
+  approveTicket,
+  buildWorkspaceIndex,
+  auditPolicyDecision,
+  createContextPack,
+  createSkillReplayFixture,
+  createGatewayClient,
+  createStore,
+  createWorkflow,
+  createWorkflowFromDraft,
+  draftWorkflow,
+  ensureStore,
+  ensureGatewayToken,
+  evaluatePolicy,
+  evaluateSkillCandidate,
+  evaluateTrace,
+  exportSkillPackage,
+  executeApprovedCandidateStep,
+  executeTool,
+  extractSkillFromTrace,
+  getEvaluation,
+  getCandidateApprovalContract,
+  getCandidateExecutionContract,
+  getGatewayAuthStatus,
+  getGatewayRouteContract,
+  getIndexedDocument,
+  getApprovalTicket,
+  getLlmAdapterContract,
+  getPlannerPromotionContract,
+  getRunInbox,
+  getRunInboxContract,
+  getSkillEvaluation,
+  getSkillEvaluationContract,
+  getSkillPackage,
+  getSkillPackageContract,
+  getSkillPackageImport,
+  getSkillPromotionContract,
+  getSkillReplayContract,
+  getSkillReplayFixture,
+  getSkillReplayResult,
+  getSkillVersion,
+  getRunContinuationContract,
+  getRunDetail,
+  getRunDetailContract,
+  getWorkflowDetailContract,
+  getWorkflowBuilderContract,
+  getWorkflowInbox,
+  getWorkflowInboxContract,
+  getWorkflowVersion,
+  getWorkflowRunDetail,
+  getWorkflowContinuationContract,
+  getWorkflow,
+  listApprovalTickets,
+  listEvaluations,
+  listSkillEvaluations,
+  listSkillPackageImports,
+  listSkillPackages,
+  listSkillReplayFixtures,
+  listSkillReplayResults,
+  listSkillVersions,
+  listMemory,
+  listSkills,
+  listTools,
+  listTraces,
+  listWorkflowVersions,
+  listWorkflows,
+  proposeSkill,
+  promoteSkillCandidate,
+  importSkillPackage,
+  readSkillPackageFile,
+  requestCandidateApprovals,
+  rejectTicket,
+  readWorkspaceIndex,
+  resumeAgentRun,
+  resumeWorkflowRun,
+  replaySkillFixture,
+  restoreSkillVersion,
+  restoreWorkflowVersion,
+  runDoctor,
+  runAgent,
+  runWorkflow,
+  searchWorkspaceContext,
+  searchMemory,
+  startTrace,
+  startGatewayServer,
+  updateWorkflow,
+} from "../../../packages/core/src/index.js";
+
+const store = createStore(process.cwd());
+const [, , command, subcommand, ...rest] = process.argv;
+
+try {
+  await main();
+} catch (error) {
+  console.error(`error: ${error.message}`);
+  process.exitCode = 1;
+}
+
+async function main() {
+  if (!command || command === "help" || command === "--help" || command === "-h") {
+    printHelp();
+    return;
+  }
+
+  if (command === "init") {
+    ensureStore(store);
+    printJson({
+      ok: true,
+      root: store.root,
+      message: "SpruceAgent workspace initialized.",
+    });
+    return;
+  }
+
+  if (command === "doctor") {
+    const report = runDoctor(process.cwd());
+    printJson(report);
+    if (report.status === "failed") {
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  ensureStore(store);
+
+  if (command === "status") {
+    printJson({
+      root: store.root,
+      memoryCount: listMemory(store).length,
+      traceCount: listTraces(store).length,
+      pendingApprovalCount: listApprovalTickets(store, "pending").length,
+      indexedDocumentCount: readWorkspaceIndex(store)?.documentCount ?? 0,
+      indexedAt: readWorkspaceIndex(store)?.indexedAt ?? null,
+      candidateSkillCount: listSkills(store, "candidates").length,
+      approvedSkillCount: listSkills(store, "approved").length,
+      workflowCount: listWorkflows(store).length,
+      evaluationCount: listEvaluations(store).length,
+      skillEvaluationCount: listSkillEvaluations(store).length,
+      skillReplayFixtureCount: listSkillReplayFixtures(store).length,
+      skillReplayResultCount: listSkillReplayResults(store).length,
+      skillPackageCount: listSkillPackages(store).length,
+      skillPackageImportCount: listSkillPackageImports(store).length,
+      gateway: getGatewayAuthStatus(store),
+    });
+    return;
+  }
+
+  if (command === "run") {
+    if (subcommand === "detail") {
+      handleRunDetail(rest);
+      return;
+    }
+    if (subcommand === "detail-contract") {
+      printJson(getRunDetailContract());
+      return;
+    }
+    if (subcommand === "resume") {
+      await handleRunResume(rest);
+      return;
+    }
+    await handleRun(subcommand, rest);
+    return;
+  }
+
+  if (command === "inbox") {
+    handleInbox(subcommand, rest);
+    return;
+  }
+
+  if (command === "memory") {
+    handleMemory(subcommand, rest);
+    return;
+  }
+
+  if (command === "trace") {
+    handleTrace(subcommand, rest);
+    return;
+  }
+
+  if (command === "tool") {
+    await handleTool(subcommand, rest);
+    return;
+  }
+
+  if (command === "policy") {
+    handlePolicy(subcommand, rest);
+    return;
+  }
+
+  if (command === "approval") {
+    handleApproval(subcommand, rest);
+    return;
+  }
+
+  if (command === "context") {
+    handleContext(subcommand, rest);
+    return;
+  }
+
+  if (command === "skill") {
+    handleSkill(subcommand, rest);
+    return;
+  }
+
+  if (command === "workflow") {
+    await handleWorkflow(subcommand, rest);
+    return;
+  }
+
+  if (command === "eval" || command === "evaluation") {
+    handleEvaluation(subcommand, rest);
+    return;
+  }
+
+  if (command === "gateway") {
+    await handleGateway(subcommand, rest);
+    return;
+  }
+
+  if (command === "llm") {
+    handleLlm(subcommand);
+    return;
+  }
+
+  if (command === "planner") {
+    handlePlanner(subcommand);
+    return;
+  }
+
+  if (command === "candidate") {
+    await handleCandidate(subcommand, rest);
+    return;
+  }
+
+  throw new Error(`unknown command: ${command}`);
+}
+
+function handleInbox(action, args = []) {
+  if (!action || action === "list") {
+    const flags = parseFlags([action, ...args].filter(Boolean));
+    printJson(getRunInbox(store, {
+      limit: flags.limit,
+    }));
+    return;
+  }
+
+  if (action === "contract") {
+    printJson(getRunInboxContract());
+    return;
+  }
+
+  throw new Error("usage: spruce inbox [list|contract] [--limit 20]");
+}
+
+async function handleRun(firstArg, args) {
+  const allArgs = [firstArg, ...args].filter((item) => item !== undefined);
+  const flags = parseFlags(allArgs);
+  const goal = flags._.join(" ").trim();
+  const result = await runAgent(store, {
+    goal,
+    contextQuery: flags.context,
+    trustMode: flags.trustMode ?? "approve",
+    dryRun: Boolean(flags.dryRun),
+    contextLimit: flags.contextLimit ?? flags.limit,
+    skillId: flags.skill,
+    executeSkill: Boolean(flags.executeSkill),
+    llmProvider: flags.llm,
+    llmModel: flags.llmModel,
+    llmBaseUrl: flags.llmBaseUrl,
+    llmTimeoutMs: flags.llmTimeoutMs,
+    llmTemperature: flags.llmTemperature,
+    llmMaxTokens: flags.llmMaxTokens,
+    promotePlan: Boolean(flags.promotePlan),
+    plannerAllowedTools: flags.plannerAllowedTools ? splitCsv(flags.plannerAllowedTools) : undefined,
+    requestCandidateApprovals: Boolean(flags.requestCandidateApprovals),
+    executeCandidatePlan: Boolean(flags.executeCandidatePlan),
+    actor: flags.actor ?? "local-user",
+    channel: "cli",
+  });
+  printJson(result);
+}
+
+async function handleRunResume(args) {
+  const [traceId, ...flagArgs] = args;
+  if (!traceId) throw new Error("usage: spruce run resume <traceId> [--stepId <stepId>] [--approvalId <approvalId>]");
+  const flags = parseFlags(flagArgs);
+  printJson(await resumeAgentRun(store, {
+    traceId,
+    stepId: flags.stepId,
+    approvalId: flags.approvalId,
+    trustMode: flags.trustMode ?? "approve",
+    actor: flags.actor ?? "local-user",
+  }));
+}
+
+function handleRunDetail(args) {
+  const [traceId] = args;
+  if (!traceId) throw new Error("usage: spruce run detail <traceId>");
+  printJson(getRunDetail(store, traceId));
+}
+
+function handleMemory(action, args) {
+  if (action === "add") {
+    const flags = parseFlags(args);
+    const content = flags._.join(" ").trim();
+    const memory = addMemory(store, {
+      content,
+      scope: flags.scope ?? "project",
+      kind: flags.kind ?? "note",
+      tags: splitCsv(flags.tags),
+      source: "cli",
+    });
+    printJson(memory);
+    return;
+  }
+
+  if (action === "search") {
+    const flags = parseFlags(args);
+    const query = flags._.join(" ").trim();
+    printJson(searchMemory(store, query, { limit: flags.limit ?? 10 }));
+    return;
+  }
+
+  if (action === "list") {
+    printJson(listMemory(store));
+    return;
+  }
+
+  throw new Error("usage: spruce memory <add|search|list>");
+}
+
+function handleTrace(action, args) {
+  if (action === "start") {
+    const flags = parseFlags(args);
+    const goal = flags._.join(" ").trim();
+    const trace = startTrace(store, {
+      goal,
+      actor: flags.actor ?? "local-user",
+      channel: flags.channel ?? "cli",
+      trustMode: flags.trustMode ?? "approve",
+    });
+    printJson(trace);
+    return;
+  }
+
+  if (action === "event") {
+    const [traceId, type, ...payloadParts] = args;
+    if (!traceId || !type) {
+      throw new Error("usage: spruce trace event <traceId> <type> [jsonPayload]");
+    }
+    const payload = payloadParts.length ? parseJson(payloadParts.join(" ")) : {};
+    printJson(appendTraceEvent(store, traceId, type, payload));
+    return;
+  }
+
+  if (action === "list") {
+    printJson(listTraces(store));
+    return;
+  }
+
+  throw new Error("usage: spruce trace <start|event|list>");
+}
+
+async function handleTool(action, args) {
+  if (action === "list") {
+    printJson(listTools());
+    return;
+  }
+
+  if (action === "run") {
+    const [toolName, ...flagArgs] = args;
+    if (!toolName) throw new Error("usage: spruce tool run <toolName> [--input <json>]");
+    const flags = parseFlags(flagArgs);
+    const result = await executeTool(store, {
+      toolName,
+      trustMode: flags.trustMode ?? "approve",
+      approved: Boolean(flags.approved),
+      allowCritical: Boolean(flags.allowCritical),
+      approvalId: flags.approvalId,
+      traceId: flags.traceId,
+      timeoutMs: flags.timeoutMs,
+      input: buildToolInput(toolName, flags),
+    });
+    printJson(result);
+    return;
+  }
+
+  throw new Error("usage: spruce tool <list|run>");
+}
+
+function handlePolicy(action, args) {
+  if (action !== "check") {
+    throw new Error("usage: spruce policy check --tool <name> --input <json> [--trustMode approve]");
+  }
+
+  const flags = parseFlags(args);
+  if (!flags.tool) throw new Error("--tool is required");
+
+  const input = flags.command
+    ? { command: flags.command }
+    : flags.input
+      ? parseJson(flags.input)
+      : {};
+
+  const decision = evaluatePolicy({
+    toolName: flags.tool,
+    trustMode: flags.trustMode ?? "approve",
+    input,
+  });
+  auditPolicyDecision(store, decision);
+  printJson(decision);
+}
+
+function handleApproval(action, args) {
+  if (action === "list") {
+    const flags = parseFlags(args);
+    printJson(listApprovalTickets(store, flags.status));
+    return;
+  }
+
+  if (action === "get") {
+    const [approvalId] = args;
+    if (!approvalId) throw new Error("usage: spruce approval get <approvalId>");
+    printJson(getApprovalTicket(store, approvalId));
+    return;
+  }
+
+  if (action === "approve") {
+    const [approvalId, ...flagArgs] = args;
+    if (!approvalId) throw new Error("usage: spruce approval approve <approvalId>");
+    const flags = parseFlags(flagArgs);
+    printJson(approveTicket(store, approvalId, {
+      resolvedBy: flags.by ?? "local-user",
+      reason: flags.reason ?? "approved from CLI",
+    }));
+    return;
+  }
+
+  if (action === "reject") {
+    const [approvalId, ...flagArgs] = args;
+    if (!approvalId) throw new Error("usage: spruce approval reject <approvalId>");
+    const flags = parseFlags(flagArgs);
+    printJson(rejectTicket(store, approvalId, {
+      resolvedBy: flags.by ?? "local-user",
+      reason: flags.reason ?? "rejected from CLI",
+    }));
+    return;
+  }
+
+  throw new Error("usage: spruce approval <list|get|approve|reject>");
+}
+
+function handleContext(action, args) {
+  if (action === "index") {
+    const flags = parseFlags(args);
+    const index = buildWorkspaceIndex(store, {
+      maxBytes: flags.maxBytes,
+    });
+    printJson({
+      indexedAt: index.indexedAt,
+      documentCount: index.documentCount,
+      skippedCount: index.skippedCount,
+      maxBytes: index.maxBytes,
+    });
+    return;
+  }
+
+  if (action === "search") {
+    const flags = parseFlags(args);
+    const query = flags._.join(" ").trim();
+    printJson(searchWorkspaceContext(store, query, {
+      limit: flags.limit,
+      snippetLength: flags.snippetLength,
+    }));
+    return;
+  }
+
+  if (action === "pack") {
+    const flags = parseFlags(args);
+    const query = flags._.join(" ").trim();
+    printJson(createContextPack(store, query, {
+      limit: flags.limit,
+      snippetLength: flags.snippetLength,
+    }));
+    return;
+  }
+
+  if (action === "show") {
+    const [relativePath] = args;
+    if (!relativePath) throw new Error("usage: spruce context show <path>");
+    printJson(getIndexedDocument(store, relativePath));
+    return;
+  }
+
+  throw new Error("usage: spruce context <index|search|pack|show>");
+}
+
+function handleSkill(action, args) {
+  if (action === "evaluation-contract") {
+    printJson(getSkillEvaluationContract());
+    return;
+  }
+
+  if (action === "promotion-contract") {
+    printJson(getSkillPromotionContract());
+    return;
+  }
+
+  if (action === "replay-contract") {
+    printJson(getSkillReplayContract());
+    return;
+  }
+
+  if (action === "package-contract") {
+    printJson(getSkillPackageContract());
+    return;
+  }
+
+  if (action === "list") {
+    const flags = parseFlags(args);
+    printJson(listSkills(store, flags.status ?? "approved"));
+    return;
+  }
+
+  if (action === "propose") {
+    const flags = parseFlags(args);
+    const steps = flags.steps ? splitCsv(flags.steps) : [];
+    const skill = proposeSkill(store, {
+      name: flags.name,
+      summary: flags.summary,
+      steps,
+      sourceTraceIds: splitCsv(flags.traceIds),
+    });
+    printJson(skill);
+    return;
+  }
+
+  if (action === "extract") {
+    const [traceId, ...flagArgs] = args;
+    if (!traceId) throw new Error("usage: spruce skill extract <traceId>");
+    const flags = parseFlags(flagArgs);
+    printJson(extractSkillFromTrace(store, traceId, {
+      name: flags.name,
+      summary: flags.summary,
+      minSteps: flags.minSteps,
+    }));
+    return;
+  }
+
+  if (action === "approve") {
+    const [skillId, ...flagArgs] = args;
+    if (!skillId) throw new Error("usage: spruce skill approve <skillId>");
+    const flags = parseFlags(flagArgs);
+    printJson(approveSkill(store, skillId, {
+      approvedBy: flags.by ?? "local-user",
+      reason: flags.reason ?? "approved from CLI",
+    }));
+    return;
+  }
+
+  if (action === "evaluate") {
+    const [skillId, ...flagArgs] = args;
+    if (!skillId) throw new Error("usage: spruce skill evaluate <skillId> [--status candidates|approved] [--traceId <traceId>]");
+    const flags = parseFlags(flagArgs);
+    printJson(evaluateSkillCandidate(store, skillId, {
+      status: flags.status,
+      traceId: flags.traceId,
+      trustMode: flags.trustMode,
+    }));
+    return;
+  }
+
+  if (action === "promote") {
+    const [skillId, ...flagArgs] = args;
+    if (!skillId) throw new Error("usage: spruce skill promote <skillId> [--evaluationId <evaluationId>] [--minimumScore 85]");
+    const flags = parseFlags(flagArgs);
+    printJson(promoteSkillCandidate(store, skillId, {
+      evaluationId: flags.evaluationId,
+      minimumScore: flags.minimumScore,
+      useLatestEvaluation: Boolean(flags.useLatestEvaluation),
+      trustMode: flags.trustMode,
+      by: flags.by,
+      reason: flags.reason,
+    }));
+    return;
+  }
+
+  if (action === "evaluations") {
+    printJson(listSkillEvaluations(store));
+    return;
+  }
+
+  if (action === "evaluation") {
+    const [evaluationId] = args;
+    if (!evaluationId) throw new Error("usage: spruce skill evaluation <evaluationId>");
+    printJson(getSkillEvaluation(store, evaluationId));
+    return;
+  }
+
+  if (action === "versions") {
+    const [skillId] = args;
+    if (!skillId) throw new Error("usage: spruce skill versions <skillId>");
+    printJson(listSkillVersions(store, skillId));
+    return;
+  }
+
+  if (action === "version") {
+    const [skillId, revision] = args;
+    if (!skillId || !revision) throw new Error("usage: spruce skill version <skillId> <revision>");
+    printJson(getSkillVersion(store, skillId, revision));
+    return;
+  }
+
+  if (action === "restore") {
+    const [skillId, revision, ...flagArgs] = args;
+    if (!skillId || !revision) throw new Error("usage: spruce skill restore <skillId> <revision>");
+    const flags = parseFlags(flagArgs);
+    printJson(restoreSkillVersion(store, skillId, revision, {
+      by: flags.by,
+      reason: flags.reason,
+    }));
+    return;
+  }
+
+  if (action === "fixture-create") {
+    const [skillId, ...flagArgs] = args;
+    if (!skillId) throw new Error("usage: spruce skill fixture-create <skillId> [--evaluationId <evaluationId>]");
+    const flags = parseFlags(flagArgs);
+    printJson(createSkillReplayFixture(store, skillId, {
+      status: flags.status,
+      evaluationId: flags.evaluationId,
+      name: flags.name,
+      description: flags.description,
+      minimumScore: flags.minimumScore,
+    }));
+    return;
+  }
+
+  if (action === "fixture-list") {
+    printJson(listSkillReplayFixtures(store));
+    return;
+  }
+
+  if (action === "fixture") {
+    const [fixtureId] = args;
+    if (!fixtureId) throw new Error("usage: spruce skill fixture <fixtureId>");
+    printJson(getSkillReplayFixture(store, fixtureId));
+    return;
+  }
+
+  if (action === "replay") {
+    const [fixtureId, ...flagArgs] = args;
+    if (!fixtureId) throw new Error("usage: spruce skill replay <fixtureId>");
+    const flags = parseFlags(flagArgs);
+    printJson(replaySkillFixture(store, fixtureId, {
+      status: flags.status,
+    }));
+    return;
+  }
+
+  if (action === "replay-results") {
+    printJson(listSkillReplayResults(store));
+    return;
+  }
+
+  if (action === "replay-result") {
+    const [resultId] = args;
+    if (!resultId) throw new Error("usage: spruce skill replay-result <resultId>");
+    printJson(getSkillReplayResult(store, resultId));
+    return;
+  }
+
+  if (action === "package-export") {
+    const [skillId, ...flagArgs] = args;
+    if (!skillId) throw new Error("usage: spruce skill package-export <skillId> [--file <path>]");
+    const flags = parseFlags(flagArgs);
+    printJson(exportSkillPackage(store, skillId, {
+      status: flags.status,
+      file: flags.file,
+      by: flags.by,
+    }));
+    return;
+  }
+
+  if (action === "packages") {
+    printJson(listSkillPackages(store));
+    return;
+  }
+
+  if (action === "package") {
+    const [packageId] = args;
+    if (!packageId) throw new Error("usage: spruce skill package <packageId>");
+    printJson(getSkillPackage(store, packageId));
+    return;
+  }
+
+  if (action === "package-import") {
+    const [packageRef, ...flagArgs] = args;
+    if (!packageRef) throw new Error("usage: spruce skill package-import <packageId|file>");
+    const flags = parseFlags(flagArgs);
+    const packageInput = fs.existsSync(packageRef)
+      ? readSkillPackageFile(path.resolve(packageRef))
+      : getSkillPackage(store, packageRef);
+    printJson(importSkillPackage(store, packageInput, {
+      name: flags.name,
+      summary: flags.summary,
+      preserveSourceTraceIds: Boolean(flags.preserveSourceTraceIds),
+      includeSourceMetadata: flags.includeSourceMetadata === undefined ? true : flags.includeSourceMetadata !== "false",
+      by: flags.by,
+    }));
+    return;
+  }
+
+  if (action === "package-imports") {
+    printJson(listSkillPackageImports(store));
+    return;
+  }
+
+  if (action === "package-import-record") {
+    const [importId] = args;
+    if (!importId) throw new Error("usage: spruce skill package-import-record <importId>");
+    printJson(getSkillPackageImport(store, importId));
+    return;
+  }
+
+  throw new Error("usage: spruce skill <list|propose|extract|approve|evaluate|promote|restore|evaluations|evaluation|versions|version|fixture-create|fixture-list|fixture|replay|replay-results|replay-result|package-export|packages|package|package-import|package-imports|package-import-record|evaluation-contract|promotion-contract|replay-contract|package-contract>");
+}
+
+async function handleWorkflow(action, args) {
+  if (action === "inbox") {
+    const flags = parseFlags(args);
+    printJson(getWorkflowInbox(store, {
+      limit: flags.limit,
+    }));
+    return;
+  }
+
+  if (action === "inbox-contract") {
+    printJson(getWorkflowInboxContract());
+    return;
+  }
+
+  if (action === "detail-contract") {
+    printJson(getWorkflowDetailContract());
+    return;
+  }
+
+  if (action === "continuation-contract") {
+    printJson(getWorkflowContinuationContract());
+    return;
+  }
+
+  if (action === "builder-contract") {
+    printJson(getWorkflowBuilderContract());
+    return;
+  }
+
+  if (action === "detail") {
+    const [traceId] = args;
+    if (!traceId) throw new Error("usage: spruce workflow detail <traceId>");
+    printJson(getWorkflowRunDetail(store, traceId));
+    return;
+  }
+
+  if (action === "resume") {
+    const [traceId, ...flagArgs] = args;
+    if (!traceId) throw new Error("usage: spruce workflow resume <traceId> [--stepId <stepId>] [--approvalId <approvalId>]");
+    const flags = parseFlags(flagArgs);
+    printJson(await resumeWorkflowRun(store, {
+      traceId,
+      stepId: flags.stepId,
+      approvalId: flags.approvalId,
+      trustMode: flags.trustMode ?? "approve",
+      actor: flags.actor ?? "local-user",
+    }));
+    return;
+  }
+
+  if (action === "create") {
+    const flags = parseFlags(args);
+    const input = flags.input ? parseJson(flags.input) : buildWorkflowInput(flags);
+    printJson(createWorkflow(store, input));
+    return;
+  }
+
+  if (action === "draft") {
+    const flags = parseFlags(args);
+    const goal = flags.goal ?? flags._.join(" ").trim();
+    printJson(await draftWorkflow(store, {
+      goal,
+      contextQuery: flags.context,
+      contextLimit: flags.limit,
+      skillId: flags.skill,
+      name: flags.name,
+      summary: flags.summary,
+      includeMemoryStep: flags.includeMemoryStep === undefined ? undefined : Boolean(flags.includeMemoryStep),
+      llmProvider: flags.llm ?? "mock",
+      llmModel: flags.model,
+      llmBaseUrl: flags.baseUrl,
+      llmApiKey: flags.apiKey,
+      llmTimeoutMs: flags.timeoutMs,
+      llmTemperature: flags.temperature,
+      llmMaxTokens: flags.maxTokens,
+    }));
+    return;
+  }
+
+  if (action === "save-draft") {
+    const flags = parseFlags(args);
+    const draft = flags.file ? parseJson(readTextFile(flags.file)) : flags.input ? parseJson(flags.input) : undefined;
+    printJson(await createWorkflowFromDraft(store, {
+      draft,
+      goal: flags.goal ?? flags._.join(" ").trim(),
+      contextQuery: flags.context,
+      contextLimit: flags.limit,
+      skillId: flags.skill,
+      name: flags.name,
+      summary: flags.summary,
+      llmProvider: flags.llm ?? "mock",
+      llmModel: flags.model,
+      llmBaseUrl: flags.baseUrl,
+      llmApiKey: flags.apiKey,
+      llmTimeoutMs: flags.timeoutMs,
+      llmTemperature: flags.temperature,
+      llmMaxTokens: flags.maxTokens,
+    }));
+    return;
+  }
+
+  if (action === "update") {
+    const [workflowId, ...flagArgs] = args;
+    if (!workflowId) throw new Error("usage: spruce workflow update <workflowId> [--name <name>] [--summary <summary>] [--steps <json>] [--file <path>] [--reason <reason>] [--by <actor>]");
+    const flags = parseFlags(flagArgs);
+    printJson(updateWorkflow(store, workflowId, {
+      name: flags.name,
+      summary: flags.summary,
+      steps: readWorkflowStepsFromFlags(flags),
+      status: flags.status,
+      updatedBy: flags.by ?? "local-user",
+      reason: flags.reason,
+    }));
+    return;
+  }
+
+  if (action === "archive") {
+    const [workflowId, ...flagArgs] = args;
+    if (!workflowId) throw new Error("usage: spruce workflow archive <workflowId> [--reason <reason>] [--by <actor>]");
+    const flags = parseFlags(flagArgs);
+    printJson(archiveWorkflow(store, workflowId, {
+      archivedBy: flags.by ?? "local-user",
+      reason: flags.reason,
+    }));
+    return;
+  }
+
+  if (action === "list") {
+    const flags = parseFlags(args);
+    printJson(listWorkflows(store, { status: flags.status ?? "active" }));
+    return;
+  }
+
+  if (action === "get") {
+    const [workflowId] = args;
+    if (!workflowId) throw new Error("usage: spruce workflow get <workflowId>");
+    printJson(getWorkflow(store, workflowId));
+    return;
+  }
+
+  if (action === "versions") {
+    const [workflowId] = args;
+    if (!workflowId) throw new Error("usage: spruce workflow versions <workflowId>");
+    printJson(listWorkflowVersions(store, workflowId));
+    return;
+  }
+
+  if (action === "version") {
+    const [workflowId, revision] = args;
+    if (!workflowId || !revision) throw new Error("usage: spruce workflow version <workflowId> <revision>");
+    printJson(getWorkflowVersion(store, workflowId, revision));
+    return;
+  }
+
+  if (action === "restore") {
+    const [workflowId, revision, ...flagArgs] = args;
+    if (!workflowId || !revision) throw new Error("usage: spruce workflow restore <workflowId> <revision> [--reason <reason>] [--by <actor>]");
+    const flags = parseFlags(flagArgs);
+    printJson(restoreWorkflowVersion(store, workflowId, revision, {
+      restoredBy: flags.by ?? "local-user",
+      reason: flags.reason,
+    }));
+    return;
+  }
+
+  if (action === "run") {
+    const [workflowId, ...flagArgs] = args;
+    if (!workflowId) throw new Error("usage: spruce workflow run <workflowId>");
+    const flags = parseFlags(flagArgs);
+    printJson(await runWorkflow(store, workflowId, {
+      goal: flags.goal,
+      trustMode: flags.trustMode ?? "approve",
+      dryRun: Boolean(flags.dryRun),
+      actor: flags.actor ?? "local-user",
+      channel: "cli",
+    }));
+    return;
+  }
+
+  throw new Error("usage: spruce workflow <create|draft|save-draft|update|archive|list|get|versions|version|restore|run|resume|inbox|detail|inbox-contract|detail-contract|continuation-contract|builder-contract>");
+}
+
+function handleEvaluation(action, args) {
+  if (action === "trace") {
+    const [traceId] = args;
+    if (!traceId) throw new Error("usage: spruce eval trace <traceId>");
+    printJson(evaluateTrace(store, traceId));
+    return;
+  }
+
+  if (action === "list") {
+    printJson(listEvaluations(store));
+    return;
+  }
+
+  if (action === "get") {
+    const [evaluationId] = args;
+    if (!evaluationId) throw new Error("usage: spruce eval get <evaluationId>");
+    printJson(getEvaluation(store, evaluationId));
+    return;
+  }
+
+  throw new Error("usage: spruce eval <trace|list|get>");
+}
+
+async function handleGateway(action, args) {
+  if (action === "token") {
+    const flags = parseFlags(args);
+    const token = ensureGatewayToken(store, {
+      rotate: Boolean(flags.rotate),
+    });
+    printJson({
+      created: token.created,
+      token: token.token,
+      tokenPrefix: token.tokenPrefix,
+      message: token.token
+        ? "Store this token now. It is shown only when created or rotated."
+        : "Gateway token already exists. Use --rotate to create a new one.",
+    });
+    return;
+  }
+
+  if (action === "info") {
+    printJson(getGatewayAuthStatus(store));
+    return;
+  }
+
+  if (action === "contract") {
+    printJson(getGatewayRouteContract());
+    return;
+  }
+
+  if (action === "call") {
+    const flags = parseFlags(args);
+    if (!flags.path) {
+      throw new Error("usage: spruce gateway call --path /v1/status [--method GET] [--body <json>] [--token <token>] [--url <baseUrl>]");
+    }
+    const client = createGatewayClient({
+      baseUrl: flags.url ?? "http://127.0.0.1:7357",
+      token: flags.token ?? process.env.SPRUCE_GATEWAY_TOKEN,
+    });
+    const method = flags.method ?? (flags.body ? "POST" : "GET");
+    const body = flags.body ? parseJson(flags.body) : undefined;
+    printJson(await clientRequest(client, method, flags.path, body));
+    return;
+  }
+
+  if (action === "serve") {
+    const flags = parseFlags(args);
+    const host = flags.host ?? "127.0.0.1";
+    const port = flags.port ?? 7357;
+    const result = await startGatewayServer(store, {
+      host,
+      port,
+    });
+    const baseUrl = `http://${result.host}:${result.port}`;
+    console.log(JSON.stringify({
+      ok: true,
+      url: baseUrl,
+      health: `${baseUrl}/health`,
+      workbench: `${baseUrl}/workbench`,
+      tokenCreated: result.tokenCreated,
+      token: result.token,
+      tokenPrefix: result.tokenPrefix,
+      authHeader: result.token ? `Authorization: Bearer ${result.token}` : "Authorization: Bearer <gateway-token>",
+      localOnly: true,
+    }, null, 2));
+    return await new Promise(() => {});
+  }
+
+  throw new Error("usage: spruce gateway <token|info|contract|call|serve>");
+}
+
+function handleLlm(action) {
+  if (action === "contract") {
+    printJson(getLlmAdapterContract());
+    return;
+  }
+
+  throw new Error("usage: spruce llm contract");
+}
+
+function handlePlanner(action) {
+  if (action === "contract") {
+    printJson(getPlannerPromotionContract());
+    return;
+  }
+
+  throw new Error("usage: spruce planner contract");
+}
+
+async function handleCandidate(action, args = []) {
+  if (action === "contract") {
+    printJson(getCandidateExecutionContract());
+    return;
+  }
+
+  if (action === "approval-contract") {
+    printJson(getCandidateApprovalContract());
+    return;
+  }
+
+  if (action === "continuation-contract") {
+    printJson(getRunContinuationContract());
+    return;
+  }
+
+  if (action === "request-approvals") {
+    const flags = parseFlags(args);
+    const candidatePlan = readCandidatePlanFromFlags(flags);
+    printJson(requestCandidateApprovals(store, {
+      candidatePlan,
+      traceId: flags.traceId,
+      trustMode: flags.trustMode ?? "approve",
+      actor: flags.actor ?? "local-user",
+    }));
+    return;
+  }
+
+  if (action === "execute-approved") {
+    const flags = parseFlags(args);
+    const candidatePlan = readCandidatePlanFromFlags(flags);
+    printJson(await executeApprovedCandidateStep(store, {
+      candidatePlan,
+      stepId: flags.stepId,
+      approvalId: flags.approvalId,
+      traceId: flags.traceId,
+      trustMode: flags.trustMode ?? "approve",
+      actor: flags.actor ?? "local-user",
+    }));
+    return;
+  }
+
+  throw new Error("usage: spruce candidate <contract|approval-contract|continuation-contract|request-approvals|execute-approved>");
+}
+
+function parseFlags(args) {
+  const result = { _: [] };
+  for (let index = 0; index < args.length; index += 1) {
+    const item = args[index];
+    if (item.startsWith("--")) {
+      const key = item.slice(2);
+      const next = args[index + 1];
+      if (!next || next.startsWith("--")) {
+        result[key] = true;
+      } else {
+        result[key] = next;
+        index += 1;
+      }
+    } else {
+      result._.push(item);
+    }
+  }
+  return result;
+}
+
+function parseJson(value) {
+  try {
+    return JSON.parse(String(value).replace(/^\uFEFF/, ""));
+  } catch {
+    throw new Error(`invalid JSON: ${value}`);
+  }
+}
+
+function splitCsv(value) {
+  if (!value) return [];
+  return String(value)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function buildToolInput(toolName, flags) {
+  if (flags.input) return parseJson(flags.input);
+  if (toolName === "shell.execute") {
+    return {
+      command: flags.command,
+      cwd: flags.cwd,
+    };
+  }
+  if (toolName === "file.read") {
+    return {
+      path: flags.path,
+    };
+  }
+  if (toolName === "file.write") {
+    return {
+      path: flags.path,
+      content: flags.content ?? "",
+    };
+  }
+  if (toolName === "memory.add") {
+    return {
+      content: flags._.join(" ").trim() || flags.content,
+      scope: flags.scope,
+      kind: flags.kind,
+      tags: splitCsv(flags.tags),
+      source: "tool.run",
+    };
+  }
+  return {};
+}
+
+function buildWorkflowInput(flags) {
+  const steps = [];
+  if (flags.context) {
+    steps.push({
+      kind: "context",
+      query: flags.context,
+      limit: flags.limit,
+    });
+  }
+  if (flags.skill) {
+    steps.push({
+      kind: "skill",
+      skillId: flags.skill,
+    });
+  }
+  if (flags.tool) {
+    steps.push({
+      kind: "tool",
+      toolName: flags.tool,
+      input: flags.toolInput ? parseJson(flags.toolInput) : {},
+    });
+  }
+  if (flags.memory) {
+    steps.push({
+      kind: "memory",
+      content: flags.memory,
+      tags: splitCsv(flags.tags),
+    });
+  }
+  return {
+    name: flags.name,
+    summary: flags.summary ?? "",
+    steps,
+  };
+}
+
+function readCandidatePlanFromFlags(flags) {
+  if (flags.input) return parseJson(flags.input);
+  if (flags.file) {
+    return parseJson(readTextFile(flags.file));
+  }
+  throw new Error("--input <json> or --file <path> is required");
+}
+
+function readWorkflowStepsFromFlags(flags) {
+  if (flags.steps) return parseJson(flags.steps);
+  if (flags.file) return parseJson(readTextFile(flags.file));
+  return undefined;
+}
+
+function readTextFile(filePath) {
+  return fs.readFileSync(filePath, "utf8");
+}
+
+async function clientRequest(client, method, routePath, body) {
+  return client.request(String(method).toUpperCase(), routePath, body);
+}
+
+function printJson(value) {
+  console.log(JSON.stringify(value, null, 2));
+}
+
+function printHelp() {
+  const executable = path.basename(process.argv[1] ?? "spruce");
+  console.log(`SpruceAgent CLI
+
+Usage:
+  ${executable} init
+  ${executable} doctor
+  ${executable} status
+  ${executable} run "Summarize TrustKernel" --context "TrustKernel"
+  ${executable} run "Summarize TrustKernel" --context "TrustKernel" --skill <skillId>
+  ${executable} run "Draft with mock LLM" --context "TrustKernel" --llm mock --dryRun
+  ${executable} run "Promote draft" --context "TrustKernel" --llm mock --promotePlan --dryRun
+  ${executable} run "Request candidate approvals" --llm <provider> --promotePlan --requestCandidateApprovals
+  ${executable} run "Execute promoted candidate" --context "TrustKernel" --llm <provider> --promotePlan --executeCandidatePlan
+  ${executable} run resume <traceId> [--stepId <stepId>] [--approvalId <approvalId>]
+  ${executable} run detail <traceId>
+  ${executable} run detail-contract
+  ${executable} run "Execute approved skill" --skill <skillId> --executeSkill
+  ${executable} run "Plan safely" --dryRun
+  ${executable} inbox
+  ${executable} inbox contract
+  ${executable} memory add "content" [--scope project] [--kind note] [--tags a,b]
+  ${executable} memory search "query"
+  ${executable} memory list
+  ${executable} trace start "goal" [--trustMode approve]
+  ${executable} trace event <traceId> <type> [jsonPayload]
+  ${executable} trace list
+  ${executable} tool list
+  ${executable} tool run file.read --path README.md
+  ${executable} tool run shell.execute --command "git status" --approved
+  ${executable} approval list [--status pending]
+  ${executable} approval approve <approvalId>
+  ${executable} tool run file.write --path notes.txt --content "hello" --approvalId <approvalId>
+  ${executable} context index
+  ${executable} context search "TrustKernel"
+  ${executable} context show README.md
+  ${executable} policy check --tool shell.execute --command "git status"
+  ${executable} skill propose --name "Name" --summary "Summary" --steps "step one,step two"
+  ${executable} skill extract <traceId>
+  ${executable} skill approve <skillId>
+  ${executable} skill evaluate <skillId>
+  ${executable} skill promote <skillId>
+  ${executable} skill fixture-create <skillId>
+  ${executable} skill replay <fixtureId>
+  ${executable} skill package-export <skillId> [--file skill.skillpkg.json]
+  ${executable} skill package-import <packageId|file>
+  ${executable} skill list [--status candidates]
+  ${executable} workflow create --input "{\\"name\\":\\"Review\\",\\"steps\\":[{\\"kind\\":\\"context\\",\\"query\\":\\"TrustKernel\\"}]}"
+  ${executable} workflow create --name "Review" --context "TrustKernel" --skill <skillId> --memory "Done"
+  ${executable} workflow draft "Build a review workflow" --context "TrustKernel" --llm mock
+  ${executable} workflow save-draft --file workflow-draft.json
+  ${executable} workflow update <workflowId> --file workflow-steps.json --reason "tighten review"
+  ${executable} workflow archive <workflowId> --reason "replaced by v2"
+  ${executable} workflow list [--status active|archived|all]
+  ${executable} workflow versions <workflowId>
+  ${executable} workflow restore <workflowId> <revision>
+  ${executable} workflow run <workflowId>
+  ${executable} workflow resume <traceId> [--stepId <stepId>] [--approvalId <approvalId>]
+  ${executable} workflow inbox
+  ${executable} workflow detail <traceId>
+  ${executable} eval trace <traceId>
+  ${executable} eval list
+  ${executable} llm contract
+  ${executable} planner contract
+  ${executable} candidate contract
+  ${executable} candidate approval-contract
+  ${executable} candidate continuation-contract
+  ${executable} candidate request-approvals --file candidate-plan.json
+  ${executable} candidate execute-approved --file candidate-plan.json --stepId <stepId> --approvalId <approvalId>
+  ${executable} gateway token
+  ${executable} gateway token --rotate
+  ${executable} gateway contract
+  ${executable} gateway call --path /v1/status --token <token>
+  ${executable} gateway serve [--host 127.0.0.1] [--port 7357]
+
+Workspace:
+  ${path.join(process.cwd(), ".spruceagent")}
+`);
+}
