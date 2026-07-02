@@ -76,6 +76,7 @@ const DEFAULT_GATEWAY_HOST = "127.0.0.1";
 const DEFAULT_GATEWAY_PORT = 7357;
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const WORKBENCH_ROOT = path.join(PROJECT_ROOT, "apps", "desktop");
+const SHOWCASE_ROOT = path.join(PROJECT_ROOT, "apps", "showcase");
 
 export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
   version: "0.1.0",
@@ -99,6 +100,13 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/workbench",
       authRequired: false,
       description: "Serve the local SpruceAgent Workbench UI.",
+    },
+    {
+      id: "showcase",
+      method: "GET",
+      path: "/showcase",
+      authRequired: false,
+      description: "Serve the public SpruceAgent showcase page.",
     },
     {
       id: "status",
@@ -662,8 +670,8 @@ export function createGatewayHandler(store, options = {}) {
         });
       }
 
-      if (request.method === "GET" && isWorkbenchPath(url.pathname)) {
-        return sendWorkbenchAsset(response, url.pathname);
+      if (request.method === "GET" && isStaticPagePath(url.pathname)) {
+        return sendStaticPageAsset(response, url.pathname);
       }
 
       if (!verifyRequest(store, request, options)) {
@@ -1194,12 +1202,12 @@ function sendJson(response, statusCode, body) {
   response.end(`${JSON.stringify(body, null, 2)}\n`);
 }
 
-function sendWorkbenchAsset(response, pathname) {
-  const filePath = resolveWorkbenchAsset(pathname);
+function sendStaticPageAsset(response, pathname) {
+  const filePath = resolveStaticPageAsset(pathname);
   if (!filePath || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
     return sendJson(response, 404, {
       error: "not_found",
-      message: "Workbench asset not found.",
+      message: "Static asset not found.",
     });
   }
   response.writeHead(200, {
@@ -1223,16 +1231,30 @@ function notFound() {
   };
 }
 
-function isWorkbenchPath(pathname) {
-  return pathname === "/" || pathname === "/workbench" || pathname.startsWith("/workbench/");
+function isStaticPagePath(pathname) {
+  return isWorkbenchPath(pathname) || isShowcasePath(pathname);
 }
 
-function resolveWorkbenchAsset(pathname) {
-  const relativePath = pathname === "/" || pathname === "/workbench"
+function isWorkbenchPath(pathname) {
+  return pathname === "/workbench" || pathname.startsWith("/workbench/");
+}
+
+function isShowcasePath(pathname) {
+  return pathname === "/" || pathname === "/showcase" || pathname.startsWith("/showcase/");
+}
+
+function resolveStaticPageAsset(pathname) {
+  if (isWorkbenchPath(pathname)) return resolveAsset(WORKBENCH_ROOT, pathname, "/workbench");
+  if (isShowcasePath(pathname)) return resolveAsset(SHOWCASE_ROOT, pathname, "/showcase");
+  return null;
+}
+
+function resolveAsset(root, pathname, mountPath) {
+  const relativePath = pathname === "/" || pathname === mountPath
     ? "index.html"
-    : pathname.replace(/^\/workbench\/?/, "");
-  const resolved = path.resolve(WORKBENCH_ROOT, relativePath);
-  const relative = path.relative(WORKBENCH_ROOT, resolved);
+    : pathname.replace(new RegExp(`^${mountPath}/?`), "");
+  const resolved = path.resolve(root, relativePath);
+  const relative = path.relative(root, resolved);
   if (relative.startsWith("..") || path.isAbsolute(relative)) return null;
   return resolved;
 }

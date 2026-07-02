@@ -1231,6 +1231,7 @@ test("gateway route contract exposes stable route ids", () => {
   assert.equal(contract.version, "0.1.0");
   assert.equal(contract.basePath, "/v1");
   assert.ok(routeIds.includes("workbench"));
+  assert.ok(routeIds.includes("showcase"));
   assert.ok(routeIds.includes("status"));
   assert.ok(routeIds.includes("inbox"));
   assert.ok(routeIds.includes("inbox.contract"));
@@ -1309,6 +1310,30 @@ test("gateway serves workbench static assets without API auth", async () => {
     assert.match(css.body, /Agent Workbench|summary-grid|work-section|detail-panel|run-form|draft-step-list|draft-step-fields|source-map-list|evaluation-preview/);
     assert.match(js.body, /submitRun|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|loadWorkflowDetail|resume|inbox|approval/i);
     assert.match(mark.body, /SpruceAgent mark/);
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
+
+test("gateway serves showcase static assets without API auth", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const baseUrl = `http://${gateway.host}:${gateway.port}`;
+
+  try {
+    const root = await fetchText(`${baseUrl}/`);
+    const html = await fetchText(`${baseUrl}/showcase`);
+    const css = await fetchText(`${baseUrl}/showcase/styles.css`);
+    const js = await fetchText(`${baseUrl}/showcase/app.js`);
+
+    assert.equal(root.status, 200);
+    assert.equal(html.status, 200);
+    assert.equal(css.status, 200);
+    assert.equal(js.status, 200);
+    assert.match(html.body, /SpruceAgent|SuperAgent OS|ContextOS|SkillForge|TrustKernel|GatewayMesh|Run locally/);
+    assert.match(css.body, /product-scene|loop-track|plane-grid|feature-matrix|quickstart/);
+    assert.match(js.body, /preferredLanguage|scrollIntoView/);
   } finally {
     await closeServer(gateway.server);
   }

@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SpruceAgent Showcase</title>
+    <meta name="description" content="SpruceAgent is the open-source SuperAgent OS for governed personal and team work.">
+    <link rel="stylesheet" href="/showcase/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="SpruceAgent">
+        <img src="/workbench/assets/spruce-mark.svg" alt="">
+        <span>SpruceAgent</span>
+      </a>
+      <nav aria-label="Showcase navigation">
+        <a href="#loop">Loop</a>
+        <a href="#planes">Planes</a>
+        <a href="#today">Today</a>
+        <a href="#quickstart">Run</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Open-source alpha</p>
+          <h1>SpruceAgent</h1>
+          <p class="subhead">The open-source SuperAgent OS for governed personal and team work.</p>
+          <p class="value-line">Every entrance. Native context. Evolving workflows. Trusted action.</p>
+          <div class="hero-actions">
+            <a class="primary-link" href="#quickstart">Run locally</a>
+            <a class="secondary-link" href="#loop">See the loop</a>
+          </div>
+          <code class="hero-command">npm run spruce -- gateway serve --port 7357</code>
+        </div>
+
+        <div class="product-scene" aria-label="SpruceAgent product loop preview">
+          <div class="scene-topbar">
+            <span></span>
+            <strong>Agent Workbench</strong>
+            <em>local</em>
+          </div>
+          <div class="scene-grid">
+            <section class="scene-panel goal-panel">
+              <div class="panel-label">Goal</div>
+              <h2>Create a project review workflow</h2>
+              <p>Use current repo context, propose next tasks, and require review before action.</p>
+            </section>
+            <section class="scene-panel context-panel">
+              <div class="panel-label">ContextOS</div>
+              <ul>
+                <li>README.md</li>
+                <li>docs/workflow-builder-v0.md</li>
+                <li>packages/core/src/policy.js</li>
+              </ul>
+            </section>
+            <section class="scene-panel workflow-panel">
+              <div class="panel-label">Workflow Draft</div>
+              <div class="step ready">Retrieve source map</div>
+              <div class="step ready">Draft review steps</div>
+              <div class="step gated">Approval required</div>
+            </section>
+            <section class="scene-panel trace-panel">
+              <div class="panel-label">TrustKernel Trace</div>
+              <div class="trace-row ok">LLM draft normalized</div>
+              <div class="trace-row warn">Tool write blocked</div>
+              <div class="trace-row ok">Replay fixture ready</div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <section id="loop" class="section-band">
+        <div class="section-heading">
+          <p class="eyebrow">Operating loop</p>
+          <h2>LLM drafts. You review. TrustKernel governs.</h2>
+        </div>
+        <ol class="loop-track">
+          <li><span>1</span><strong>Goal</strong><p>State the work outcome.</p></li>
+          <li><span>2</span><strong>ContextOS</strong><p>Retrieve source-backed context.</p></li>
+          <li><span>3</span><strong>Builder</strong><p>Draft a workflow.</p></li>
+          <li><span>4</span><strong>Review</strong><p>Edit before action.</p></li>
+          <li><span>5</span><strong>TrustKernel</strong><p>Apply policy and approvals.</p></li>
+          <li><span>6</span><strong>Run</strong><p>Execute inside boundaries.</p></li>
+          <li><span>7</span><strong>Trace</strong><p>Audit every step.</p></li>
+          <li><span>8</span><strong>SkillForge</strong><p>Promote repeatable success.</p></li>
+        </ol>
+      </section>
+
+      <section id="planes" class="section-band split">
+        <div class="section-heading">
+          <p class="eyebrow">Four planes</p>
+          <h2>One agent surface, four enforceable systems.</h2>
+        </div>
+        <div class="plane-grid">
+          <article><strong>GatewayMesh</strong><p>Local API, CLI, desktop workbench, and future entrances with shared identity and permissions.</p></article>
+          <article><strong>ContextOS</strong><p>Workspace index, retrieval, source maps, and context packs grounded in actual files.</p></article>
+          <article><strong>SkillForge</strong><p>Extract, evaluate, promote, version, replay, restore, import, and export reusable skills.</p></article>
+          <article><strong>TrustKernel</strong><p>Policies, approval tickets, candidate gates, trace audit, and safe continuation.</p></article>
+        </div>
+      </section>
+
+      <section id="today" class="section-band">
+        <div class="section-heading">
+          <p class="eyebrow">Works today</p>
+          <h2>Alpha capabilities are concrete and test-backed.</h2>
+        </div>
+        <div class="feature-matrix">
+          <span>CLI</span>
+          <span>Local Gateway</span>
+          <span>Workbench</span>
+          <span>Workspace index/search</span>
+          <span>Workflow builder</span>
+          <span>Workflow versioning</span>
+          <span>Run inbox/detail</span>
+          <span>Approval tickets</span>
+          <span>LLM adapters</span>
+          <span>Skill replay</span>
+          <span>Skill packages</span>
+          <span>Alpha smoke test</span>
+        </div>
+      </section>
+
+      <section class="section-band safety">
+        <div>
+          <p class="eyebrow">Safety model</p>
+          <h2>Power is useful only when the boundary is visible.</h2>
+        </div>
+        <ul>
+          <li>Local-first runtime and bearer-token gateway.</li>
+          <li>LLM output becomes draft plans, not direct action.</li>
+          <li>Risky actions require approval tickets.</li>
+          <li>Imported skill packages become candidates, not approved skills.</li>
+          <li>Runs, workflows, and skills produce inspectable traces.</li>
+        </ul>
+      </section>
+
+      <section id="quickstart" class="section-band quickstart">
+        <div class="section-heading">
+          <p class="eyebrow">Developer quickstart</p>
+          <h2>Run SpruceAgent locally.</h2>
+        </div>
+        <pre><code>git clone https://github.com/zlx101/SpruceAgent.git
+cd SpruceAgent
+npm run doctor
+npm run alpha:smoke
+npm test
+npm run spruce -- gateway token
+npm run spruce -- gateway serve --port 7357</code></pre>
+        <div class="link-row">
+          <a href="/workbench">Open Workbench</a>
+          <a href="https://github.com/zlx101/SpruceAgent">GitHub</a>
+          <a href="/showcase">Showcase</a>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>SpruceAgent</span>
+      <span>Skill -> Workflow -> Agent -> Super-Agent -> Super AI Assistant</span>
+    </footer>
+    <script src="/showcase/app.js" type="module"></script>
+  </body>
+</html>

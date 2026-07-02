@@ -13,6 +13,9 @@ const REQUIRED_PATHS = [
   ".github/pull_request_template.md",
   ".github/ISSUE_TEMPLATE/bug_report.yml",
   ".github/ISSUE_TEMPLATE/feature_request.yml",
+  "apps/showcase/index.html",
+  "apps/showcase/app.js",
+  "apps/showcase/styles.css",
   "apps/cli/bin/spruce.js",
   "apps/desktop/index.html",
   "apps/desktop/app.js",
@@ -20,6 +23,7 @@ const REQUIRED_PATHS = [
   "packages/core/src/index.js",
   "tests/core.test.js",
   "docs/open-source-alpha-quickstart.md",
+  "docs/public-showcase-v0.md",
   "docs/release-checklist.md",
 ];
 

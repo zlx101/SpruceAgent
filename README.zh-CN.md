@@ -38,6 +38,8 @@ SpruceAgent 目前处于开源 alpha 与核心基础设施阶段。
 建议先读：
 
 - [Open Source Alpha Quickstart](docs/open-source-alpha-quickstart.md)
+- [公开展示页](apps/showcase/index.html)
+- [Public Showcase v0](docs/public-showcase-v0.md)
 - [贡献指南](CONTRIBUTING.md)
 - [安全策略](SECURITY.md)
 - [发布检查清单](docs/release-checklist.md)
@@ -106,6 +108,12 @@ npm run spruce -- gateway serve --port 7357
 
 ```text
 http://127.0.0.1:7357/workbench
+```
+
+公开展示页：
+
+```text
+http://127.0.0.1:7357/showcase
 ```
 
 Workbench 当前用于查看状态、检索上下文、启动 run、审批候选动作、运行 workflow、查看 trace，并进入 SkillForge 的评估、晋升、回放和包导入导出流程。

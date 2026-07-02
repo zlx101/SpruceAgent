@@ -38,6 +38,8 @@ SpruceAgent is in architecture and core foundation development.
 Start here:
 
 - [Open Source Alpha Quickstart](docs/open-source-alpha-quickstart.md)
+- [Public Showcase](apps/showcase/index.html)
+- [Public Showcase v0](docs/public-showcase-v0.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security Policy](SECURITY.md)
 - [Release Checklist](docs/release-checklist.md)
@@ -146,6 +148,7 @@ npm run spruce -- gateway token
 npm run spruce -- gateway contract
 npm run spruce -- gateway serve
 # then open http://127.0.0.1:7357/workbench
+# public showcase: http://127.0.0.1:7357/showcase
 npm run spruce -- tool run shell.execute --command "echo spruce" --approved
 npm run spruce -- policy check --tool shell.execute --command "git status"
 ```
