@@ -44,6 +44,7 @@ import { getRunDetail, getRunDetailContract } from "./run-detail.js";
 import { getRunInbox, getRunInboxContract } from "./run-inbox.js";
 import { getLlmAdapterContract } from "./llm.js";
 import { runAgent } from "./agent-runner.js";
+import { runPreflight } from "./preflight.js";
 import { readJson, writeJson } from "./storage.js";
 import { listTools } from "./tools.js";
 import { listTraces } from "./trace.js";
@@ -317,6 +318,13 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/tools/run",
       authRequired: true,
       description: "Execute a tool through TrustKernel policy and approval gates.",
+    },
+    {
+      id: "preflight.run",
+      method: "POST",
+      path: "/v1/preflight",
+      authRequired: true,
+      description: "Run deterministic local readiness checks before agent or workflow execution.",
     },
     {
       id: "context.index",
@@ -892,6 +900,17 @@ async function routeRequest(store, request, url, body) {
     }));
   }
 
+  if (request.method === "POST" && url.pathname === "/v1/preflight") {
+    return ok(runPreflight(store, {
+      kind: body.kind ?? "gateway.preflight",
+      requireFreshContext: Boolean(body.requireFreshContext),
+      refreshContext: Boolean(body.refreshContext),
+      contextMaxBytes: body.contextMaxBytes ?? body.maxBytes,
+      maxChanges: body.maxChanges,
+      incremental: body.incremental,
+    }));
+  }
+
   if (request.method === "POST" && url.pathname === "/v1/context/index") {
     const index = buildWorkspaceIndex(store, {
       maxBytes: body.maxBytes,
@@ -941,6 +960,8 @@ async function routeRequest(store, request, url, body) {
       executeCandidatePlan: Boolean(body.executeCandidatePlan),
       candidateApprovalIds: body.candidateApprovalIds,
       requireFreshContext: Boolean(body.requireFreshContext),
+      refreshContext: Boolean(body.refreshContext),
+      contextMaxBytes: body.contextMaxBytes ?? body.maxBytes,
       actor: body.actor ?? "gateway-user",
       channel: "gateway",
     }));
@@ -1117,6 +1138,8 @@ async function routeRequest(store, request, url, body) {
       trustMode: body.trustMode ?? "approve",
       dryRun: Boolean(body.dryRun),
       requireFreshContext: Boolean(body.requireFreshContext),
+      refreshContext: Boolean(body.refreshContext),
+      contextMaxBytes: body.contextMaxBytes ?? body.maxBytes,
       actor: body.actor ?? "gateway-user",
       channel: "gateway",
     }));

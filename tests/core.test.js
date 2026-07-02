@@ -90,6 +90,7 @@ import {
   restoreWorkflowVersion,
   runDoctor,
   runAgent,
+  runPreflight,
   runWorkflow,
   searchWorkspaceContext,
   searchMemory,
@@ -444,6 +445,35 @@ test("workspace freshness detects missing, fresh, and stale indexes", () => {
   assert.ok(stale.changes.added.includes("added.md"));
 });
 
+test("run preflight can warn, block, and refresh ContextOS", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+
+  const warning = runPreflight(store);
+  assert.equal(warning.status, "warning");
+  assert.equal(warning.canProceed, true);
+  assert.equal(warning.context.final.status, "missing");
+
+  const blocked = runPreflight(store, {
+    requireFreshContext: true,
+  });
+  assert.equal(blocked.status, "blocked");
+  assert.equal(blocked.canProceed, false);
+  assert.equal(blocked.blockers[0].id, "context.freshness");
+
+  fs.writeFileSync(path.join(dir, "README.md"), "Preflight refreshes ContextOS.", "utf8");
+  const refreshed = runPreflight(store, {
+    requireFreshContext: true,
+    refreshContext: true,
+  });
+  assert.equal(refreshed.status, "passed");
+  assert.equal(refreshed.canProceed, true);
+  assert.equal(refreshed.context.initial.status, "missing");
+  assert.equal(refreshed.context.final.status, "fresh");
+  assert.equal(refreshed.context.refreshed, true);
+  assert.equal(refreshed.actions[0].id, "context.index");
+});
+
 test("workspace context search returns scored snippets", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   const store = ensureStore(createStore(dir));
@@ -510,6 +540,7 @@ test("agent run dry-run creates trace and plan without tool execution", async ()
   assert.equal(run.status, "dry_run");
   assert.equal(run.results.length, 0);
   assert.equal(run.knownFacts.llmConnected, false);
+  assert.equal(run.preflight.status, "passed");
   assert.equal(run.contextFreshness.status, "fresh");
   assert.ok(run.plan.steps.some((step) => step.id === "step_read_top_context"));
   assert.ok(events.some((event) => event.type === "agent.plan"));
@@ -551,10 +582,38 @@ test("agent run blocks execution when fresh context is required and index is sta
 
   const events = readTraceEvents(store, run.traceId);
   assert.equal(run.status, "blocked");
+  assert.equal(run.preflight.status, "blocked");
   assert.equal(run.contextFreshness.status, "stale");
   assert.equal(run.contextFreshness.summary.changed, 1);
   assert.equal(run.results.length, 0);
   assert.equal(events.some((event) => event.type === "tool.result"), false);
+  assert.ok(events.some((event) => event.type === "run.preflight"));
+});
+
+test("agent run can refresh stale context before requiring fresh context", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, "trust.md"), "TrustKernel old context.", "utf8");
+  buildWorkspaceIndex(store);
+  fs.writeFileSync(path.join(dir, "trust.md"), "TrustKernel refreshed context.", "utf8");
+
+  const run = await runAgent(store, {
+    goal: "Use refreshed TrustKernel context",
+    contextQuery: "refreshed",
+    requireFreshContext: true,
+    refreshContext: true,
+    dryRun: true,
+  });
+
+  const events = readTraceEvents(store, run.traceId);
+  assert.equal(run.status, "dry_run");
+  assert.equal(run.preflight.status, "passed");
+  assert.equal(run.preflight.context.refreshed, true);
+  assert.equal(run.contextFreshness.status, "fresh");
+  assert.equal(run.context.resultCount, 1);
+  assert.equal(run.context.results[0].path, "trust.md");
+  assert.match(run.context.results[0].snippet, /refreshed context/);
+  assert.ok(events.some((event) => event.type === "run.preflight"));
 });
 
 test("agent run without index reports a warning instead of inventing context", async () => {
@@ -1106,6 +1165,7 @@ test("workflow runs context, tool, and memory steps", async () => {
   const run = await runWorkflow(store, workflow.id);
 
   assert.equal(run.status, "completed");
+  assert.equal(run.preflight.status, "passed");
   assert.equal(run.contextFreshness.status, "fresh");
   assert.ok(run.results.some((result) => result.kind === "context" && result.status === "succeeded"));
   assert.ok(run.results.some((result) => result.toolName === "file.read" && result.status === "succeeded"));
@@ -1132,9 +1192,40 @@ test("workflow run blocks execution when fresh context is required and index is 
 
   const events = readTraceEvents(store, run.traceId);
   assert.equal(run.status, "blocked");
+  assert.equal(run.preflight.status, "blocked");
   assert.equal(run.contextFreshness.status, "stale");
   assert.equal(run.results.length, 0);
   assert.equal(events.some((event) => event.type === "tool.result"), false);
+  assert.ok(events.some((event) => event.type === "run.preflight"));
+});
+
+test("workflow run can refresh stale context before requiring fresh context", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, "README.md"), "Workflow old context.", "utf8");
+  buildWorkspaceIndex(store);
+  fs.writeFileSync(path.join(dir, "README.md"), "Workflow refreshed context.", "utf8");
+  const workflow = createWorkflow(store, {
+    name: "Refreshed Workflow",
+    steps: [
+      { kind: "context", query: "refreshed", limit: 1 },
+    ],
+  });
+
+  const run = await runWorkflow(store, workflow.id, {
+    requireFreshContext: true,
+    refreshContext: true,
+  });
+
+  const events = readTraceEvents(store, run.traceId);
+  assert.equal(run.status, "completed");
+  assert.equal(run.preflight.status, "passed");
+  assert.equal(run.preflight.context.refreshed, true);
+  assert.equal(run.contextFreshness.status, "fresh");
+  assert.equal(run.results[0].status, "succeeded");
+  assert.equal(run.results[0].context.results[0].path, "README.md");
+  assert.match(run.results[0].context.results[0].snippet, /refreshed context/);
+  assert.ok(events.some((event) => event.type === "run.preflight"));
 });
 
 test("workflow inbox and detail reconstruct workflow run traces", async () => {
@@ -1372,6 +1463,7 @@ test("gateway route contract exposes stable route ids", () => {
   assert.ok(routeIds.includes("showcase"));
   assert.ok(routeIds.includes("status"));
   assert.ok(routeIds.includes("context.freshness"));
+  assert.ok(routeIds.includes("preflight.run"));
   assert.ok(routeIds.includes("inbox"));
   assert.ok(routeIds.includes("inbox.contract"));
   assert.ok(routeIds.includes("runs.get"));
@@ -1792,15 +1884,22 @@ test("gateway client reads context freshness and can require fresh context", asy
 
   try {
     const freshness = await client.contextFreshness();
+    const preflight = await client.preflight({
+      requireFreshContext: true,
+      refreshContext: true,
+    });
     const run = await client.runAgent({
       goal: "Require fresh gateway context",
       contextQuery: "Gateway",
       requireFreshContext: true,
+      refreshContext: true,
     });
 
     assert.equal(freshness.status, "stale");
-    assert.equal(run.status, "blocked");
-    assert.equal(run.contextFreshness.status, "stale");
+    assert.equal(preflight.status, "passed");
+    assert.equal(preflight.context.refreshed, true);
+    assert.equal(run.status, "completed");
+    assert.equal(run.contextFreshness.status, "fresh");
   } finally {
     await closeServer(gateway.server);
   }

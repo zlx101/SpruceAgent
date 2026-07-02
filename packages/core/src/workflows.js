@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { addMemory } from "./memory.js";
-import { assessWorkspaceIndexFreshness, createContextPack } from "./context.js";
+import { createContextPack } from "./context.js";
 import { executeTool } from "./executor.js";
 import { createId, nowIso } from "./id.js";
+import { runPreflight } from "./preflight.js";
 import { getApprovedSkill } from "./skills.js";
 import { appendTraceEvent, startTrace } from "./trace.js";
 import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
@@ -180,19 +181,27 @@ export async function runWorkflow(store, workflowId, input = {}) {
     name: workflow.name,
     stepCount: workflow.steps.length,
   });
-  const contextFreshness = assessWorkspaceIndexFreshness(store);
+  const preflight = runPreflight(store, {
+    kind: "workflow.run.preflight",
+    requireFreshContext: input.requireFreshContext,
+    refreshContext: input.refreshContext,
+    contextMaxBytes: input.contextMaxBytes,
+  });
+  appendTraceEvent(store, trace.id, "run.preflight", preflight);
+  const contextFreshness = preflight.context.final;
   appendTraceEvent(store, trace.id, "context.staleness", contextFreshness);
 
-  if (input.requireFreshContext && contextFreshness.status !== "fresh") {
+  if (!preflight.canProceed) {
     const result = {
       id: trace.id,
       status: "blocked",
       workflow,
       traceId: trace.id,
+      preflight,
       contextFreshness,
       results: [],
       limits: [
-        "Execution was blocked because requireFreshContext was set and ContextOS reported a stale or missing index.",
+        "Execution was blocked because preflight found one or more required runtime gates unsatisfied.",
         ...v0Limits(),
       ],
     };
@@ -206,6 +215,7 @@ export async function runWorkflow(store, workflowId, input = {}) {
       status: "dry_run",
       workflow,
       traceId: trace.id,
+      preflight,
       contextFreshness,
       results: [],
       limits: v0Limits(),
@@ -233,6 +243,7 @@ export async function runWorkflow(store, workflowId, input = {}) {
     status,
     workflow,
     traceId: trace.id,
+    preflight,
     contextFreshness,
     results,
     limits: v0Limits(),

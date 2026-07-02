@@ -55,6 +55,7 @@ Start here:
 - [ContextOS Index Safety v0](docs/contextos-index-safety-v0.md)
 - [ContextOS Incremental Index v0](docs/contextos-incremental-index-v0.md)
 - [ContextOS Staleness Guard v0](docs/contextos-staleness-guard-v0.md)
+- [Run Preflight / Auto-Reindex v0](docs/run-preflight-auto-reindex-v0.md)
 - [ContextOS Source Map v0](docs/contextos-source-map-v0.md)
 - [Agent Run Loop v0](docs/agent-run-loop-v0.md)
 - [SkillForge v0](docs/skillforge-v0.md)

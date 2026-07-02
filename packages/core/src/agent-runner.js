@@ -1,11 +1,12 @@
 import { addMemory } from "./memory.js";
-import { assessWorkspaceIndexFreshness, createContextPack, readWorkspaceIndex } from "./context.js";
+import { createContextPack, readWorkspaceIndex } from "./context.js";
 import { executeTool } from "./executor.js";
 import { requestCandidateApprovals } from "./candidate-approvals.js";
 import { executeCandidatePlan } from "./candidate-executor.js";
 import { getApprovedSkill } from "./skills.js";
 import { createLlmProvider, draftLlmPlan } from "./llm.js";
 import { promoteLlmDraftToCandidatePlan } from "./planner.js";
+import { runPreflight } from "./preflight.js";
 import { appendTraceEvent, startTrace } from "./trace.js";
 
 export async function runAgent(store, input) {
@@ -31,6 +32,14 @@ export async function runAgent(store, input) {
     },
   });
 
+  const preflight = runPreflight(store, {
+    kind: "agent.run.preflight",
+    requireFreshContext: input.requireFreshContext,
+    refreshContext: input.refreshContext,
+    contextMaxBytes: input.contextMaxBytes,
+  });
+  appendTraceEvent(store, trace.id, "run.preflight", preflight);
+
   const llmProvider = resolveLlmProvider(input.llmProvider, input);
   const knownFacts = collectKnownFacts(store, selectedSkill, executeSkill, llmProvider);
   appendTraceEvent(store, trace.id, "agent.known_facts", knownFacts);
@@ -49,16 +58,17 @@ export async function runAgent(store, input) {
     limit: input.contextLimit ?? 5,
   });
   appendTraceEvent(store, trace.id, "agent.context", contextPack);
-  const contextFreshness = assessWorkspaceIndexFreshness(store);
+  const contextFreshness = preflight.context.final;
   appendTraceEvent(store, trace.id, "context.staleness", contextFreshness);
 
-  if (input.requireFreshContext && contextFreshness.status !== "fresh") {
+  if (!preflight.canProceed) {
     const result = {
       id: trace.id,
       status: "blocked",
       goal,
       traceId: trace.id,
       knownFacts,
+      preflight,
       context: contextPack,
       contextFreshness,
       skill: selectedSkill,
@@ -67,7 +77,7 @@ export async function runAgent(store, input) {
       candidatePlan: null,
       results: [],
       limits: [
-        "Execution was blocked because requireFreshContext was set and ContextOS reported a stale or missing index.",
+        "Execution was blocked because preflight found one or more required runtime gates unsatisfied.",
         ...v0Limits(Boolean(llmProvider)),
       ],
     };
@@ -105,6 +115,7 @@ export async function runAgent(store, input) {
       goal,
       traceId: trace.id,
       knownFacts,
+      preflight,
       context: contextPack,
       contextFreshness,
       skill: selectedSkill,
@@ -189,6 +200,7 @@ export async function runAgent(store, input) {
     goal,
     traceId: trace.id,
     knownFacts,
+    preflight,
     context: contextPack,
     contextFreshness,
     skill: selectedSkill,

@@ -69,6 +69,7 @@ export function createGatewayClient(options = {}) {
     listSkillReplayResults: () => request("GET", "/v1/skill-replay/results"),
     getSkillReplayResult: (resultId) => request("GET", `/v1/skill-replay/results/${encodePathPart(resultId)}`),
     runTool: (input) => request("POST", "/v1/tools/run", input),
+    preflight: (input = {}) => request("POST", "/v1/preflight", input),
     indexContext: (input = {}) => request("POST", "/v1/context/index", input),
     contextFreshness: (input = {}) => request("GET", `/v1/context/freshness${input.maxChanges ? `?maxChanges=${encodeURIComponent(input.maxChanges)}` : ""}`),
     searchContext: (input) => request("POST", "/v1/context/search", input),

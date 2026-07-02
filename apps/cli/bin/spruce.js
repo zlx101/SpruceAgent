@@ -86,6 +86,7 @@ import {
   restoreWorkflowVersion,
   runDoctor,
   runAgent,
+  runPreflight,
   runWorkflow,
   searchWorkspaceContext,
   searchMemory,
@@ -283,6 +284,8 @@ async function handleRun(firstArg, args) {
     requestCandidateApprovals: Boolean(flags.requestCandidateApprovals),
     executeCandidatePlan: Boolean(flags.executeCandidatePlan),
     requireFreshContext: Boolean(flags.requireFreshContext),
+    refreshContext: Boolean(flags.refreshContext),
+    contextMaxBytes: flags.contextMaxBytes ?? flags.maxBytes,
     actor: flags.actor ?? "local-user",
     channel: "cli",
   });
@@ -495,6 +498,18 @@ function handleContext(action, args) {
     return;
   }
 
+  if (action === "preflight") {
+    const flags = parseFlags(args);
+    printJson(runPreflight(store, {
+      kind: "context.preflight",
+      requireFreshContext: Boolean(flags.requireFreshContext),
+      refreshContext: Boolean(flags.refreshContext),
+      contextMaxBytes: flags.contextMaxBytes ?? flags.maxBytes,
+      maxChanges: flags.maxChanges,
+    }));
+    return;
+  }
+
   if (action === "pack") {
     const flags = parseFlags(args);
     const query = flags._.join(" ").trim();
@@ -512,7 +527,7 @@ function handleContext(action, args) {
     return;
   }
 
-  throw new Error("usage: spruce context <index|freshness|search|pack|show>");
+  throw new Error("usage: spruce context <index|freshness|preflight|search|pack|show>");
 }
 
 function handleSkill(action, args) {
@@ -920,6 +935,8 @@ async function handleWorkflow(action, args) {
       trustMode: flags.trustMode ?? "approve",
       dryRun: Boolean(flags.dryRun),
       requireFreshContext: Boolean(flags.requireFreshContext),
+      refreshContext: Boolean(flags.refreshContext),
+      contextMaxBytes: flags.contextMaxBytes ?? flags.maxBytes,
       actor: flags.actor ?? "local-user",
       channel: "cli",
     }));
@@ -1222,6 +1239,7 @@ Usage:
   ${executable} status
   ${executable} run "Summarize TrustKernel" --context "TrustKernel"
   ${executable} run "Summarize TrustKernel" --context "TrustKernel" --requireFreshContext
+  ${executable} run "Summarize TrustKernel" --context "TrustKernel" --requireFreshContext --refreshContext
   ${executable} run "Summarize TrustKernel" --context "TrustKernel" --skill <skillId>
   ${executable} run "Draft with mock LLM" --context "TrustKernel" --llm mock --dryRun
   ${executable} run "Promote draft" --context "TrustKernel" --llm mock --promotePlan --dryRun
@@ -1248,6 +1266,7 @@ Usage:
   ${executable} tool run file.write --path notes.txt --content "hello" --approvalId <approvalId>
   ${executable} context index
   ${executable} context freshness
+  ${executable} context preflight [--requireFreshContext] [--refreshContext]
   ${executable} context search "TrustKernel"
   ${executable} context show README.md
   ${executable} policy check --tool shell.execute --command "git status"
@@ -1270,7 +1289,7 @@ Usage:
   ${executable} workflow list [--status active|archived|all]
   ${executable} workflow versions <workflowId>
   ${executable} workflow restore <workflowId> <revision>
-  ${executable} workflow run <workflowId> [--requireFreshContext]
+  ${executable} workflow run <workflowId> [--requireFreshContext] [--refreshContext]
   ${executable} workflow resume <traceId> [--stepId <stepId>] [--approvalId <approvalId>]
   ${executable} workflow inbox
   ${executable} workflow detail <traceId>
