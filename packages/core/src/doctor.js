@@ -5,7 +5,14 @@ import { createStore, ensureStore } from "./storage.js";
 
 const REQUIRED_PATHS = [
   "README.md",
+  "LICENSE",
+  "CONTRIBUTING.md",
+  "SECURITY.md",
+  "CODE_OF_CONDUCT.md",
   "package.json",
+  ".github/pull_request_template.md",
+  ".github/ISSUE_TEMPLATE/bug_report.yml",
+  ".github/ISSUE_TEMPLATE/feature_request.yml",
   "apps/cli/bin/spruce.js",
   "apps/desktop/index.html",
   "apps/desktop/app.js",
@@ -13,6 +20,7 @@ const REQUIRED_PATHS = [
   "packages/core/src/index.js",
   "tests/core.test.js",
   "docs/open-source-alpha-quickstart.md",
+  "docs/release-checklist.md",
 ];
 
 export function runDoctor(cwd = process.cwd()) {
@@ -54,6 +62,8 @@ function checkPackageJson(cwd) {
     const pkg = JSON.parse(fs.readFileSync(filePath, "utf8"));
     const missing = [];
     if (pkg.type !== "module") missing.push("type=module");
+    if (pkg.license !== "Apache-2.0") missing.push("license=Apache-2.0");
+    if (!pkg.repository?.url) missing.push("repository.url");
     if (!pkg.scripts?.test) missing.push("scripts.test");
     if (!pkg.scripts?.spruce) missing.push("scripts.spruce");
     if (!pkg.engines?.node) missing.push("engines.node");

@@ -1,0 +1,36 @@
+name: Engineering task
+description: Track an implementation task with verification.
+title: "[Task]: "
+labels:
+  - task
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Target Outcome
+      description: What should be true when this is done?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Files, modules, or contracts likely affected.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification Plan
+      placeholder: |
+        - npm run doctor
+        - npm run check
+        - npm test
+        - npm run alpha:smoke
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks and Rollback
+      description: Note safety risks, migration risks, or rollback path.

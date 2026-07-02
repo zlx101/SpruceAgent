@@ -4,6 +4,24 @@
   "private": true,
   "type": "module",
   "description": "The open-source SuperAgent OS for future super individuals and super teams.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zlx101/SpruceAgent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zlx101/SpruceAgent/issues"
+  },
+  "homepage": "https://github.com/zlx101/SpruceAgent#readme",
+  "keywords": [
+    "agent",
+    "superagent",
+    "ai-agent",
+    "workflow",
+    "memory",
+    "skills",
+    "trust"
+  ],
   "bin": {
     "spruce": "apps/cli/bin/spruce.js"
   },

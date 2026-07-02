@@ -1,0 +1,48 @@
+name: Feature request
+description: Propose a capability for SpruceAgent.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user or developer problem should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Capability
+      description: Describe the smallest useful version.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - ContextOS
+        - SkillForge
+        - Workflow
+        - GatewayMesh
+        - TrustKernel
+        - LLM provider
+        - CLI
+        - Desktop workbench
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety and Trust Boundary
+      description: What approvals, audits, policies, or context boundaries are needed?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered

@@ -38,6 +38,10 @@ SpruceAgent is in architecture and core foundation development.
 Start here:
 
 - [Open Source Alpha Quickstart](docs/open-source-alpha-quickstart.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
+- [Release Checklist](docs/release-checklist.md)
+- [Repo Release Kit v0](docs/repo-release-kit-v0.md)
 - [SuperAgent Blueprint](docs/spruceagent-superagent-blueprint.md)
 - [Open Source Growth Strategy](docs/spruceagent-open-source-growth-strategy.md)
 - [Research Upgrade Notes](docs/spruceagent-research-upgrade-2026.md)

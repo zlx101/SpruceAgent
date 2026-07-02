@@ -1,8 +1,8 @@
 # SpruceAgent
 
-> 面向未来超级个人与超级团队的开源超级智能体操作系统：多入口、原生记忆、自我进化、可信可控。
+> 面向未来超级个人与超级团队的开源 SuperAgent OS：多入口、原生记忆、自我进化、可信可控。
 
-SpruceAgent 是一个 local-first 的 Agent 平台。目标不是再做一个普通 Agent framework，而是成为未来超级个人与超级团队的神兵利器。
+SpruceAgent 是一个 local-first 的智能体平台。它不是再做一个普通 Agent framework，而是要成为未来超级个人与超级团队的神兵利器。
 
 它由四个核心能力构成：
 
@@ -33,22 +33,33 @@ SpruceAgent 要做的是它们之上的下一层：
 
 ## 当前阶段
 
-SpruceAgent 目前处于架构和核心基础开发阶段。
+SpruceAgent 目前处于开源 alpha 与核心基础设施阶段。
 
 建议先读：
 
+- [Open Source Alpha Quickstart](docs/open-source-alpha-quickstart.md)
+- [贡献指南](CONTRIBUTING.md)
+- [安全策略](SECURITY.md)
+- [发布检查清单](docs/release-checklist.md)
+- [Repo Release Kit v0](docs/repo-release-kit-v0.md)
 - [SuperAgent 蓝图](docs/spruceagent-superagent-blueprint.md)
 - [开源增长与架构战略](docs/spruceagent-open-source-growth-strategy.md)
 - [研究升级记录](docs/spruceagent-research-upgrade-2026.md)
+- [三大基石项目再核验](docs/foundation-projects-revalidation-2026-07-01.md)
 - [核心工具执行引擎](docs/core-tool-execution-engine.md)
 - [审批票据系统](docs/approval-ticket-system.md)
 - [工作区上下文检索](docs/workspace-context-retrieval.md)
+- [ContextOS Source Map v0](docs/contextos-source-map-v0.md)
 - [Agent Run Loop v0](docs/agent-run-loop-v0.md)
 - [SkillForge v0](docs/skillforge-v0.md)
-- [Skill Lifecycle v0](docs/skill-lifecycle-v0.md)
+- [Skill 生命周期 v0](docs/skill-lifecycle-v0.md)
+- [SkillForge Evaluation Harness v0](docs/skillforge-evaluation-harness-v0.md)
+- [Skill Promotion / Versioning v0](docs/skill-promotion-versioning-v0.md)
+- [Skill Restore / Replay Fixtures v0](docs/skill-restore-replay-fixtures-v0.md)
+- [Skill Package / Import-Export v0](docs/skill-package-import-export-v0.md)
 - [Typed Executable Skills v0](docs/typed-executable-skills-v0.md)
 - [Skill 与 CLI 生态研究](docs/skill-and-cli-ecosystem-research.md)
-- [能力演化链](docs/capability-evolution-chain.md)
+- [能力演化链路](docs/capability-evolution-chain.md)
 - [Workflow v0](docs/workflow-v0.md)
 - [Workflow Builder v0](docs/workflow-builder-v0.md)
 - [Workflow Versioning / Archive v0](docs/workflow-versioning-archive-v0.md)
@@ -71,80 +82,44 @@ SpruceAgent 目前处于架构和核心基础开发阶段。
 - [方向自查 - 2026-06-29](docs/direction-alignment-check-2026-06-29.md)
 - [工程原则](docs/engineering-principles.md)
 
-## 本地核心快速开始
+## 本地快速开始
 
 ```bash
+npm run doctor
+npm run alpha:smoke
 npm test
 npm run spruce -- init
 npm run spruce -- status
-npm run spruce -- memory add "SpruceAgent serves future super individuals and super teams." --tags positioning
-npm run spruce -- memory search "super teams"
-npm run spruce -- trace start "Ship the first SpruceAgent core"
-npm run spruce -- tool list
-npm run spruce -- tool run file.read --path README.md
-npm run spruce -- tool run file.write --path notes.txt --content "hello"
-npm run spruce -- approval list --status pending
-npm run spruce -- approval approve <approvalId>
-npm run spruce -- tool run file.write --path notes.txt --content "hello" --approvalId <approvalId>
 npm run spruce -- context index
 npm run spruce -- context search "TrustKernel" --limit 3
 npm run spruce -- run "Read TrustKernel context safely" --context "TrustKernel" --limit 2
-npm run spruce -- run "Plan only" --context "TrustKernel" --dryRun
-npm run spruce -- run "Draft with mock LLM" --context "TrustKernel" --llm mock --dryRun
-npm run spruce -- run "Promote draft" --context "TrustKernel" --llm mock --promotePlan --dryRun
-npm run spruce -- run "Request candidate approvals" --llm <provider> --promotePlan --requestCandidateApprovals
-npm run spruce -- run resume <traceId>
-npm run spruce -- run detail <traceId>
-npm run spruce -- run detail-contract
-npm run spruce -- inbox
-npm run spruce -- inbox contract
-DEEPSEEK_API_KEY=<token> npm run spruce -- run "Draft with DeepSeek" --context "TrustKernel" --llm deepseek --llmModel deepseek-v4-flash --dryRun
-npm run spruce -- skill extract <traceId>
-npm run spruce -- skill approve <skillId>
-npm run spruce -- run "Use approved skill" --context "TrustKernel" --skill <skillId>
-npm run spruce -- run "Execute approved skill" --skill <skillId> --executeSkill
-npm run spruce -- skill list --status candidates
-npm run spruce -- workflow draft "Create a project review workflow" --context "TrustKernel" --llm mock
-npm run spruce -- workflow save-draft --file workflow-draft.json
-npm run spruce -- workflow create --name "Review" --context "TrustKernel" --skill <skillId> --memory "Done"
-npm run spruce -- workflow versions <workflowId>
-npm run spruce -- workflow archive <workflowId>
-npm run spruce -- workflow restore <workflowId> <revision>
-npm run spruce -- workflow run <workflowId>
-npm run spruce -- workflow resume <traceId>
-npm run spruce -- eval trace <traceId>
-npm run spruce -- eval list
-npm run spruce -- llm contract
-npm run spruce -- planner contract
-npm run spruce -- candidate contract
-npm run spruce -- candidate approval-contract
-npm run spruce -- candidate continuation-contract
-npm run spruce -- gateway token
-npm run spruce -- gateway contract
-npm run spruce -- gateway serve
-# 然后打开 http://127.0.0.1:7357/workbench
-npm run spruce -- tool run shell.execute --command "echo spruce" --approved
-npm run spruce -- policy check --tool shell.execute --command "git status"
 ```
 
-第一版核心会创建本地 `.spruceagent/` 工作区存储，用来保存 memory、trace、audit log、skill candidate，并支持 skill approval、显式 typed skill execution、workflow、workflow versioning/archive、workflow evaluation、workflow inbox/detail、workflow continuation、GatewayMesh Local API、Desktop UI Workbench v0、Workbench Run Launcher v0、Workbench Workflow Editor v0、Workbench Skill / Workflow Runner v0、LLM Adapter v0、Planner Promotion v0、Candidate Execution v0、Candidate Approval Flow v0、Run Continuation v0、Run State / Inbox v0、Run Detail / Trace Viewer v0、trace-to-skill extraction、policy decision、approval ticket、workspace context index、受 policy 约束的工具执行，以及规则化 Agent Run Loop v0。
+## Gateway 与 Workbench
 
-## 语言策略
+```bash
+npm run spruce -- gateway token
+npm run spruce -- gateway serve --port 7357
+```
 
-Canonical language：English。
+打开：
 
-社区语言优先级：
+```text
+http://127.0.0.1:7357/workbench
+```
 
-1. English
-2. 简体中文 / 繁体中文
-3. Spanish
-4. Hindi
-5. Arabic
+Workbench 当前用于查看状态、检索上下文、启动 run、审批候选动作、运行 workflow、查看 trace，并进入 SkillForge 的评估、晋升、回放和包导入导出流程。
 
-## 北极星
+## 安全边界
 
-SpruceAgent 不是一个更失控的自治黑箱，也不只是个人效率工具。
+SpruceAgent 的核心原则是：智能可以增强，但控制权必须留在用户手里。
 
-它是在用户拥有控制权前提下，服务个人与团队的持续智能复利。
+- LLM 输出默认只是 draft，不会直接执行。
+- 候选计划必须经过 promotion 和 policy gate。
+- 中高风险工具动作必须经过审批票据。
+- 导入的 skill package 只会成为 candidate，不会自动变成 approved skill。
+- `.spruceagent/`、密钥、运行态数据和本地 skill 包不应提交到仓库。
 
-所有执行都必须遵守一条规则：安全到值得信任，可靠到可以依赖，合规到可以采用，实用到每天可用，简单到能用第一性原理解释。
+## 许可证
+
+SpruceAgent 使用 Apache-2.0 许可证。
