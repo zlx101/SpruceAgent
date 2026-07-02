@@ -35,8 +35,53 @@ const defaultTextExtensions = new Set([
   ".yml",
 ]);
 
+const sensitiveFileNames = new Set([
+  ".env",
+  ".env.local",
+  ".env.development",
+  ".env.production",
+  ".npmrc",
+  ".pypirc",
+  ".netrc",
+  "id_rsa",
+  "id_dsa",
+  "id_ecdsa",
+  "id_ed25519",
+]);
+
+const sensitiveExtensions = new Set([
+  ".key",
+  ".pem",
+  ".p12",
+  ".pfx",
+]);
+
+const secretPatterns = [
+  {
+    name: "assignment_secret",
+    pattern: /\b([A-Z0-9_]*(?:API[_-]?KEY|SECRET|TOKEN|PASSWORD|PRIVATE[_-]?KEY|ACCESS[_-]?KEY)[A-Z0-9_]*\s*[:=]\s*)(["']?)([^\s"',}]{8,})(\2)/gi,
+    replacement: (...match) => `${match[1]}${match[2]}[REDACTED]${match[4]}`,
+  },
+  {
+    name: "bearer_token",
+    pattern: /\b(Bearer\s+)[A-Za-z0-9._~+/=-]{16,}/gi,
+    replacement: (...match) => `${match[1]}[REDACTED]`,
+  },
+  {
+    name: "openai_like_key",
+    pattern: /\b(sk-[A-Za-z0-9_-]{16,})\b/g,
+    replacement: () => "[REDACTED]",
+  },
+  {
+    name: "github_token",
+    pattern: /\b(gh[pousr]_[A-Za-z0-9_]{20,})\b/g,
+    replacement: () => "[REDACTED]",
+  },
+];
+
 export function buildWorkspaceIndex(store, options = {}) {
   const maxBytes = Number(options.maxBytes ?? 256 * 1024);
+  const ignoreRules = loadIgnoreRules(store.cwd);
   const documents = [];
   const skipped = [];
 
@@ -44,6 +89,18 @@ export function buildWorkspaceIndex(store, options = {}) {
     const relativePath = normalizePath(path.relative(store.cwd, filePath));
     const stat = fs.statSync(filePath);
     const extension = path.extname(filePath).toLowerCase();
+
+    const sensitiveReason = classifySensitivePath(relativePath);
+    if (sensitiveReason) {
+      skipped.push({ path: relativePath, reason: sensitiveReason });
+      return;
+    }
+
+    const ignoreRule = findMatchingIgnoreRule(relativePath, ignoreRules);
+    if (ignoreRule) {
+      skipped.push({ path: relativePath, reason: "ignored_by_rule", rule: ignoreRule.raw });
+      return;
+    }
 
     if (!defaultTextExtensions.has(extension)) {
       skipped.push({ path: relativePath, reason: "unsupported_extension" });
@@ -62,26 +119,37 @@ export function buildWorkspaceIndex(store, options = {}) {
     }
 
     const content = buffer.toString("utf8");
+    const redaction = redactSecrets(content);
     documents.push({
       path: relativePath,
       extension,
       bytes: stat.size,
       mtimeMs: stat.mtimeMs,
       hash: hashContent(buffer),
-      lineCount: countLines(content),
-      content,
+      lineCount: countLines(redaction.content),
+      content: redaction.content,
+      redacted: redaction.count > 0,
+      redactionCount: redaction.count,
     });
   });
 
+  const redactedDocumentCount = documents.filter((document) => document.redacted).length;
   const index = {
     version: 1,
     indexedAt: nowIso(),
     root: store.cwd,
     documentCount: documents.length,
     skippedCount: skipped.length,
+    redactedDocumentCount,
     maxBytes,
     documents: documents.sort((a, b) => a.path.localeCompare(b.path)),
     skipped: skipped.sort((a, b) => a.path.localeCompare(b.path)),
+    safety: {
+      ignoredRuleCount: ignoreRules.length,
+      sensitiveSkipCount: skipped.filter((item) => item.reason.startsWith("sensitive_")).length,
+      redactedDocumentCount,
+      redactionPatterns: secretPatterns.map((item) => item.name),
+    },
   };
 
   writeJson(indexPath(store), index);
@@ -270,6 +338,71 @@ function walk(dir, onFile) {
       onFile(path.join(dir, entry.name));
     }
   }
+}
+
+function loadIgnoreRules(root) {
+  const filePath = path.join(root, ".gitignore");
+  if (!fs.existsSync(filePath)) return [];
+  return fs.readFileSync(filePath, "utf8")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#") && !line.startsWith("!"))
+    .map((raw) => ({
+      raw,
+      directoryOnly: raw.endsWith("/"),
+      pattern: raw.replace(/^\/+/, "").replace(/\/+$/, ""),
+    }))
+    .filter((rule) => rule.pattern && !rule.pattern.includes("**"));
+}
+
+function findMatchingIgnoreRule(relativePath, rules) {
+  return rules.find((rule) => matchesIgnoreRule(relativePath, rule));
+}
+
+function matchesIgnoreRule(relativePath, rule) {
+  const normalized = normalizePath(relativePath);
+  const pattern = normalizePath(rule.pattern);
+  if (rule.directoryOnly) {
+    return normalized === pattern || normalized.startsWith(`${pattern}/`) || normalized.includes(`/${pattern}/`);
+  }
+  if (pattern.includes("*")) {
+    return globToRegex(pattern).test(normalized) || globToRegex(`*/${pattern}`).test(normalized);
+  }
+  if (pattern.includes("/")) {
+    return normalized === pattern || normalized.startsWith(`${pattern}/`);
+  }
+  return normalized === pattern || normalized.endsWith(`/${pattern}`);
+}
+
+function globToRegex(pattern) {
+  const escaped = pattern
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, "[^/]*");
+  return new RegExp(`^${escaped}$`);
+}
+
+function classifySensitivePath(relativePath) {
+  const normalized = normalizePath(relativePath).toLowerCase();
+  const baseName = path.posix.basename(normalized);
+  const extension = path.posix.extname(normalized);
+  if (sensitiveFileNames.has(baseName)) return "sensitive_filename";
+  if (sensitiveExtensions.has(extension)) return "sensitive_extension";
+  if (normalized.includes("/.ssh/")) return "sensitive_directory";
+  if (normalized.includes("/secrets/") || normalized.includes("/secret/")) return "sensitive_directory";
+  if (/(\b|[/_.-])secrets?([/_.-]|$)/i.test(normalized)) return "sensitive_name";
+  return null;
+}
+
+function redactSecrets(content) {
+  let redacted = String(content ?? "");
+  let count = 0;
+  for (const item of secretPatterns) {
+    redacted = redacted.replace(item.pattern, (...args) => {
+      count += 1;
+      return item.replacement(...args);
+    });
+  }
+  return { content: redacted, count };
 }
 
 function scoreDocument(document, terms, rawQuery) {

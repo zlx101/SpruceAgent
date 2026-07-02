@@ -36,6 +36,8 @@ The index stores:
 - SHA-256 hash
 - line count
 - text content
+- redaction status
+- redaction count
 
 The search returns:
 
@@ -54,9 +56,20 @@ The indexer skips:
 - `.git`
 - `node_modules`
 - build/cache directories
+- supported `.gitignore` rules
+- sensitive file names such as `.env`, `.npmrc`, `.pypirc`, `.netrc`, and SSH private key names
+- sensitive extensions such as `.pem`, `.key`, `.p12`, and `.pfx`
+- paths that look like secret files or secret directories
 - unsupported extensions
 - files larger than the configured max size
 - likely binary files
+
+The indexer redacts common secret patterns before content enters the index:
+
+- API key, secret, token, password, private key, and access key assignments
+- bearer tokens
+- OpenAI-style `sk-...` keys
+- GitHub-style `gh*_...` tokens
 
 Default max file size:
 
@@ -97,6 +110,8 @@ This feature does not yet provide:
 - semantic embedding search
 - incremental indexing
 - file watchers
+- complete `.gitignore` compatibility
+- perfect secret detection
 - PDF parsing
 - OCR
 - personal app integrations

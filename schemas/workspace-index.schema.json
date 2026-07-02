@@ -11,6 +11,7 @@
     "root": { "type": "string" },
     "documentCount": { "type": "integer", "minimum": 0 },
     "skippedCount": { "type": "integer", "minimum": 0 },
+    "redactedDocumentCount": { "type": "integer", "minimum": 0 },
     "maxBytes": { "type": "integer", "minimum": 1 },
     "documents": {
       "type": "array",
@@ -25,7 +26,9 @@
           "mtimeMs": { "type": "number" },
           "hash": { "type": "string" },
           "lineCount": { "type": "integer", "minimum": 0 },
-          "content": { "type": "string" }
+          "content": { "type": "string" },
+          "redacted": { "type": "boolean" },
+          "redactionCount": { "type": "integer", "minimum": 0 }
         }
       }
     },
@@ -38,6 +41,19 @@
         "properties": {
           "path": { "type": "string" },
           "reason": { "type": "string" }
+        }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ignoredRuleCount": { "type": "integer", "minimum": 0 },
+        "sensitiveSkipCount": { "type": "integer", "minimum": 0 },
+        "redactedDocumentCount": { "type": "integer", "minimum": 0 },
+        "redactionPatterns": {
+          "type": "array",
+          "items": { "type": "string" }
         }
       }
     }

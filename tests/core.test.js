@@ -355,6 +355,42 @@ test("workspace index captures text files and skips internal state", () => {
   assert.ok(index.skipped.some((item) => item.path === "image.png"));
 });
 
+test("workspace index respects ignore rules and redacts secrets", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, ".gitignore"), [
+    "ignored.md",
+    "private/",
+  ].join("\n"), "utf8");
+  fs.writeFileSync(path.join(dir, "ignored.md"), "This ignored file mentions SpruceAgent.", "utf8");
+  fs.mkdirSync(path.join(dir, "private"));
+  fs.writeFileSync(path.join(dir, "private", "notes.md"), "Private notes mention TrustKernel.", "utf8");
+  fs.writeFileSync(path.join(dir, ".env"), "DEEPSEEK_API_KEY=sk-should-never-index", "utf8");
+  fs.writeFileSync(path.join(dir, "config.json"), JSON.stringify({
+    provider: "deepseek",
+    apiKey: "sk-1234567890abcdef1234567890",
+    note: "SpruceAgent uses redacted provider config.",
+  }), "utf8");
+
+  const index = buildWorkspaceIndex(store);
+  const paths = index.documents.map((document) => document.path);
+  const config = getIndexedDocument(store, "config.json");
+  const results = searchWorkspaceContext(store, "provider config");
+
+  assert.equal(paths.includes("ignored.md"), false);
+  assert.equal(paths.includes("private/notes.md"), false);
+  assert.equal(paths.includes(".env"), false);
+  assert.ok(index.skipped.some((item) => item.path === "ignored.md" && item.reason === "ignored_by_rule"));
+  assert.ok(index.skipped.some((item) => item.path === ".env" && item.reason === "sensitive_filename"));
+  assert.equal(index.redactedDocumentCount, 1);
+  assert.equal(index.safety.redactedDocumentCount, 1);
+  assert.equal(config.redacted, true);
+  assert.equal(config.redactionCount, 1);
+  assert.match(config.content, /\[REDACTED\]/);
+  assert.doesNotMatch(config.content, /sk-1234567890abcdef1234567890/);
+  assert.doesNotMatch(results[0].snippet, /sk-1234567890abcdef1234567890/);
+});
+
 test("workspace context search returns scored snippets", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   const store = ensureStore(createStore(dir));

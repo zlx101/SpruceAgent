@@ -23,6 +23,7 @@ const REQUIRED_PATHS = [
   "packages/core/src/index.js",
   "tests/core.test.js",
   "docs/open-source-alpha-quickstart.md",
+  "docs/contextos-index-safety-v0.md",
   "docs/public-showcase-v0.md",
   "docs/release-checklist.md",
 ];

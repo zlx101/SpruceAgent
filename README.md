@@ -52,6 +52,7 @@ Start here:
 - [Core Tool Execution Engine](docs/core-tool-execution-engine.md)
 - [Approval Ticket System](docs/approval-ticket-system.md)
 - [Workspace Context Retrieval](docs/workspace-context-retrieval.md)
+- [ContextOS Index Safety v0](docs/contextos-index-safety-v0.md)
 - [ContextOS Source Map v0](docs/contextos-source-map-v0.md)
 - [Agent Run Loop v0](docs/agent-run-loop-v0.md)
 - [SkillForge v0](docs/skillforge-v0.md)
