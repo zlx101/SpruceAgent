@@ -35,6 +35,8 @@ import {
   getApprovalTicket,
   getApprovalQueue,
   getApprovalQueueContract,
+  getArtifact,
+  getArtifactContract,
   getLlmAdapterContract,
   getPlannerPromotionContract,
   getRunInbox,
@@ -61,6 +63,7 @@ import {
   getWorkflowContinuationContract,
   getWorkflow,
   listApprovalTickets,
+  listArtifacts,
   listEvaluations,
   listSkillEvaluations,
   listSkillPackageImports,
@@ -145,6 +148,7 @@ async function main() {
       candidateSkillCount: listSkills(store, "candidates").length,
       approvedSkillCount: listSkills(store, "approved").length,
       workflowCount: listWorkflows(store).length,
+      artifactCount: listArtifacts(store).summary.total,
       evaluationCount: listEvaluations(store).length,
       skillEvaluationCount: listSkillEvaluations(store).length,
       skillReplayFixtureCount: listSkillReplayFixtures(store).length,
@@ -200,6 +204,11 @@ async function main() {
 
   if (command === "approval") {
     handleApproval(subcommand, rest);
+    return;
+  }
+
+  if (command === "artifact" || command === "artifacts") {
+    handleArtifact(subcommand, rest);
     return;
   }
 
@@ -477,6 +486,34 @@ function handleApproval(action, args) {
   }
 
   throw new Error("usage: spruce approval <queue|queue-contract|list|get|approve|reject>");
+}
+
+function handleArtifact(action, args) {
+  if (!action || action === "list") {
+    const flags = parseFlags(args);
+    printJson(listArtifacts(store, {
+      limit: flags.limit,
+      traceId: flags.traceId,
+      kind: flags.kind,
+      sourceKind: flags.sourceKind,
+      status: flags.status,
+    }));
+    return;
+  }
+
+  if (action === "get") {
+    const [artifactId] = args;
+    if (!artifactId) throw new Error("usage: spruce artifact get <artifactId>");
+    printJson(getArtifact(store, artifactId));
+    return;
+  }
+
+  if (action === "contract") {
+    printJson(getArtifactContract());
+    return;
+  }
+
+  throw new Error("usage: spruce artifact <list|get|contract>");
 }
 
 function handleContext(action, args) {
@@ -1281,6 +1318,9 @@ Usage:
   ${executable} approval list [--status pending]
   ${executable} approval queue [--traceKind agent.run|workflow.run]
   ${executable} approval approve <approvalId>
+  ${executable} artifact list [--traceId <traceId>] [--kind tool_result]
+  ${executable} artifact get <artifactId>
+  ${executable} artifact contract
   ${executable} tool run file.write --path notes.txt --content "hello" --approvalId <approvalId>
   ${executable} context index
   ${executable} context freshness

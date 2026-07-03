@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/artifact.schema.json",
+  "title": "SpruceAgent Artifact",
+  "type": "object",
+  "required": ["version", "createdAt", "status", "summary", "items", "limits"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "status": {
+      "type": "string",
+      "enum": ["available", "empty"]
+    },
+    "summary": {
+      "type": "object",
+      "required": ["total", "traceCount", "byKind", "byStatus"],
+      "additionalProperties": false,
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "traceCount": { "type": "integer", "minimum": 0 },
+        "byKind": { "type": "object" },
+        "byStatus": { "type": "object" }
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "traceId", "title", "status", "createdAt", "summary", "detailRoute"],
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string" },
+          "kind": {
+            "type": "string",
+            "enum": ["run_summary", "tool_result", "approval_decision", "continuation_result", "evaluation_report", "memory_write"]
+          },
+          "sourceKind": { "type": ["string", "null"] },
+          "traceId": { "type": ["string", "null"] },
+          "title": { "type": "string" },
+          "status": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": ["string", "null"], "format": "date-time" },
+          "route": { "type": ["string", "null"] },
+          "summary": { "type": "object" },
+          "detailRoute": { "type": "string" }
+        }
+      }
+    },
+    "limits": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

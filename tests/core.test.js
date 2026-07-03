@@ -38,6 +38,8 @@ import {
   getApprovedSkill,
   getApprovalQueue,
   getApprovalQueueContract,
+  getArtifact,
+  getArtifactContract,
   getIndexedDocument,
   getApprovalTicket,
   getGatewayRouteContract,
@@ -67,6 +69,7 @@ import {
   getWorkflowVersion,
   getWorkflowRunDetail,
   getWorkflowContinuationContract,
+  listArtifacts,
   listTools,
   listEvaluations,
   listSkillEvaluations,
@@ -1588,6 +1591,9 @@ test("gateway route contract exposes stable route ids", () => {
   assert.ok(routeIds.includes("inbox.contract"));
   assert.ok(routeIds.includes("approval_queue"));
   assert.ok(routeIds.includes("approval_queue.contract"));
+  assert.ok(routeIds.includes("artifacts.list"));
+  assert.ok(routeIds.includes("artifacts.get"));
+  assert.ok(routeIds.includes("artifacts.contract"));
   assert.ok(routeIds.includes("runs.get"));
   assert.ok(routeIds.includes("run_detail.contract"));
   assert.ok(routeIds.includes("skills.list"));
@@ -1723,6 +1729,8 @@ test("gateway client reads status and route contract", async () => {
     const candidateApprovalContract = await client.candidateApprovalContract();
     const runContinuationContract = await client.runContinuationContract();
     const runDetailContract = await client.runDetailContract();
+    const artifactContract = await client.artifactContract();
+    const artifacts = await client.artifacts();
     const workflowInbox = await client.workflowInbox();
     const workflowInboxContract = await client.workflowInboxContract();
     const workflowDetailContract = await client.workflowDetailContract();
@@ -1748,6 +1756,8 @@ test("gateway client reads status and route contract", async () => {
     assert.equal(candidateApprovalContract.interface, "spruceagent.candidate-approval");
     assert.equal(runContinuationContract.interface, "spruceagent.run-continuation");
     assert.equal(runDetailContract.interface, "spruceagent.run-detail");
+    assert.equal(artifactContract.interface, "spruceagent.artifacts");
+    assert.equal(artifacts.status, "empty");
     assert.equal(workflowInbox.version, "0.1.0");
     assert.equal(workflowInboxContract.interface, "spruceagent.workflow-inbox");
     assert.equal(workflowDetailContract.interface, "spruceagent.workflow-detail");
@@ -2013,6 +2023,38 @@ test("gateway client reads run detail projection", async () => {
     assert.equal(detail.summary.pendingApprovalCount, 1);
     assert.equal(detail.candidateSteps[0].id, "write_note");
     assert.ok(detail.timeline.some((event) => event.type === "agent.completed"));
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
+
+test("gateway client reads run artifacts", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, "README.md"), "Gateway artifact context.", "utf8");
+  buildWorkspaceIndex(store);
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const client = createGatewayClient({
+    baseUrl: `http://${gateway.host}:${gateway.port}`,
+    token: gateway.token,
+  });
+
+  try {
+    const run = await client.runAgent({
+      goal: "Gateway artifact dry run",
+      contextQuery: "artifact",
+      dryRun: true,
+      trustMode: "approve",
+    });
+    const artifacts = await client.artifacts({ traceId: run.traceId });
+    const summary = artifacts.items.find((item) => item.kind === "run_summary");
+    const detail = await client.artifact(summary.id);
+
+    assert.equal(artifacts.status, "available");
+    assert.equal(artifacts.summary.byKind.run_summary, 1);
+    assert.equal(summary.traceId, run.traceId);
+    assert.equal(detail.id, summary.id);
+    assert.equal(detail.payload.status, "dry_run");
   } finally {
     await closeServer(gateway.server);
   }
@@ -2914,6 +2956,15 @@ test("approval queue contract exposes read-only decision queue boundary", () => 
   assert.ok(contract.safetyBoundary.some((item) => item.includes("read-only")));
 });
 
+test("artifact contract exposes read-only execution journal boundary", () => {
+  const contract = getArtifactContract();
+
+  assert.equal(contract.interface, "spruceagent.artifacts");
+  assert.equal(contract.outputKind, "execution_journal");
+  assert.ok(contract.artifactKinds.includes("tool_result"));
+  assert.ok(contract.safetyBoundary.some((item) => item.includes("read-only")));
+});
+
 test("run detail contract exposes read-only trace audit boundary", () => {
   const contract = getRunDetailContract();
 
@@ -3049,6 +3100,63 @@ test("run detail reconstructs candidate approvals and resume trace", async () =>
   assert.equal(completed.resumeEvents.length, 1);
   assert.equal(completed.toolResults[0].toolName, "file.write");
   assert.equal(fs.readFileSync(path.join(dir, "detail.txt"), "utf8"), "detail resumed");
+});
+
+test("artifacts reconstruct an agent execution journal", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const provider = {
+    id: "artifact-test",
+    model: "artifact-test-v0",
+    async draftPlan() {
+      return {
+        planDraft: {
+          proposedSteps: [
+            {
+              id: "write_artifact",
+              kind: "tool",
+              description: "Write an artifact note.",
+              toolName: "file.write",
+              input: {
+                path: "artifact.txt",
+                content: "artifact journal",
+              },
+            },
+          ],
+        },
+      };
+    },
+  };
+
+  const run = await runAgent(store, {
+    goal: "Create artifact journal",
+    llmProvider: provider,
+    promotePlan: true,
+    requestCandidateApprovals: true,
+  });
+  const approvalId = run.candidateApprovals.results[0].approval.id;
+  approveTicket(store, approvalId);
+  await resumeAgentRun(store, { traceId: run.traceId });
+  const evaluation = evaluateTrace(store, run.traceId);
+  const artifacts = listArtifacts(store, { traceId: run.traceId });
+  const toolArtifact = artifacts.items.find((item) => item.kind === "tool_result");
+  const approvalArtifact = artifacts.items.find((item) => item.kind === "approval_decision");
+  const evaluationArtifact = artifacts.items.find((item) => item.kind === "evaluation_report");
+  const detail = getArtifact(store, toolArtifact.id);
+  const runDetail = getRunDetail(store, run.traceId);
+
+  assert.equal(artifacts.status, "available");
+  assert.equal(artifacts.summary.byKind.run_summary, 1);
+  assert.equal(artifacts.summary.byKind.tool_result, 1);
+  assert.equal(artifacts.summary.byKind.approval_decision, 1);
+  assert.equal(artifacts.summary.byKind.continuation_result, 1);
+  assert.equal(artifacts.summary.byKind.evaluation_report, 1);
+  assert.equal(toolArtifact.summary.outputPath, "artifact.txt");
+  assert.equal(approvalArtifact.refs.approvalId, approvalId);
+  assert.equal(evaluationArtifact.refs.evaluationId, evaluation.id);
+  assert.equal(detail.payload.output.path, "artifact.txt");
+  assert.equal(runDetail.summary.artifactCount, artifacts.summary.total);
+  assert.equal(runDetail.artifacts.some((item) => item.id === toolArtifact.id), true);
 });
 
 test("run inbox tracks pending approvals, resumable runs, and recent runs", async () => {

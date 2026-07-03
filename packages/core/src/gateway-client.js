@@ -34,6 +34,9 @@ export function createGatewayClient(options = {}) {
     inboxContract: () => request("GET", "/v1/inbox/contract"),
     approvalQueue: (input = {}) => request("GET", `/v1/approval-queue${queueParams(input)}`),
     approvalQueueContract: () => request("GET", "/v1/approval-queue/contract"),
+    artifacts: (input = {}) => request("GET", `/v1/artifacts${artifactParams(input)}`),
+    artifact: (artifactId) => request("GET", `/v1/artifacts/${encodePathPart(artifactId)}`),
+    artifactContract: () => request("GET", "/v1/artifacts/contract"),
     contract: () => request("GET", "/v1/contract"),
     llmContract: () => request("GET", "/v1/llm/contract"),
     workflowBuilderContract: () => request("GET", "/v1/workflow-builder/contract"),
@@ -112,6 +115,17 @@ function queueParams(input = {}) {
   const params = new URLSearchParams();
   if (input.limit) params.set("limit", input.limit);
   if (input.traceKind) params.set("traceKind", input.traceKind);
+  if (input.status) params.set("status", input.status);
+  const value = params.toString();
+  return value ? `?${value}` : "";
+}
+
+function artifactParams(input = {}) {
+  const params = new URLSearchParams();
+  if (input.limit) params.set("limit", input.limit);
+  if (input.traceId) params.set("traceId", input.traceId);
+  if (input.kind) params.set("kind", input.kind);
+  if (input.sourceKind) params.set("sourceKind", input.sourceKind);
   if (input.status) params.set("status", input.status);
   const value = params.toString();
   return value ? `?${value}` : "";

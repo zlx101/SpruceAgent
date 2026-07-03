@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { approveTicket, getApprovalTicket, listApprovalTickets, rejectTicket } from "./approvals.js";
 import { getApprovalQueue, getApprovalQueueContract } from "./approval-queue.js";
+import { getArtifact, getArtifactContract, listArtifacts } from "./artifacts.js";
 import { assessWorkspaceIndexFreshness, buildWorkspaceIndex, readWorkspaceIndex, searchWorkspaceContext } from "./context.js";
 import { evaluateTrace, getEvaluation, listEvaluations } from "./evaluations.js";
 import {
@@ -151,6 +152,27 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/approval-queue/contract",
       authRequired: true,
       description: "Read the Approval Queue contract.",
+    },
+    {
+      id: "artifacts.list",
+      method: "GET",
+      path: "/v1/artifacts",
+      authRequired: true,
+      description: "List run artifacts and execution journal entries.",
+    },
+    {
+      id: "artifacts.get",
+      method: "GET",
+      path: "/v1/artifacts/:artifactId",
+      authRequired: true,
+      description: "Read a run artifact detail by id.",
+    },
+    {
+      id: "artifacts.contract",
+      method: "GET",
+      path: "/v1/artifacts/contract",
+      authRequired: true,
+      description: "Read the Artifacts contract.",
     },
     {
       id: "tools.list",
@@ -762,6 +784,24 @@ async function routeRequest(store, request, url, body) {
     return ok(getApprovalQueueContract());
   }
 
+  if (request.method === "GET" && url.pathname === "/v1/artifacts") {
+    return ok(listArtifacts(store, {
+      limit: url.searchParams.get("limit") ?? undefined,
+      traceId: url.searchParams.get("traceId") ?? undefined,
+      kind: url.searchParams.get("kind") ?? undefined,
+      sourceKind: url.searchParams.get("sourceKind") ?? undefined,
+      status: url.searchParams.get("status") ?? undefined,
+    }));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/artifacts/contract") {
+    return ok(getArtifactContract());
+  }
+
+  if (request.method === "GET" && pathParts[1] === "artifacts" && pathParts[2]) {
+    return ok(getArtifact(store, pathParts[2]));
+  }
+
   if (request.method === "GET" && url.pathname === "/v1/contract") {
     return ok(getGatewayRouteContract());
   }
@@ -1240,6 +1280,7 @@ function gatewayStatus(store) {
     candidateSkillCount: listSkills(store, "candidates").length,
     approvedSkillCount: listSkills(store, "approved").length,
     workflowCount: listWorkflows(store).length,
+    artifactCount: listArtifacts(store).summary.total,
     evaluationCount: listEvaluations(store).length,
     skillEvaluationCount: listSkillEvaluations(store).length,
     skillReplayFixtureCount: listSkillReplayFixtures(store).length,

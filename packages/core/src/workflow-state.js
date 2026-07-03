@@ -1,5 +1,6 @@
 import { listApprovalTickets } from "./approvals.js";
 import { getApprovalQueue } from "./approval-queue.js";
+import { listArtifactsForTrace } from "./artifacts.js";
 import { createSourceMap } from "./context.js";
 import { listEvaluations } from "./evaluations.js";
 import { listTraces, readTraceEvents } from "./trace.js";
@@ -126,6 +127,7 @@ export function getWorkflowRunDetail(store, traceId) {
   };
   traceDecisionQueue.summary = summarizeDecisionQueue(traceDecisionQueue.items);
   traceDecisionQueue.status = deriveDecisionQueueStatus(traceDecisionQueue.items);
+  const artifacts = listArtifactsForTrace(store, traceId);
 
   return {
     version: WORKFLOW_DETAIL_CONTRACT.version,
@@ -142,6 +144,7 @@ export function getWorkflowRunDetail(store, traceId) {
       decisionQueueCount: traceDecisionQueue.summary.total,
       resumableStepCount: countResumableWorkflowSteps(output.results ?? [], approvals),
       toolResultCount: toolResults.length,
+      artifactCount: artifacts.length,
       evaluationCount: evaluations.length,
     },
     workflow: output.workflow,
@@ -150,6 +153,7 @@ export function getWorkflowRunDetail(store, traceId) {
     steps: buildWorkflowSteps(output.workflow, output.results ?? [], events),
     approvals,
     decisionQueue: traceDecisionQueue,
+    artifacts,
     toolResults,
     resumeEvents,
     evaluations,

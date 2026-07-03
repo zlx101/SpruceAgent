@@ -29,6 +29,7 @@ const REQUIRED_PATHS = [
   "docs/run-preflight-auto-reindex-v0.md",
   "docs/run-risk-preflight-v0.md",
   "docs/approval-queue-v0.md",
+  "docs/run-artifact-store-v0.md",
   "docs/public-showcase-v0.md",
   "docs/release-checklist.md",
 ];

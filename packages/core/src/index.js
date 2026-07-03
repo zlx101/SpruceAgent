@@ -96,6 +96,12 @@ export {
   rejectTicket,
 } from "./approvals.js";
 export {
+  getArtifact,
+  getArtifactContract,
+  listArtifacts,
+  listArtifactsForTrace,
+} from "./artifacts.js";
+export {
   getApprovalQueue,
   getApprovalQueueContract,
 } from "./approval-queue.js";

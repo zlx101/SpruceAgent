@@ -1,5 +1,6 @@
 import { listApprovalTickets } from "./approvals.js";
 import { getApprovalQueue } from "./approval-queue.js";
+import { listArtifactsForTrace } from "./artifacts.js";
 import { createSourceMap } from "./context.js";
 import { listEvaluations } from "./evaluations.js";
 import { readTraceEvents } from "./trace.js";
@@ -63,6 +64,7 @@ export function getRunDetail(store, traceId) {
   };
   traceDecisionQueue.summary = summarizeDecisionQueue(traceDecisionQueue.items);
   traceDecisionQueue.status = deriveDecisionQueueStatus(traceDecisionQueue.items);
+  const artifacts = listArtifactsForTrace(store, traceId);
 
   return {
     version: RUN_DETAIL_CONTRACT.version,
@@ -78,6 +80,7 @@ export function getRunDetail(store, traceId) {
       decisionQueueCount: traceDecisionQueue.summary.total,
       candidateStepCount: run.candidatePlan?.promotedSteps?.length ?? 0,
       toolResultCount: events.filter((event) => event.type === "tool.result").length,
+      artifactCount: artifacts.length,
       evaluationCount: evaluations.length,
     },
     run: {
@@ -101,6 +104,7 @@ export function getRunDetail(store, traceId) {
     candidateSteps: buildCandidateSteps(run.candidatePlan, approvals),
     approvals,
     decisionQueue: traceDecisionQueue,
+    artifacts,
     toolResults: events
       .filter((event) => event.type === "tool.result")
       .map((event) => ({
