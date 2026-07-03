@@ -6,6 +6,8 @@ const state = {
   candidateSkills: [],
   skillEvaluations: [],
   skillEvaluationDetail: null,
+  agentAdapters: null,
+  agentPlan: null,
   workflows: [],
   workflowVersions: null,
   workflowDraft: null,
@@ -70,11 +72,13 @@ const nodes = {
   resumableCount: document.querySelector("#resumable-count"),
   recentCount: document.querySelector("#recent-count"),
   artifactCount: document.querySelector("#artifact-count"),
+  agentAdapterCount: document.querySelector("#agent-adapter-count"),
   decisionQueueState: document.querySelector("#decision-queue-state"),
   approvalState: document.querySelector("#approval-state"),
   resumeState: document.querySelector("#resume-state"),
   recentState: document.querySelector("#recent-state"),
   artifactState: document.querySelector("#artifact-state"),
+  agentAdapterState: document.querySelector("#agent-adapter-state"),
   decisionQueueList: document.querySelector("#decision-queue-list"),
   pendingList: document.querySelector("#pending-list"),
   skillList: document.querySelector("#skill-list"),
@@ -83,6 +87,8 @@ const nodes = {
   skillEvaluationState: document.querySelector("#skill-evaluation-state"),
   skillEvaluationList: document.querySelector("#skill-evaluation-list"),
   skillEvaluationPanel: document.querySelector("#skill-evaluation-panel"),
+  agentAdapterList: document.querySelector("#agent-adapter-list"),
+  agentPlanPanel: document.querySelector("#agent-plan-panel"),
   workflowList: document.querySelector("#workflow-list"),
   workflowVersionList: document.querySelector("#workflow-version-list"),
   workflowRunList: document.querySelector("#workflow-run-list"),
@@ -171,6 +177,12 @@ nodes.skillList.addEventListener("click", async (event) => {
   if (button.dataset.action === "skill-evaluation-view") {
     await loadSkillEvaluation(button.dataset.evaluationId);
   }
+});
+
+nodes.agentAdapterList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action='agent-plan']");
+  if (!button) return;
+  await planAgentAdapterRunFromWorkbench(button.dataset.adapterId);
 });
 
 nodes.workflowList.addEventListener("click", async (event) => {
@@ -290,7 +302,7 @@ async function refresh() {
   state.busy = true;
   setStatus("Loading");
   try {
-    const [inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts] = await Promise.all([
+    const [inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters] = await Promise.all([
       get("/v1/inbox"),
       get("/v1/skills?status=approved"),
       get("/v1/skills?status=candidates"),
@@ -299,6 +311,7 @@ async function refresh() {
       get("/v1/workflows/inbox"),
       get("/v1/approval-queue"),
       get("/v1/artifacts?limit=20"),
+      get("/v1/agent-adapters"),
     ]);
     state.inbox = inbox;
     state.skills = skills;
@@ -308,6 +321,7 @@ async function refresh() {
     state.workflowInbox = workflowInbox;
     state.approvalQueue = approvalQueue;
     state.artifacts = artifacts;
+    state.agentAdapters = agentAdapters;
     render();
     setStatus(`Connected - ${state.approvalQueue.status.replace(/_/g, " ")}`);
   } catch (error) {
@@ -913,12 +927,21 @@ function render() {
     },
     items: [],
   };
+  const agentAdapters = state.agentAdapters || {
+    summary: {
+      total: 0,
+      byKind: {},
+      byStatus: {},
+    },
+    items: [],
+  };
 
   nodes.pendingCount.textContent = inbox.summary.pendingApprovalCount;
   nodes.decisionCount.textContent = approvalQueue.summary.pendingDecisionCount + approvalQueue.summary.readyToResumeCount;
   nodes.resumableCount.textContent = inbox.summary.resumableRunCount;
   nodes.recentCount.textContent = inbox.summary.recentRunCount;
   nodes.artifactCount.textContent = artifacts.summary.total;
+  nodes.agentAdapterCount.textContent = agentAdapters.summary.total;
   nodes.skillState.textContent = `${skills.length}`;
   nodes.candidateSkillState.textContent = `${candidateSkills.length} candidates`;
   nodes.skillEvaluationState.textContent = `${skillEvaluations.length} reports`;
@@ -929,11 +952,14 @@ function render() {
   nodes.resumeState.textContent = `${inbox.resumableRuns.length}`;
   nodes.recentState.textContent = `${inbox.recentRuns.length}`;
   nodes.artifactState.textContent = `${artifacts.summary.total} artifacts / ${artifacts.summary.traceCount} traces`;
+  nodes.agentAdapterState.textContent = `${agentAdapters.summary.total} planned`;
 
   renderSkills(skills);
   renderCandidateSkills(candidateSkills);
   renderSkillEvaluations(skillEvaluations);
   renderSkillEvaluationPanel(state.skillEvaluationDetail);
+  renderAgentAdapters(agentAdapters.items);
+  renderAgentPlanPanel(state.agentPlan);
   renderWorkflowSkillOptions(skills);
   renderWorkflowDraft(state.workflowDraft);
   renderWorkflows(workflows);
@@ -1042,6 +1068,41 @@ function renderArtifactPanel(detail) {
     summary: detail.summary,
     payload: detail.payload,
     limits: detail.limits,
+  }, null, 2);
+}
+
+function renderAgentAdapters(items) {
+  replaceList(nodes.agentAdapterList, items, (item) => itemNode({
+    title: item.name || item.id,
+    meta: [
+      [statusClass(item.status), item.status],
+      ["kind", item.kind],
+      ["provider", item.provider],
+      ["isolation", item.recommendedIsolation],
+      ["command", item.command],
+    ],
+    actions: [
+      agentPlanButton(item.id),
+    ],
+  }));
+}
+
+function renderAgentPlanPanel(plan) {
+  if (!plan) {
+    nodes.agentPlanPanel.textContent = "{}";
+    return;
+  }
+  nodes.agentPlanPanel.textContent = JSON.stringify({
+    id: plan.id,
+    status: plan.status,
+    executionMode: plan.executionMode,
+    adapter: plan.adapter,
+    goal: plan.goal,
+    isolation: plan.isolation,
+    launchPreview: plan.launchPreview,
+    reviewGate: plan.reviewGate,
+    sourceMap: plan.sourceMap,
+    limits: plan.limits,
   }, null, 2);
 }
 
@@ -1444,6 +1505,27 @@ async function loadTraceReport(traceId) {
     const report = await get(`/v1/reports/traces/${encodeURIComponent(traceId)}?format=markdown`);
     downloadText(`${traceId}-trace-report.md`, report.markdown);
     setStatus(`Exported report - ${shortId(traceId)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+async function planAgentAdapterRunFromWorkbench(adapterId) {
+  const goal = nodes.runGoal.value.trim();
+  if (!goal) {
+    setStatus("Goal required before planning an agent adapter run", true);
+    document.querySelector("#launch")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  setStatus("Planning agent adapter run");
+  try {
+    state.agentPlan = await post(`/v1/agent-adapters/${encodeURIComponent(adapterId)}/plan`, {
+      goal,
+      contextQuery: nodes.runContext.value.trim(),
+    });
+    renderAgentPlanPanel(state.agentPlan);
+    setStatus(`Planned ${state.agentPlan.adapter.name} run`);
+    document.querySelector("#agents")?.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -1861,6 +1943,16 @@ function reportButton(traceId) {
   return button;
 }
 
+function agentPlanButton(adapterId) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "agent-plan";
+  button.dataset.adapterId = adapterId;
+  button.innerHTML = '<span aria-hidden="true">&#9874;</span><span>Plan</span>';
+  return button;
+}
+
 function libraryButton(action, id, iconHtml, label) {
   const button = document.createElement("button");
   button.className = "item-action secondary";
@@ -1902,7 +1994,7 @@ function shortId(value) {
 function statusClass(value) {
   if (["available", "completed", "dry_run", "approved", "passed", "recorded"].includes(value)) return "completed";
   if (["failed", "blocked", "completed_with_blockers"].includes(value)) return "failed";
-  if (["requires_approval", "action_required", "pending_decision", "candidate", "needs_review"].includes(value)) return "pending";
+  if (["requires_approval", "action_required", "pending_decision", "candidate", "needs_review", "planned"].includes(value)) return "pending";
   if (["ready_to_resume", "approved_unresumable"].includes(value)) return "ready";
   return "";
 }

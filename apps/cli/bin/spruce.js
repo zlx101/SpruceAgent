@@ -10,6 +10,7 @@ import {
   approveTicket,
   buildWorkspaceIndex,
   auditPolicyDecision,
+  createAgentAdapterRunPlan,
   createContextPack,
   createSkillReplayFixture,
   createGatewayClient,
@@ -37,6 +38,8 @@ import {
   getApprovalQueueContract,
   getArtifact,
   getArtifactContract,
+  getAgentAdapter,
+  getAgentAdapterContract,
   getLlmAdapterContract,
   getPlannerPromotionContract,
   getRunInbox,
@@ -65,6 +68,7 @@ import {
   getWorkflowContinuationContract,
   getWorkflow,
   listApprovalTickets,
+  listAgentAdapters,
   listArtifacts,
   listEvaluations,
   listSkillEvaluations,
@@ -150,6 +154,7 @@ async function main() {
       candidateSkillCount: listSkills(store, "candidates").length,
       approvedSkillCount: listSkills(store, "approved").length,
       workflowCount: listWorkflows(store).length,
+      agentAdapterCount: listAgentAdapters().summary.total,
       artifactCount: listArtifacts(store).summary.total,
       evaluationCount: listEvaluations(store).length,
       skillEvaluationCount: listSkillEvaluations(store).length,
@@ -256,6 +261,11 @@ async function main() {
 
   if (command === "candidate") {
     await handleCandidate(subcommand, rest);
+    return;
+  }
+
+  if (command === "agent" || command === "agents") {
+    handleAgent(subcommand, rest);
     return;
   }
 
@@ -1186,6 +1196,47 @@ async function handleCandidate(action, args = []) {
   throw new Error("usage: spruce candidate <contract|approval-contract|continuation-contract|request-approvals|execute-approved>");
 }
 
+function handleAgent(action, args = []) {
+  if (!action || action === "adapters" || action === "adapter-list" || action === "list") {
+    const flags = parseFlags(args);
+    printJson(listAgentAdapters({
+      kind: flags.kind,
+      status: flags.status,
+    }));
+    return;
+  }
+
+  if (action === "adapter" || action === "get") {
+    const [adapterId] = args;
+    if (!adapterId) throw new Error("usage: spruce agent adapter <adapterId>");
+    printJson(getAgentAdapter(adapterId));
+    return;
+  }
+
+  if (action === "plan") {
+    const [adapterId, ...flagArgs] = args;
+    if (!adapterId) throw new Error("usage: spruce agent plan <adapterId> --goal <goal> [--context <query>]");
+    const flags = parseFlags(flagArgs);
+    printJson(createAgentAdapterRunPlan(store, {
+      adapterId,
+      goal: flags.goal ?? flags._.join(" ").trim(),
+      contextQuery: flags.context,
+      contextLimit: flags.limit,
+      branchName: flags.branch,
+      baseBranch: flags.baseBranch,
+      isolationMode: flags.isolationMode,
+    }));
+    return;
+  }
+
+  if (action === "contract" || action === "adapter-contract") {
+    printJson(getAgentAdapterContract());
+    return;
+  }
+
+  throw new Error("usage: spruce agent <adapters|adapter|plan|contract>");
+}
+
 function parseFlags(args) {
   const result = { _: [] };
   for (let index = 0; index < args.length; index += 1) {
@@ -1418,6 +1469,10 @@ Usage:
   ${executable} candidate continuation-contract
   ${executable} candidate request-approvals --file candidate-plan.json
   ${executable} candidate execute-approved --file candidate-plan.json --stepId <stepId> --approvalId <approvalId>
+  ${executable} agent adapters [--kind coding_cli]
+  ${executable} agent adapter <adapterId>
+  ${executable} agent plan <adapterId> --goal "Implement task" [--context "query"]
+  ${executable} agent contract
   ${executable} gateway token
   ${executable} gateway token --rotate
   ${executable} gateway contract

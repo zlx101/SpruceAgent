@@ -39,6 +39,10 @@ export function createGatewayClient(options = {}) {
     artifactContract: () => request("GET", "/v1/artifacts/contract"),
     traceReport: (traceId, input = {}) => request("GET", `/v1/reports/traces/${encodePathPart(traceId)}${traceReportParams(input)}`),
     traceReportContract: () => request("GET", "/v1/reports/contract"),
+    listAgentAdapters: (input = {}) => request("GET", `/v1/agent-adapters${agentAdapterParams(input)}`),
+    getAgentAdapter: (adapterId) => request("GET", `/v1/agent-adapters/${encodePathPart(adapterId)}`),
+    agentAdapterContract: () => request("GET", "/v1/agent-adapters/contract"),
+    planAgentAdapterRun: (adapterId, input = {}) => request("POST", `/v1/agent-adapters/${encodePathPart(adapterId)}/plan`, input),
     contract: () => request("GET", "/v1/contract"),
     llmContract: () => request("GET", "/v1/llm/contract"),
     workflowBuilderContract: () => request("GET", "/v1/workflow-builder/contract"),
@@ -137,6 +141,14 @@ function traceReportParams(input = {}) {
   const params = new URLSearchParams();
   if (input.format) params.set("format", input.format);
   if (input.includeRaw) params.set("includeRaw", "true");
+  const value = params.toString();
+  return value ? `?${value}` : "";
+}
+
+function agentAdapterParams(input = {}) {
+  const params = new URLSearchParams();
+  if (input.kind) params.set("kind", input.kind);
+  if (input.status) params.set("status", input.status);
   const value = params.toString();
   return value ? `?${value}` : "";
 }

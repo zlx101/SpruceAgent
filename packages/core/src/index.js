@@ -107,6 +107,12 @@ export {
   renderTraceReportMarkdown,
 } from "./trace-report.js";
 export {
+  createAgentAdapterRunPlan,
+  getAgentAdapter,
+  getAgentAdapterContract,
+  listAgentAdapters,
+} from "./agent-adapters.js";
+export {
   getApprovalQueue,
   getApprovalQueueContract,
 } from "./approval-queue.js";

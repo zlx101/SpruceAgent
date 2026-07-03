@@ -14,6 +14,7 @@ import {
   createContextPack,
   createSourceMap,
   createApprovalTicket,
+  createAgentAdapterRunPlan,
   createSkillReplayFixture,
   createStore,
   createWorkflow,
@@ -40,6 +41,8 @@ import {
   getApprovalQueueContract,
   getArtifact,
   getArtifactContract,
+  getAgentAdapter,
+  getAgentAdapterContract,
   getIndexedDocument,
   getApprovalTicket,
   getGatewayRouteContract,
@@ -72,6 +75,7 @@ import {
   getWorkflowRunDetail,
   getWorkflowContinuationContract,
   listArtifacts,
+  listAgentAdapters,
   listTools,
   listEvaluations,
   listSkillEvaluations,
@@ -1598,6 +1602,10 @@ test("gateway route contract exposes stable route ids", () => {
   assert.ok(routeIds.includes("artifacts.contract"));
   assert.ok(routeIds.includes("trace_reports.get"));
   assert.ok(routeIds.includes("trace_reports.contract"));
+  assert.ok(routeIds.includes("agent_adapters.list"));
+  assert.ok(routeIds.includes("agent_adapters.get"));
+  assert.ok(routeIds.includes("agent_adapters.plan"));
+  assert.ok(routeIds.includes("agent_adapters.contract"));
   assert.ok(routeIds.includes("runs.get"));
   assert.ok(routeIds.includes("run_detail.contract"));
   assert.ok(routeIds.includes("skills.list"));
@@ -1670,9 +1678,9 @@ test("gateway serves workbench static assets without API auth", async () => {
     assert.equal(css.status, 200);
     assert.equal(js.status, 200);
     assert.equal(mark.status, 200);
-    assert.match(html.body, /Launch Run|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Workflow Versions|Workflow Runs|Decision Queue|decision-queue-list|Artifacts|artifact-list|artifact-panel|Run Detail/);
-    assert.match(css.body, /Agent Workbench|summary-grid|work-section|detail-panel|run-form|draft-step-list|draft-step-fields|source-map-list|evaluation-preview|artifact-preview/);
-    assert.match(js.body, /submitRun|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|resume|inbox|approval/i);
+    assert.match(html.body, /Launch Run|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Agent Adapters|agent-adapter-list|agent-plan-panel|Workflow Versions|Workflow Runs|Decision Queue|decision-queue-list|Artifacts|artifact-list|artifact-panel|Run Detail/);
+    assert.match(css.body, /Agent Workbench|summary-grid|work-section|detail-panel|run-form|draft-step-list|draft-step-fields|source-map-list|evaluation-preview|artifact-preview|agent-plan-preview/);
+    assert.match(js.body, /submitRun|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|renderAgentAdapters|renderAgentPlanPanel|agentPlanButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|resume|inbox|approval/i);
     assert.match(mark.body, /SpruceAgent mark/);
   } finally {
     await closeServer(gateway.server);
@@ -1734,6 +1742,7 @@ test("gateway client reads status and route contract", async () => {
     const runContinuationContract = await client.runContinuationContract();
     const runDetailContract = await client.runDetailContract();
     const artifactContract = await client.artifactContract();
+    const agentAdapterContract = await client.agentAdapterContract();
     const artifacts = await client.artifacts();
     const workflowInbox = await client.workflowInbox();
     const workflowInboxContract = await client.workflowInboxContract();
@@ -1761,6 +1770,8 @@ test("gateway client reads status and route contract", async () => {
     assert.equal(runContinuationContract.interface, "spruceagent.run-continuation");
     assert.equal(runDetailContract.interface, "spruceagent.run-detail");
     assert.equal(artifactContract.interface, "spruceagent.artifacts");
+    assert.equal(agentAdapterContract.interface, "spruceagent.agent-adapters");
+    assert.equal(status.agentAdapterCount >= 5, true);
     assert.equal(artifacts.status, "empty");
     assert.equal(workflowInbox.version, "0.1.0");
     assert.equal(workflowInboxContract.interface, "spruceagent.workflow-inbox");
@@ -2093,6 +2104,41 @@ test("gateway client reads trace reports in json and markdown", async () => {
     assert.equal(report.rawEvents, undefined);
     assert.match(markdown.markdown, /# Agent Trace Report: Gateway report dry run/);
     assert.match(markdown.markdown, /## Artifacts/);
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
+
+test("gateway client reads and plans agent adapters without execution", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, "README.md"), "Agent adapter gateway context.", "utf8");
+  buildWorkspaceIndex(store);
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const client = createGatewayClient({
+    baseUrl: `http://${gateway.host}:${gateway.port}`,
+    token: gateway.token,
+  });
+
+  try {
+    const contract = await client.agentAdapterContract();
+    const adapters = await client.listAgentAdapters();
+    const adapter = await client.getAgentAdapter("codex-cli");
+    const plan = await client.planAgentAdapterRun("codex-cli", {
+      goal: "Plan adapter gateway run",
+      contextQuery: "adapter",
+    });
+
+    assert.equal(contract.interface, "spruceagent.agent-adapters");
+    assert.equal(adapters.summary.total >= 5, true);
+    assert.equal(adapter.id, "codex-cli");
+    assert.equal(adapter.capabilities.directExecution, false);
+    assert.equal(plan.status, "planned");
+    assert.equal(plan.executionMode, "preview_only");
+    assert.equal(plan.adapter.id, "codex-cli");
+    assert.equal(plan.isolation.requiresGitWorktree, true);
+    assert.equal(plan.reviewGate.mergeAllowedInV0, false);
+    assert.equal(plan.sourceMap.sources.length > 0, true);
   } finally {
     await closeServer(gateway.server);
   }
@@ -3013,6 +3059,21 @@ test("trace report contract exposes export-only audit boundary", () => {
   assert.ok(contract.safetyBoundary.some((item) => item.includes("execute tools")));
 });
 
+test("agent adapter registry exposes planned CLI adapters without execution", () => {
+  const contract = getAgentAdapterContract();
+  const adapters = listAgentAdapters();
+  const codex = getAgentAdapter("codex-cli");
+
+  assert.equal(contract.interface, "spruceagent.agent-adapters");
+  assert.equal(contract.outputKind, "agent_fleet_control_plane");
+  assert.ok(contract.plannedIsolationModes.includes("git_worktree"));
+  assert.equal(adapters.status, "available");
+  assert.equal(adapters.summary.byKind.coding_cli >= 3, true);
+  assert.equal(codex.id, "codex-cli");
+  assert.equal(codex.capabilities.directExecution, false);
+  assert.ok(codex.integrationChecklist.some((item) => item.includes("isolated workspace")));
+});
+
 test("run detail contract exposes read-only trace audit boundary", () => {
   const contract = getRunDetailContract();
 
@@ -3297,6 +3358,32 @@ test("trace report supports workflow run traces", async () => {
   assert.equal(report.summary.artifactCount > 0, true);
   assert.equal(report.subject.workflow.name, "Workflow Report");
   assert.match(markdown.markdown, /# Workflow Trace Report: Workflow Report/);
+});
+
+test("agent adapter run plan previews isolated worktree execution", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, "README.md"), "Agent adapter planning context.", "utf8");
+  buildWorkspaceIndex(store);
+
+  const plan = createAgentAdapterRunPlan(store, {
+    adapterId: "claude-code",
+    goal: "Plan isolated adapter work",
+    contextQuery: "adapter planning",
+    baseBranch: "main",
+  });
+
+  assert.equal(plan.status, "planned");
+  assert.equal(plan.executionMode, "preview_only");
+  assert.equal(plan.adapter.id, "claude-code");
+  assert.equal(plan.isolation.mode, "git_worktree");
+  assert.equal(plan.isolation.baseBranch, "main");
+  assert.equal(plan.isolation.requiresGitWorktree, true);
+  assert.match(plan.isolation.branchName, /^codex\/agent-claude-code-/);
+  assert.equal(plan.launchPreview.command, "claude");
+  assert.equal(plan.reviewGate.required, true);
+  assert.equal(plan.reviewGate.requiredArtifacts.includes("trace_report"), true);
+  assert.equal(plan.sourceMap.sources.length > 0, true);
 });
 
 test("run inbox tracks pending approvals, resumable runs, and recent runs", async () => {

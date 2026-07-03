@@ -3,6 +3,12 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  createAgentAdapterRunPlan,
+  getAgentAdapter,
+  getAgentAdapterContract,
+  listAgentAdapters,
+} from "./agent-adapters.js";
 import { approveTicket, getApprovalTicket, listApprovalTickets, rejectTicket } from "./approvals.js";
 import { getApprovalQueue, getApprovalQueueContract } from "./approval-queue.js";
 import { getArtifact, getArtifactContract, listArtifacts } from "./artifacts.js";
@@ -188,6 +194,34 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/reports/contract",
       authRequired: true,
       description: "Read the Trace Report contract.",
+    },
+    {
+      id: "agent_adapters.list",
+      method: "GET",
+      path: "/v1/agent-adapters",
+      authRequired: true,
+      description: "List CLI agent adapter specifications.",
+    },
+    {
+      id: "agent_adapters.get",
+      method: "GET",
+      path: "/v1/agent-adapters/:adapterId",
+      authRequired: true,
+      description: "Read a CLI agent adapter specification.",
+    },
+    {
+      id: "agent_adapters.plan",
+      method: "POST",
+      path: "/v1/agent-adapters/:adapterId/plan",
+      authRequired: true,
+      description: "Preview an isolated adapter run plan without executing an external CLI.",
+    },
+    {
+      id: "agent_adapters.contract",
+      method: "GET",
+      path: "/v1/agent-adapters/contract",
+      authRequired: true,
+      description: "Read the Agent Adapter Registry contract.",
     },
     {
       id: "tools.list",
@@ -828,6 +862,28 @@ async function routeRequest(store, request, url, body) {
     }));
   }
 
+  if (request.method === "GET" && url.pathname === "/v1/agent-adapters") {
+    return ok(listAgentAdapters({
+      kind: url.searchParams.get("kind") ?? undefined,
+      status: url.searchParams.get("status") ?? undefined,
+    }));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/agent-adapters/contract") {
+    return ok(getAgentAdapterContract());
+  }
+
+  if (request.method === "GET" && pathParts[1] === "agent-adapters" && pathParts[2]) {
+    return ok(getAgentAdapter(pathParts[2]));
+  }
+
+  if (request.method === "POST" && pathParts[1] === "agent-adapters" && pathParts[2] && pathParts[3] === "plan") {
+    return ok(createAgentAdapterRunPlan(store, {
+      ...body,
+      adapterId: pathParts[2],
+    }));
+  }
+
   if (request.method === "GET" && url.pathname === "/v1/contract") {
     return ok(getGatewayRouteContract());
   }
@@ -1306,6 +1362,7 @@ function gatewayStatus(store) {
     candidateSkillCount: listSkills(store, "candidates").length,
     approvedSkillCount: listSkills(store, "approved").length,
     workflowCount: listWorkflows(store).length,
+    agentAdapterCount: listAgentAdapters().summary.total,
     artifactCount: listArtifacts(store).summary.total,
     evaluationCount: listEvaluations(store).length,
     skillEvaluationCount: listSkillEvaluations(store).length,

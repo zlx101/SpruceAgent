@@ -36,6 +36,7 @@
           <a href="#skills">Skills</a>
           <a href="#skillforge">SkillForge</a>
           <a href="#workflows">Workflows</a>
+          <a href="#agents">Agents</a>
           <a href="#workflow-runs">Workflow Runs</a>
           <a href="#decision-queue">Queue</a>
           <a href="#approvals">Approvals</a>
@@ -77,6 +78,10 @@
           <article class="metric">
             <span class="metric-label">Artifacts</span>
             <strong id="artifact-count">0</strong>
+          </article>
+          <article class="metric">
+            <span class="metric-label">Agents</span>
+            <strong id="agent-adapter-count">0</strong>
           </article>
         </section>
 
@@ -265,6 +270,15 @@
             <span id="workflow-state" class="section-state">0</span>
           </div>
           <div id="workflow-list" class="item-list"></div>
+        </section>
+
+        <section id="agents" class="work-section">
+          <div class="section-heading">
+            <h2>Agent Adapters</h2>
+            <span id="agent-adapter-state" class="section-state">0 planned</span>
+          </div>
+          <div id="agent-adapter-list" class="item-list"></div>
+          <pre id="agent-plan-panel" class="json-view agent-plan-preview">{}</pre>
         </section>
 
         <section id="workflow-versions" class="work-section">
