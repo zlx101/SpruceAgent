@@ -32,6 +32,7 @@ const REQUIRED_PATHS = [
   "docs/run-artifact-store-v0.md",
   "docs/trace-report-export-v0.md",
   "docs/agent-adapter-registry-v0.md",
+  "docs/isolated-agent-workspace-v0.md",
   "docs/public-showcase-v0.md",
   "docs/release-checklist.md",
 ];

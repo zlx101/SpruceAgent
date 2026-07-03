@@ -40,6 +40,8 @@ import {
   getArtifactContract,
   getAgentAdapter,
   getAgentAdapterContract,
+  getAgentWorkspace,
+  getAgentWorkspaceContract,
   getLlmAdapterContract,
   getPlannerPromotionContract,
   getRunInbox,
@@ -69,6 +71,7 @@ import {
   getWorkflow,
   listApprovalTickets,
   listAgentAdapters,
+  listAgentWorkspaces,
   listArtifacts,
   listEvaluations,
   listSkillEvaluations,
@@ -85,6 +88,7 @@ import {
   listWorkflows,
   proposeSkill,
   promoteSkillCandidate,
+  prepareAgentWorkspace,
   importSkillPackage,
   readSkillPackageFile,
   requestCandidateApprovals,
@@ -155,6 +159,7 @@ async function main() {
       approvedSkillCount: listSkills(store, "approved").length,
       workflowCount: listWorkflows(store).length,
       agentAdapterCount: listAgentAdapters().summary.total,
+      agentWorkspaceCount: listAgentWorkspaces(store).summary.total,
       artifactCount: listArtifacts(store).summary.total,
       evaluationCount: listEvaluations(store).length,
       skillEvaluationCount: listSkillEvaluations(store).length,
@@ -1229,12 +1234,50 @@ function handleAgent(action, args = []) {
     return;
   }
 
+  if (action === "prepare") {
+    const [adapterId, ...flagArgs] = args;
+    if (!adapterId) throw new Error("usage: spruce agent prepare <adapterId> --goal <goal> [--context <query>]");
+    const flags = parseFlags(flagArgs);
+    printJson(prepareAgentWorkspace(store, {
+      adapterId,
+      goal: flags.goal ?? flags._.join(" ").trim(),
+      contextQuery: flags.context,
+      contextLimit: flags.limit,
+      branchName: flags.branch,
+      baseBranch: flags.baseBranch,
+      baseRef: flags.baseRef,
+      isolationMode: flags.isolationMode,
+    }));
+    return;
+  }
+
+  if (action === "workspaces" || action === "workspace-list") {
+    const flags = parseFlags(args);
+    printJson(listAgentWorkspaces(store, {
+      status: flags.status,
+      adapterId: flags.adapterId,
+    }));
+    return;
+  }
+
+  if (action === "workspace") {
+    const [workspaceId] = args;
+    if (!workspaceId) throw new Error("usage: spruce agent workspace <workspaceId>");
+    printJson(getAgentWorkspace(store, workspaceId));
+    return;
+  }
+
+  if (action === "workspace-contract") {
+    printJson(getAgentWorkspaceContract());
+    return;
+  }
+
   if (action === "contract" || action === "adapter-contract") {
     printJson(getAgentAdapterContract());
     return;
   }
 
-  throw new Error("usage: spruce agent <adapters|adapter|plan|contract>");
+  throw new Error("usage: spruce agent <adapters|adapter|plan|prepare|workspaces|workspace|contract|workspace-contract>");
 }
 
 function parseFlags(args) {
@@ -1472,7 +1515,11 @@ Usage:
   ${executable} agent adapters [--kind coding_cli]
   ${executable} agent adapter <adapterId>
   ${executable} agent plan <adapterId> --goal "Implement task" [--context "query"]
+  ${executable} agent prepare <adapterId> --goal "Implement task" [--context "query"]
+  ${executable} agent workspaces [--adapterId codex-cli]
+  ${executable} agent workspace <workspaceId>
   ${executable} agent contract
+  ${executable} agent workspace-contract
   ${executable} gateway token
   ${executable} gateway token --rotate
   ${executable} gateway contract

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -43,6 +44,8 @@ import {
   getArtifactContract,
   getAgentAdapter,
   getAgentAdapterContract,
+  getAgentWorkspace,
+  getAgentWorkspaceContract,
   getIndexedDocument,
   getApprovalTicket,
   getGatewayRouteContract,
@@ -76,6 +79,7 @@ import {
   getWorkflowContinuationContract,
   listArtifacts,
   listAgentAdapters,
+  listAgentWorkspaces,
   listTools,
   listEvaluations,
   listSkillEvaluations,
@@ -90,6 +94,7 @@ import {
   normalizeWorkflowDraft,
   proposeSkill,
   promoteSkillCandidate,
+  prepareAgentWorkspace,
   importSkillPackage,
   promoteLlmDraftToCandidatePlan,
   requestCandidateApprovals,
@@ -127,6 +132,7 @@ test("workspace store initializes core files", () => {
   assert.ok(fs.existsSync(path.join(store.root, "skill-replay-result-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "skill-package-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "skill-package-import-index.jsonl")));
+  assert.ok(fs.existsSync(path.join(store.root, "agent-workspace-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "evaluations")));
   assert.ok(fs.existsSync(path.join(store.root, "skill-evaluations")));
   assert.ok(fs.existsSync(path.join(store.root, "skill-history")));
@@ -134,6 +140,8 @@ test("workspace store initializes core files", () => {
   assert.ok(fs.existsSync(path.join(store.root, "skill-replay-results")));
   assert.ok(fs.existsSync(path.join(store.root, "skill-packages")));
   assert.ok(fs.existsSync(path.join(store.root, "skill-imports")));
+  assert.ok(fs.existsSync(path.join(store.root, "agent-workspaces")));
+  assert.ok(fs.existsSync(path.join(store.root, "worktrees")));
 });
 
 test("doctor reports alpha readiness without failed checks", () => {
@@ -1606,6 +1614,10 @@ test("gateway route contract exposes stable route ids", () => {
   assert.ok(routeIds.includes("agent_adapters.get"));
   assert.ok(routeIds.includes("agent_adapters.plan"));
   assert.ok(routeIds.includes("agent_adapters.contract"));
+  assert.ok(routeIds.includes("agent_workspaces.list"));
+  assert.ok(routeIds.includes("agent_workspaces.get"));
+  assert.ok(routeIds.includes("agent_workspaces.prepare"));
+  assert.ok(routeIds.includes("agent_workspaces.contract"));
   assert.ok(routeIds.includes("runs.get"));
   assert.ok(routeIds.includes("run_detail.contract"));
   assert.ok(routeIds.includes("skills.list"));
@@ -1678,9 +1690,9 @@ test("gateway serves workbench static assets without API auth", async () => {
     assert.equal(css.status, 200);
     assert.equal(js.status, 200);
     assert.equal(mark.status, 200);
-    assert.match(html.body, /Launch Run|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Agent Adapters|agent-adapter-list|agent-plan-panel|Workflow Versions|Workflow Runs|Decision Queue|decision-queue-list|Artifacts|artifact-list|artifact-panel|Run Detail/);
-    assert.match(css.body, /Agent Workbench|summary-grid|work-section|detail-panel|run-form|draft-step-list|draft-step-fields|source-map-list|evaluation-preview|artifact-preview|agent-plan-preview/);
-    assert.match(js.body, /submitRun|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|renderAgentAdapters|renderAgentPlanPanel|agentPlanButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|resume|inbox|approval/i);
+    assert.match(html.body, /Launch Run|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Agent Adapters|agent-adapter-list|agent-plan-panel|Agent Workspaces|agent-workspace-list|agent-workspace-panel|Workflow Versions|Workflow Runs|Decision Queue|decision-queue-list|Artifacts|artifact-list|artifact-panel|Run Detail/);
+    assert.match(css.body, /Agent Workbench|summary-grid|work-section|detail-panel|run-form|draft-step-list|draft-step-fields|source-map-list|evaluation-preview|artifact-preview|agent-plan-preview|agent-workspace-preview/);
+    assert.match(js.body, /submitRun|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|prepareAgentWorkspaceFromWorkbench|loadAgentWorkspace|renderAgentAdapters|renderAgentPlanPanel|renderAgentWorkspaces|renderAgentWorkspacePanel|agentPlanButton|agentPrepareButton|agentWorkspaceViewButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|agentWorkspaces|resume|inbox|approval/i);
     assert.match(mark.body, /SpruceAgent mark/);
   } finally {
     await closeServer(gateway.server);
@@ -1743,6 +1755,7 @@ test("gateway client reads status and route contract", async () => {
     const runDetailContract = await client.runDetailContract();
     const artifactContract = await client.artifactContract();
     const agentAdapterContract = await client.agentAdapterContract();
+    const agentWorkspaceContract = await client.agentWorkspaceContract();
     const artifacts = await client.artifacts();
     const workflowInbox = await client.workflowInbox();
     const workflowInboxContract = await client.workflowInboxContract();
@@ -1771,7 +1784,9 @@ test("gateway client reads status and route contract", async () => {
     assert.equal(runDetailContract.interface, "spruceagent.run-detail");
     assert.equal(artifactContract.interface, "spruceagent.artifacts");
     assert.equal(agentAdapterContract.interface, "spruceagent.agent-adapters");
+    assert.equal(agentWorkspaceContract.interface, "spruceagent.agent-workspaces");
     assert.equal(status.agentAdapterCount >= 5, true);
+    assert.equal(status.agentWorkspaceCount, 0);
     assert.equal(artifacts.status, "empty");
     assert.equal(workflowInbox.version, "0.1.0");
     assert.equal(workflowInboxContract.interface, "spruceagent.workflow-inbox");
@@ -2139,6 +2154,43 @@ test("gateway client reads and plans agent adapters without execution", async ()
     assert.equal(plan.isolation.requiresGitWorktree, true);
     assert.equal(plan.reviewGate.mergeAllowedInV0, false);
     assert.equal(plan.sourceMap.sources.length > 0, true);
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
+
+test("gateway client prepares and reads isolated agent workspaces", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  initGitRepo(dir);
+  const store = ensureStore(createStore(dir));
+  buildWorkspaceIndex(store);
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const client = createGatewayClient({
+    baseUrl: `http://${gateway.host}:${gateway.port}`,
+    token: gateway.token,
+  });
+
+  try {
+    const contract = await client.agentWorkspaceContract();
+    const prepared = await client.prepareAgentWorkspace({
+      adapterId: "codex-cli",
+      goal: "Prepare gateway workspace",
+      contextQuery: "README",
+    });
+    const list = await client.listAgentWorkspaces();
+    const detail = await client.getAgentWorkspace(prepared.id);
+    const status = await client.status();
+
+    assert.equal(contract.interface, "spruceagent.agent-workspaces");
+    assert.equal(prepared.status, "prepared");
+    assert.equal(prepared.adapter.id, "codex-cli");
+    assert.equal(prepared.launchPreview.command, "codex");
+    assert.equal(prepared.reviewGate.mergeAllowedInV0, false);
+    assert.equal(fs.existsSync(prepared.workspacePath), true);
+    assert.equal(fs.existsSync(path.join(prepared.workspacePath, "README.md")), true);
+    assert.equal(list.summary.total, 1);
+    assert.equal(detail.id, prepared.id);
+    assert.equal(status.agentWorkspaceCount, 1);
   } finally {
     await closeServer(gateway.server);
   }
@@ -3386,6 +3438,54 @@ test("agent adapter run plan previews isolated worktree execution", () => {
   assert.equal(plan.sourceMap.sources.length > 0, true);
 });
 
+test("agent workspace prepares git worktrees without launching external agents", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  initGitRepo(dir);
+  const store = ensureStore(createStore(dir));
+  buildWorkspaceIndex(store);
+
+  const contract = getAgentWorkspaceContract();
+  const workspace = prepareAgentWorkspace(store, {
+    adapterId: "codex-cli",
+    goal: "Prepare isolated workspace",
+    contextQuery: "README",
+  });
+  const listed = listAgentWorkspaces(store);
+  const loaded = getAgentWorkspace(store, workspace.id);
+  const worktreeList = git(dir, ["worktree", "list"]);
+
+  assert.equal(contract.interface, "spruceagent.agent-workspaces");
+  assert.equal(contract.modes.includes("git_worktree"), true);
+  assert.equal(workspace.status, "prepared");
+  assert.equal(workspace.mode, "git_worktree");
+  assert.equal(workspace.adapter.id, "codex-cli");
+  assert.equal(workspace.git.worktreeCreated, true);
+  assert.equal(workspace.launchPreview.command, "codex");
+  assert.equal(workspace.reviewGate.mergeAllowedInV0, false);
+  assert.match(workspace.workspacePath, /[\\/]\.spruceagent[\\/]worktrees[\\/]/);
+  assert.equal(fs.existsSync(workspace.workspacePath), true);
+  assert.equal(fs.existsSync(path.join(workspace.workspacePath, "README.md")), true);
+  assert.match(worktreeList, new RegExp(workspace.isolation.branchName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.equal(listed.summary.total, 1);
+  assert.equal(listed.summary.gitWorktreeCount, 1);
+  assert.equal(loaded.id, workspace.id);
+  assert.equal(loaded.plan.executionMode, "preview_only");
+});
+
+test("agent workspace records readonly adapter workspace without git worktree", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const workspace = prepareAgentWorkspace(store, {
+    adapterId: "local-shell-agent",
+    goal: "Prepare readonly workspace",
+  });
+
+  assert.equal(workspace.status, "prepared_readonly");
+  assert.equal(workspace.mode, "current_workspace_readonly");
+  assert.equal(workspace.workspacePath, dir);
+  assert.equal(listAgentWorkspaces(store).summary.gitWorktreeCount, 0);
+});
+
 test("run inbox tracks pending approvals, resumable runs, and recent runs", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   const store = ensureStore(createStore(dir));
@@ -3547,6 +3647,22 @@ function createWriteCandidatePlan() {
         },
       ],
     },
+  });
+}
+
+function initGitRepo(dir) {
+  fs.writeFileSync(path.join(dir, "README.md"), "SpruceAgent test repository.", "utf8");
+  git(dir, ["init"]);
+  git(dir, ["config", "user.email", "test@spruceagent.local"]);
+  git(dir, ["config", "user.name", "SpruceAgent Test"]);
+  git(dir, ["add", "README.md"]);
+  git(dir, ["commit", "-m", "Initial commit"]);
+}
+
+function git(dir, args) {
+  return execFileSync("git", ["-C", dir, ...args], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
   });
 }
 

@@ -51,6 +51,12 @@ Read the contract:
 npm run spruce -- agent contract
 ```
 
+Prepare an isolated workspace from a plan:
+
+```bash
+npm run spruce -- agent prepare codex-cli --goal "Implement search filters" --context "Run Inbox"
+```
+
 ## Gateway
 
 Routes:
@@ -60,6 +66,10 @@ GET  /v1/agent-adapters
 GET  /v1/agent-adapters/:adapterId
 POST /v1/agent-adapters/:adapterId/plan
 GET  /v1/agent-adapters/contract
+GET  /v1/agent-workspaces
+GET  /v1/agent-workspaces/:workspaceId
+POST /v1/agent-workspaces
+GET  /v1/agent-workspaces/contract
 ```
 
 ## Workbench
@@ -76,16 +86,19 @@ The `Plan` action uses the current Launch Run goal and context query to preview:
 - required review gate
 - ContextOS source map
 
+The `Prepare` action creates an isolated Agent Workspace record and, for coding CLI adapters, a git worktree under `.spruceagent/worktrees`.
+
 ## Safety Boundary
 
 Adapter Registry v0 is intentionally conservative:
 
 - it does not start external CLI agents
-- it does not create worktrees
-- it does not create branches
+- plan preview does not create worktrees or branches
 - it does not mutate files
 - it does not merge changes
 - it only returns adapter specs and execution plan previews
+
+Agent Workspace v0 is the separate, explicit step that may create a local git worktree. It still does not execute external CLI agents, commit, push, merge, or approve changes.
 
 Future execution must go through TrustKernel, isolated workspaces, artifact capture, diff review, and Trace Report export.
 

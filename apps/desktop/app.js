@@ -8,6 +8,8 @@ const state = {
   skillEvaluationDetail: null,
   agentAdapters: null,
   agentPlan: null,
+  agentWorkspaces: null,
+  agentWorkspaceDetail: null,
   workflows: [],
   workflowVersions: null,
   workflowDraft: null,
@@ -73,12 +75,14 @@ const nodes = {
   recentCount: document.querySelector("#recent-count"),
   artifactCount: document.querySelector("#artifact-count"),
   agentAdapterCount: document.querySelector("#agent-adapter-count"),
+  agentWorkspaceCount: document.querySelector("#agent-workspace-count"),
   decisionQueueState: document.querySelector("#decision-queue-state"),
   approvalState: document.querySelector("#approval-state"),
   resumeState: document.querySelector("#resume-state"),
   recentState: document.querySelector("#recent-state"),
   artifactState: document.querySelector("#artifact-state"),
   agentAdapterState: document.querySelector("#agent-adapter-state"),
+  agentWorkspaceState: document.querySelector("#agent-workspace-state"),
   decisionQueueList: document.querySelector("#decision-queue-list"),
   pendingList: document.querySelector("#pending-list"),
   skillList: document.querySelector("#skill-list"),
@@ -89,6 +93,8 @@ const nodes = {
   skillEvaluationPanel: document.querySelector("#skill-evaluation-panel"),
   agentAdapterList: document.querySelector("#agent-adapter-list"),
   agentPlanPanel: document.querySelector("#agent-plan-panel"),
+  agentWorkspaceList: document.querySelector("#agent-workspace-list"),
+  agentWorkspacePanel: document.querySelector("#agent-workspace-panel"),
   workflowList: document.querySelector("#workflow-list"),
   workflowVersionList: document.querySelector("#workflow-version-list"),
   workflowRunList: document.querySelector("#workflow-run-list"),
@@ -180,9 +186,20 @@ nodes.skillList.addEventListener("click", async (event) => {
 });
 
 nodes.agentAdapterList.addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-action='agent-plan']");
+  const button = event.target.closest("[data-action]");
   if (!button) return;
-  await planAgentAdapterRunFromWorkbench(button.dataset.adapterId);
+  if (button.dataset.action === "agent-plan") {
+    await planAgentAdapterRunFromWorkbench(button.dataset.adapterId);
+  }
+  if (button.dataset.action === "agent-prepare") {
+    await prepareAgentWorkspaceFromWorkbench(button.dataset.adapterId);
+  }
+});
+
+nodes.agentWorkspaceList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action='agent-workspace-view']");
+  if (!button) return;
+  await loadAgentWorkspace(button.dataset.workspaceId);
 });
 
 nodes.workflowList.addEventListener("click", async (event) => {
@@ -302,7 +319,7 @@ async function refresh() {
   state.busy = true;
   setStatus("Loading");
   try {
-    const [inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters] = await Promise.all([
+    const [inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces] = await Promise.all([
       get("/v1/inbox"),
       get("/v1/skills?status=approved"),
       get("/v1/skills?status=candidates"),
@@ -312,6 +329,7 @@ async function refresh() {
       get("/v1/approval-queue"),
       get("/v1/artifacts?limit=20"),
       get("/v1/agent-adapters"),
+      get("/v1/agent-workspaces"),
     ]);
     state.inbox = inbox;
     state.skills = skills;
@@ -322,6 +340,7 @@ async function refresh() {
     state.approvalQueue = approvalQueue;
     state.artifacts = artifacts;
     state.agentAdapters = agentAdapters;
+    state.agentWorkspaces = agentWorkspaces;
     render();
     setStatus(`Connected - ${state.approvalQueue.status.replace(/_/g, " ")}`);
   } catch (error) {
@@ -935,6 +954,15 @@ function render() {
     },
     items: [],
   };
+  const agentWorkspaces = state.agentWorkspaces || {
+    summary: {
+      total: 0,
+      byStatus: {},
+      byAdapter: {},
+      gitWorktreeCount: 0,
+    },
+    items: [],
+  };
 
   nodes.pendingCount.textContent = inbox.summary.pendingApprovalCount;
   nodes.decisionCount.textContent = approvalQueue.summary.pendingDecisionCount + approvalQueue.summary.readyToResumeCount;
@@ -942,6 +970,7 @@ function render() {
   nodes.recentCount.textContent = inbox.summary.recentRunCount;
   nodes.artifactCount.textContent = artifacts.summary.total;
   nodes.agentAdapterCount.textContent = agentAdapters.summary.total;
+  nodes.agentWorkspaceCount.textContent = agentWorkspaces.summary.total;
   nodes.skillState.textContent = `${skills.length}`;
   nodes.candidateSkillState.textContent = `${candidateSkills.length} candidates`;
   nodes.skillEvaluationState.textContent = `${skillEvaluations.length} reports`;
@@ -953,6 +982,7 @@ function render() {
   nodes.recentState.textContent = `${inbox.recentRuns.length}`;
   nodes.artifactState.textContent = `${artifacts.summary.total} artifacts / ${artifacts.summary.traceCount} traces`;
   nodes.agentAdapterState.textContent = `${agentAdapters.summary.total} planned`;
+  nodes.agentWorkspaceState.textContent = `${agentWorkspaces.summary.total} prepared / ${agentWorkspaces.summary.gitWorktreeCount} worktrees`;
 
   renderSkills(skills);
   renderCandidateSkills(candidateSkills);
@@ -960,6 +990,8 @@ function render() {
   renderSkillEvaluationPanel(state.skillEvaluationDetail);
   renderAgentAdapters(agentAdapters.items);
   renderAgentPlanPanel(state.agentPlan);
+  renderAgentWorkspaces(agentWorkspaces.items);
+  renderAgentWorkspacePanel(state.agentWorkspaceDetail);
   renderWorkflowSkillOptions(skills);
   renderWorkflowDraft(state.workflowDraft);
   renderWorkflows(workflows);
@@ -1083,6 +1115,7 @@ function renderAgentAdapters(items) {
     ],
     actions: [
       agentPlanButton(item.id),
+      agentPrepareButton(item.id),
     ],
   }));
 }
@@ -1103,6 +1136,43 @@ function renderAgentPlanPanel(plan) {
     reviewGate: plan.reviewGate,
     sourceMap: plan.sourceMap,
     limits: plan.limits,
+  }, null, 2);
+}
+
+function renderAgentWorkspaces(items) {
+  replaceList(nodes.agentWorkspaceList, items, (item) => itemNode({
+    title: item.goal || item.id,
+    meta: [
+      [statusClass(item.status), item.status],
+      ["adapter", item.adapter?.id || "-"],
+      ["mode", item.mode],
+      ["branch", item.branchName || "-"],
+      ["created", formatTime(item.createdAt)],
+    ],
+    actions: [
+      agentWorkspaceViewButton(item.id),
+    ],
+  }));
+}
+
+function renderAgentWorkspacePanel(workspace) {
+  if (!workspace) {
+    nodes.agentWorkspacePanel.textContent = "{}";
+    return;
+  }
+  nodes.agentWorkspacePanel.textContent = JSON.stringify({
+    id: workspace.id,
+    status: workspace.status,
+    mode: workspace.mode,
+    adapter: workspace.adapter,
+    goal: workspace.goal,
+    workspacePath: workspace.workspacePath,
+    isolation: workspace.isolation,
+    git: workspace.git,
+    launchPreview: workspace.launchPreview,
+    reviewGate: workspace.reviewGate,
+    notes: workspace.notes,
+    limits: workspace.limits,
   }, null, 2);
 }
 
@@ -1531,6 +1601,41 @@ async function planAgentAdapterRunFromWorkbench(adapterId) {
   }
 }
 
+async function prepareAgentWorkspaceFromWorkbench(adapterId) {
+  const goal = nodes.runGoal.value.trim();
+  if (!goal) {
+    setStatus("Goal required before preparing an agent workspace", true);
+    document.querySelector("#launch")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  setStatus("Preparing isolated agent workspace");
+  try {
+    state.agentWorkspaceDetail = await post("/v1/agent-workspaces", {
+      adapterId,
+      goal,
+      contextQuery: nodes.runContext.value.trim(),
+    });
+    state.agentWorkspaces = await get("/v1/agent-workspaces");
+    render();
+    setStatus(`Prepared workspace - ${shortId(state.agentWorkspaceDetail.id)}`);
+    document.querySelector("#agents")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+async function loadAgentWorkspace(workspaceId) {
+  if (!workspaceId) return;
+  setStatus("Loading agent workspace");
+  try {
+    state.agentWorkspaceDetail = await get(`/v1/agent-workspaces/${encodeURIComponent(workspaceId)}`);
+    renderAgentWorkspacePanel(state.agentWorkspaceDetail);
+    setStatus(`Loaded workspace - ${shortId(workspaceId)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 function renderDetail(detail) {
   nodes.detailPanel.replaceChildren();
   if (!detail) {
@@ -1950,6 +2055,26 @@ function agentPlanButton(adapterId) {
   button.dataset.action = "agent-plan";
   button.dataset.adapterId = adapterId;
   button.innerHTML = '<span aria-hidden="true">&#9874;</span><span>Plan</span>';
+  return button;
+}
+
+function agentPrepareButton(adapterId) {
+  const button = document.createElement("button");
+  button.className = "item-action";
+  button.type = "button";
+  button.dataset.action = "agent-prepare";
+  button.dataset.adapterId = adapterId;
+  button.innerHTML = '<span aria-hidden="true">&#8862;</span><span>Prepare</span>';
+  return button;
+}
+
+function agentWorkspaceViewButton(workspaceId) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "agent-workspace-view";
+  button.dataset.workspaceId = workspaceId;
+  button.innerHTML = '<span aria-hidden="true">&#128065;</span><span>View</span>';
   return button;
 }
 

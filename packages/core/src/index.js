@@ -107,6 +107,12 @@ export {
   renderTraceReportMarkdown,
 } from "./trace-report.js";
 export {
+  getAgentWorkspace,
+  getAgentWorkspaceContract,
+  listAgentWorkspaces,
+  prepareAgentWorkspace,
+} from "./agent-workspaces.js";
+export {
   createAgentAdapterRunPlan,
   getAgentAdapter,
   getAgentAdapterContract,
