@@ -41,6 +41,7 @@
           <a href="#approvals">Approvals</a>
           <a href="#resumable">Resumable</a>
           <a href="#recent">Recent</a>
+          <a href="#artifacts">Artifacts</a>
           <a href="#detail">Detail</a>
         </nav>
       </aside>
@@ -72,6 +73,10 @@
           <article class="metric">
             <span class="metric-label">Recent</span>
             <strong id="recent-count">0</strong>
+          </article>
+          <article class="metric">
+            <span class="metric-label">Artifacts</span>
+            <strong id="artifact-count">0</strong>
           </article>
         </section>
 
@@ -308,6 +313,15 @@
             <span id="recent-state" class="section-state">0</span>
           </div>
           <div id="recent-list" class="item-list"></div>
+        </section>
+
+        <section id="artifacts" class="work-section">
+          <div class="section-heading">
+            <h2>Artifacts</h2>
+            <span id="artifact-state" class="section-state">0 artifacts</span>
+          </div>
+          <div id="artifact-list" class="item-list"></div>
+          <pre id="artifact-panel" class="json-view artifact-preview">{}</pre>
         </section>
 
         <section id="detail" class="work-section detail-section">

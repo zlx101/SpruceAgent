@@ -11,6 +11,8 @@ const state = {
   workflowDraft: null,
   workflowInbox: null,
   approvalQueue: null,
+  artifacts: null,
+  artifactDetail: null,
   detail: null,
   busy: false,
 };
@@ -67,10 +69,12 @@ const nodes = {
   decisionCount: document.querySelector("#decision-count"),
   resumableCount: document.querySelector("#resumable-count"),
   recentCount: document.querySelector("#recent-count"),
+  artifactCount: document.querySelector("#artifact-count"),
   decisionQueueState: document.querySelector("#decision-queue-state"),
   approvalState: document.querySelector("#approval-state"),
   resumeState: document.querySelector("#resume-state"),
   recentState: document.querySelector("#recent-state"),
+  artifactState: document.querySelector("#artifact-state"),
   decisionQueueList: document.querySelector("#decision-queue-list"),
   pendingList: document.querySelector("#pending-list"),
   skillList: document.querySelector("#skill-list"),
@@ -84,6 +88,8 @@ const nodes = {
   workflowRunList: document.querySelector("#workflow-run-list"),
   resumableList: document.querySelector("#resumable-list"),
   recentList: document.querySelector("#recent-list"),
+  artifactList: document.querySelector("#artifact-list"),
+  artifactPanel: document.querySelector("#artifact-panel"),
   detailState: document.querySelector("#detail-state"),
   detailPanel: document.querySelector("#detail-panel"),
   emptyTemplate: document.querySelector("#empty-template"),
@@ -247,6 +253,21 @@ nodes.resumableList.addEventListener("click", async (event) => {
   await refreshAfterRunControlAction();
 });
 
+nodes.artifactList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action]");
+  if (!button) return;
+  if (button.dataset.action === "artifact-view") {
+    await loadArtifact(button.dataset.artifactId);
+  }
+  if (button.dataset.action === "artifact-run-detail") {
+    if (button.dataset.sourceKind === "workflow.run") {
+      await loadWorkflowDetail(button.dataset.traceId);
+    } else {
+      await loadDetail(button.dataset.traceId);
+    }
+  }
+});
+
 document.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action='details']");
   if (!button) return;
@@ -263,7 +284,7 @@ async function refresh() {
   state.busy = true;
   setStatus("Loading");
   try {
-    const [inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue] = await Promise.all([
+    const [inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts] = await Promise.all([
       get("/v1/inbox"),
       get("/v1/skills?status=approved"),
       get("/v1/skills?status=candidates"),
@@ -271,6 +292,7 @@ async function refresh() {
       get("/v1/workflows"),
       get("/v1/workflows/inbox"),
       get("/v1/approval-queue"),
+      get("/v1/artifacts?limit=20"),
     ]);
     state.inbox = inbox;
     state.skills = skills;
@@ -279,6 +301,7 @@ async function refresh() {
     state.workflows = workflows;
     state.workflowInbox = workflowInbox;
     state.approvalQueue = approvalQueue;
+    state.artifacts = artifacts;
     render();
     setStatus(`Connected - ${state.approvalQueue.status.replace(/_/g, " ")}`);
   } catch (error) {
@@ -325,14 +348,16 @@ async function handleDecisionQueueAction(button) {
 }
 
 async function refreshAfterRunControlAction() {
-  const [inbox, workflowInbox, approvalQueue] = await Promise.all([
+  const [inbox, workflowInbox, approvalQueue, artifacts] = await Promise.all([
     get("/v1/inbox"),
     get("/v1/workflows/inbox"),
     get("/v1/approval-queue"),
+    get("/v1/artifacts?limit=20"),
   ]);
   state.inbox = inbox;
   state.workflowInbox = workflowInbox;
   state.approvalQueue = approvalQueue;
+  state.artifacts = artifacts;
   render();
 }
 
@@ -873,11 +898,21 @@ function render() {
     },
     workflowRuns: [],
   };
+  const artifacts = state.artifacts || {
+    summary: {
+      total: 0,
+      traceCount: 0,
+      byKind: {},
+      byStatus: {},
+    },
+    items: [],
+  };
 
   nodes.pendingCount.textContent = inbox.summary.pendingApprovalCount;
   nodes.decisionCount.textContent = approvalQueue.summary.pendingDecisionCount + approvalQueue.summary.readyToResumeCount;
   nodes.resumableCount.textContent = inbox.summary.resumableRunCount;
   nodes.recentCount.textContent = inbox.summary.recentRunCount;
+  nodes.artifactCount.textContent = artifacts.summary.total;
   nodes.skillState.textContent = `${skills.length}`;
   nodes.candidateSkillState.textContent = `${candidateSkills.length} candidates`;
   nodes.skillEvaluationState.textContent = `${skillEvaluations.length} reports`;
@@ -887,6 +922,7 @@ function render() {
   nodes.approvalState.textContent = `${inbox.pendingApprovals.length}`;
   nodes.resumeState.textContent = `${inbox.resumableRuns.length}`;
   nodes.recentState.textContent = `${inbox.recentRuns.length}`;
+  nodes.artifactState.textContent = `${artifacts.summary.total} artifacts / ${artifacts.summary.traceCount} traces`;
 
   renderSkills(skills);
   renderCandidateSkills(candidateSkills);
@@ -901,6 +937,8 @@ function render() {
   renderPending(inbox.pendingApprovals);
   renderResumable(inbox.resumableRuns);
   renderRecent(inbox.recentRuns);
+  renderArtifacts(artifacts.items);
+  renderArtifactPanel(state.artifactDetail);
   renderDetail(state.detail);
 }
 
@@ -962,6 +1000,43 @@ function renderDecisionQueue(items) {
       ...item.actions.map((action) => decisionQueueButton(item, action)),
     ],
   }));
+}
+
+function renderArtifacts(items) {
+  replaceList(nodes.artifactList, items, (item) => itemNode({
+    title: item.title || item.id,
+    meta: [
+      [statusClass(item.status), item.status],
+      ["kind", item.kind],
+      [item.sourceKind === "workflow.run" ? "workflow" : "agent", item.sourceKind || "trace"],
+      ["trace", shortId(item.traceId)],
+      ["updated", formatTime(item.updatedAt || item.createdAt)],
+    ],
+    actions: [
+      artifactViewButton(item.id),
+      ...(item.traceId ? [artifactRunDetailButton(item)] : []),
+    ],
+  }));
+}
+
+function renderArtifactPanel(detail) {
+  if (!detail) {
+    nodes.artifactPanel.textContent = "{}";
+    return;
+  }
+  nodes.artifactPanel.textContent = JSON.stringify({
+    id: detail.id,
+    kind: detail.kind,
+    sourceKind: detail.sourceKind,
+    traceId: detail.traceId,
+    title: detail.title,
+    status: detail.status,
+    route: detail.route,
+    refs: detail.refs,
+    summary: detail.summary,
+    payload: detail.payload,
+    limits: detail.limits,
+  }, null, 2);
 }
 
 function renderSkills(items) {
@@ -1343,6 +1418,19 @@ async function loadWorkflowDetail(traceId, options = {}) {
   }
 }
 
+async function loadArtifact(artifactId) {
+  if (!artifactId) return;
+  setStatus("Loading artifact");
+  try {
+    state.artifactDetail = await get(`/v1/artifacts/${encodeURIComponent(artifactId)}`);
+    renderArtifactPanel(state.artifactDetail);
+    setStatus(`Loaded artifact - ${shortId(artifactId)}`);
+    document.querySelector("#artifacts")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 function renderDetail(detail) {
   nodes.detailPanel.replaceChildren();
   if (!detail) {
@@ -1361,6 +1449,7 @@ function renderDetail(detail) {
     renderCandidateSteps(detail.candidateSteps || []),
     renderTimeline(detail.timeline || []),
     renderToolResults(detail.toolResults || []),
+    renderArtifactsBlock(detail.artifacts || []),
     renderRawRun(detail),
   );
 }
@@ -1373,6 +1462,7 @@ function renderWorkflowDetail(detail) {
     renderWorkflowSteps(detail.steps || []),
     renderTimeline(detail.timeline || []),
     renderToolResults(detail.toolResults || []),
+    renderArtifactsBlock(detail.artifacts || []),
     renderRawWorkflow(detail),
   );
 }
@@ -1403,6 +1493,7 @@ function renderWorkflowSummary(detail) {
     ["Results", detail.summary.resultCount],
     ["Pending", detail.summary.pendingApprovalCount],
     ["Tools", detail.summary.toolResultCount],
+    ["Artifacts", detail.summary.artifactCount ?? detail.artifacts?.length ?? 0],
   ]) {
     const stat = document.createElement("div");
     stat.className = "detail-stat";
@@ -1448,6 +1539,7 @@ function renderRawWorkflow(detail) {
     approvals: detail.approvals,
     resumeEvents: detail.resumeEvents,
     evaluations: detail.evaluations,
+    artifacts: detail.artifacts,
   }, null, 2);
   block.appendChild(pre);
   return block;
@@ -1479,6 +1571,7 @@ function renderDetailSummary(detail) {
     ["Pending", detail.summary.pendingApprovalCount],
     ["Candidate", detail.summary.candidateStepCount],
     ["Tools", detail.summary.toolResultCount],
+    ["Artifacts", detail.summary.artifactCount ?? detail.artifacts?.length ?? 0],
   ]) {
     const stat = document.createElement("div");
     stat.className = "detail-stat";
@@ -1548,6 +1641,25 @@ function renderToolResults(results) {
   return block;
 }
 
+function renderArtifactsBlock(items) {
+  const block = detailBlock("Artifacts");
+  if (!items.length) {
+    block.appendChild(emptyInline("No artifacts"));
+    return block;
+  }
+  for (const artifact of items) {
+    const row = document.createElement("div");
+    row.className = "step-row";
+    row.append(
+      textNode("div", artifact.kind || "-", "step-tool"),
+      textNode("div", artifact.title || artifact.id, "step-title"),
+      pillNode(artifact.status, statusClass(artifact.status)),
+    );
+    block.appendChild(row);
+  }
+  return block;
+}
+
 function renderRawRun(detail) {
   const block = detailBlock("Raw Run");
   const pre = document.createElement("pre");
@@ -1557,6 +1669,7 @@ function renderRawRun(detail) {
     approvals: detail.approvals,
     resumeEvents: detail.resumeEvents,
     evaluations: detail.evaluations,
+    artifacts: detail.artifacts,
   }, null, 2);
   block.appendChild(pre);
   return block;
@@ -1697,6 +1810,27 @@ function workflowRestoreButton(workflowId, revision) {
   return button;
 }
 
+function artifactViewButton(artifactId) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "artifact-view";
+  button.dataset.artifactId = artifactId;
+  button.innerHTML = '<span aria-hidden="true">&#128065;</span><span>View</span>';
+  return button;
+}
+
+function artifactRunDetailButton(item) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "artifact-run-detail";
+  button.dataset.traceId = item.traceId;
+  button.dataset.sourceKind = item.sourceKind || "";
+  button.innerHTML = '<span aria-hidden="true">&#9432;</span><span>Run</span>';
+  return button;
+}
+
 function libraryButton(action, id, iconHtml, label) {
   const button = document.createElement("button");
   button.className = "item-action secondary";
@@ -1736,7 +1870,7 @@ function shortId(value) {
 }
 
 function statusClass(value) {
-  if (["completed", "dry_run", "approved", "passed"].includes(value)) return "completed";
+  if (["available", "completed", "dry_run", "approved", "passed", "recorded"].includes(value)) return "completed";
   if (["failed", "blocked", "completed_with_blockers"].includes(value)) return "failed";
   if (["requires_approval", "action_required", "pending_decision", "candidate", "needs_review"].includes(value)) return "pending";
   if (["ready_to_resume", "approved_unresumable"].includes(value)) return "ready";

@@ -39,8 +39,10 @@ The first screen is backed by `GET /v1/inbox` and renders:
 - pending approvals
 - runs ready to resume
 - recent runs
+- artifacts
 - summary counts
 - run detail for a selected trace
+- artifact detail for selected run outputs, approvals, evaluations, and memory records
 
 ## What It Can Do
 
@@ -72,6 +74,9 @@ Workbench v0 supports:
 - reject pending approval tickets
 - resume approval-gated runs
 - inspect run detail, candidate steps, timeline, tool results, and raw run JSON
+- inspect artifact lists through `GET /v1/artifacts`
+- inspect artifact detail payloads through `GET /v1/artifacts/:artifactId`
+- jump from an artifact back to its agent or workflow run detail
 
 ## Safety Boundary
 
@@ -96,6 +101,7 @@ Workbench v0 does not bypass TrustKernel.
 - approve/reject calls use existing approval routes
 - resume calls use `POST /v1/runs/:traceId/resume`
 - detail calls use read-only `GET /v1/runs/:traceId`
+- artifact calls are read-only projections and do not copy workspace outputs
 - tool execution still flows through TrustKernel
 
 ## Files
@@ -112,7 +118,7 @@ Run Inbox v0 made the product state visible. Workbench v0 makes it actionable an
 This is the first real operating surface for SpruceAgent:
 
 ```text
-Draft Workflow -> Review Steps -> Save Workflow -> Version / Archive / Restore -> Evaluate Skill -> Launch / Skill / Workflow -> Inspect -> Approve / Reject -> Resume -> Audit
+Draft Workflow -> Review Steps -> Save Workflow -> Version / Archive / Restore -> Evaluate Skill -> Launch / Skill / Workflow -> Inspect -> Approve / Reject -> Resume -> Artifact -> Audit
 ```
 
 It is still local-first, conservative, and auditable.

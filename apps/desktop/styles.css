@@ -209,7 +209,7 @@ h2 {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -472,7 +472,7 @@ button:disabled {
 
 .detail-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 8px;
   margin-top: 12px;
 }
@@ -544,6 +544,10 @@ button:disabled {
 }
 
 .evaluation-preview {
+  margin-top: 12px;
+}
+
+.artifact-preview {
   margin-top: 12px;
 }
 
