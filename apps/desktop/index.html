@@ -37,6 +37,7 @@
           <a href="#skillforge">SkillForge</a>
           <a href="#workflows">Workflows</a>
           <a href="#workflow-runs">Workflow Runs</a>
+          <a href="#decision-queue">Queue</a>
           <a href="#approvals">Approvals</a>
           <a href="#resumable">Resumable</a>
           <a href="#recent">Recent</a>
@@ -59,6 +60,10 @@
           <article class="metric">
             <span class="metric-label">Pending</span>
             <strong id="pending-count">0</strong>
+          </article>
+          <article class="metric">
+            <span class="metric-label">Queue</span>
+            <strong id="decision-count">0</strong>
           </article>
           <article class="metric">
             <span class="metric-label">Ready</span>
@@ -271,6 +276,14 @@
             <span id="workflow-run-state" class="section-state">0</span>
           </div>
           <div id="workflow-run-list" class="item-list"></div>
+        </section>
+
+        <section id="decision-queue" class="work-section">
+          <div class="section-heading">
+            <h2>Decision Queue</h2>
+            <span id="decision-queue-state" class="section-state">0</span>
+          </div>
+          <div id="decision-queue-list" class="item-list"></div>
         </section>
 
         <section id="approvals" class="work-section">

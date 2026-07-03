@@ -1660,9 +1660,9 @@ test("gateway serves workbench static assets without API auth", async () => {
     assert.equal(css.status, 200);
     assert.equal(js.status, 200);
     assert.equal(mark.status, 200);
-    assert.match(html.body, /Launch Run|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Workflow Versions|Workflow Runs|Run Detail/);
+    assert.match(html.body, /Launch Run|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Workflow Versions|Workflow Runs|Decision Queue|decision-queue-list|Run Detail/);
     assert.match(css.body, /Agent Workbench|summary-grid|work-section|detail-panel|run-form|draft-step-list|draft-step-fields|source-map-list|evaluation-preview/);
-    assert.match(js.body, /submitRun|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|loadWorkflowDetail|resume|inbox|approval/i);
+    assert.match(js.body, /submitRun|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|loadWorkflowDetail|handleDecisionQueueAction|renderDecisionQueue|approvalQueue|resume|inbox|approval/i);
     assert.match(mark.body, /SpruceAgent mark/);
   } finally {
     await closeServer(gateway.server);

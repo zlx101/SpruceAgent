@@ -10,6 +10,7 @@ const state = {
   workflowVersions: null,
   workflowDraft: null,
   workflowInbox: null,
+  approvalQueue: null,
   detail: null,
   busy: false,
 };
@@ -63,11 +64,14 @@ const nodes = {
   workflowVersionState: document.querySelector("#workflow-version-state"),
   workflowRunState: document.querySelector("#workflow-run-state"),
   pendingCount: document.querySelector("#pending-count"),
+  decisionCount: document.querySelector("#decision-count"),
   resumableCount: document.querySelector("#resumable-count"),
   recentCount: document.querySelector("#recent-count"),
+  decisionQueueState: document.querySelector("#decision-queue-state"),
   approvalState: document.querySelector("#approval-state"),
   resumeState: document.querySelector("#resume-state"),
   recentState: document.querySelector("#recent-state"),
+  decisionQueueList: document.querySelector("#decision-queue-list"),
   pendingList: document.querySelector("#pending-list"),
   skillList: document.querySelector("#skill-list"),
   candidateSkillState: document.querySelector("#candidate-skill-state"),
@@ -199,6 +203,21 @@ nodes.workflowRunList.addEventListener("click", async (event) => {
   }
 });
 
+nodes.decisionQueueList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-queue-action]");
+  if (button) {
+    await handleDecisionQueueAction(button);
+    return;
+  }
+  const detail = event.target.closest("[data-action='decision-details']");
+  if (!detail) return;
+  if (detail.dataset.traceKind === "workflow.run") {
+    await loadWorkflowDetail(detail.dataset.traceId);
+  } else {
+    await loadDetail(detail.dataset.traceId);
+  }
+});
+
 nodes.pendingList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action]");
   if (!button) return;
@@ -208,13 +227,13 @@ nodes.pendingList.addEventListener("click", async (event) => {
     await post(`/v1/approvals/${encodeURIComponent(approvalId)}/approve`, {
       reason: "approved from workbench",
     });
-    await refresh();
+    await refreshAfterRunControlAction();
   }
   if (button.dataset.action === "reject") {
     await post(`/v1/approvals/${encodeURIComponent(approvalId)}/reject`, {
       reason: "rejected from workbench",
     });
-    await refresh();
+    await refreshAfterRunControlAction();
   }
 });
 
@@ -225,7 +244,7 @@ nodes.resumableList.addEventListener("click", async (event) => {
     stepId: button.dataset.stepId || undefined,
     approvalId: button.dataset.approvalId || undefined,
   });
-  await refresh();
+  await refreshAfterRunControlAction();
 });
 
 document.addEventListener("click", async (event) => {
@@ -244,13 +263,14 @@ async function refresh() {
   state.busy = true;
   setStatus("Loading");
   try {
-    const [inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox] = await Promise.all([
+    const [inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue] = await Promise.all([
       get("/v1/inbox"),
       get("/v1/skills?status=approved"),
       get("/v1/skills?status=candidates"),
       get("/v1/skill-evaluations"),
       get("/v1/workflows"),
       get("/v1/workflows/inbox"),
+      get("/v1/approval-queue"),
     ]);
     state.inbox = inbox;
     state.skills = skills;
@@ -258,8 +278,9 @@ async function refresh() {
     state.skillEvaluations = skillEvaluations;
     state.workflows = workflows;
     state.workflowInbox = workflowInbox;
+    state.approvalQueue = approvalQueue;
     render();
-    setStatus(`Connected - ${state.inbox.status.replace(/_/g, " ")}`);
+    setStatus(`Connected - ${state.approvalQueue.status.replace(/_/g, " ")}`);
   } catch (error) {
     setStatus(error.message, true);
   } finally {
@@ -273,6 +294,60 @@ async function get(path) {
 
 async function post(path, body) {
   return request("POST", path, body);
+}
+
+async function handleDecisionQueueAction(button) {
+  if (state.busy) return;
+  const action = {
+    id: button.dataset.queueAction,
+    method: button.dataset.method || "POST",
+    path: button.dataset.path,
+    body: button.dataset.body ? JSON.parse(button.dataset.body) : {},
+  };
+  if (!action.path || action.method !== "POST") return;
+  state.busy = true;
+  setStatus(`${titleCase(action.id)} requested`);
+  try {
+    const body = decisionActionBody(action);
+    await post(action.path, body);
+    await refreshAfterRunControlAction();
+    setStatus(`${titleCase(action.id)} complete`);
+    if (button.dataset.traceKind === "workflow.run") {
+      await loadWorkflowDetail(button.dataset.traceId, { scroll: false });
+    } else if (button.dataset.traceId) {
+      await loadDetail(button.dataset.traceId, { scroll: false });
+    }
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+  }
+}
+
+async function refreshAfterRunControlAction() {
+  const [inbox, workflowInbox, approvalQueue] = await Promise.all([
+    get("/v1/inbox"),
+    get("/v1/workflows/inbox"),
+    get("/v1/approval-queue"),
+  ]);
+  state.inbox = inbox;
+  state.workflowInbox = workflowInbox;
+  state.approvalQueue = approvalQueue;
+  render();
+}
+
+function decisionActionBody(action) {
+  if (action.id === "approve") {
+    return { reason: "approved from workbench decision queue" };
+  }
+  if (action.id === "reject") {
+    return { reason: "rejected from workbench decision queue" };
+  }
+  return pruneEmpty({
+    ...(action.body ?? {}),
+    trustMode: nodes.runTrust.value,
+    actor: "workbench-user",
+  });
 }
 
 async function draftWorkflowFromWorkbench() {
@@ -492,8 +567,7 @@ async function submitRun() {
     const run = await post("/v1/runs", input);
     nodes.launchState.textContent = shortId(run.traceId);
     setStatus(`Run created - ${shortId(run.traceId)}`);
-    state.inbox = await get("/v1/inbox");
-    render();
+    await refreshAfterRunControlAction();
     await loadDetail(run.traceId, { scroll: true });
   } catch (error) {
     nodes.launchState.textContent = "Failed";
@@ -522,8 +596,7 @@ async function runSkill(skillId, options = {}) {
   setStatus(nodes.launchState.textContent);
   try {
     const run = await post("/v1/runs", input);
-    state.inbox = await get("/v1/inbox");
-    render();
+    await refreshAfterRunControlAction();
     await loadDetail(run.traceId, { scroll: true });
   } catch (error) {
     nodes.launchState.textContent = "Failed";
@@ -605,9 +678,7 @@ async function runWorkflowFromWorkbench(workflowId, options = {}) {
       dryRun: Boolean(options.dryRun),
       actor: "workbench-user",
     }));
-    state.inbox = await get("/v1/inbox");
-    state.workflowInbox = await get("/v1/workflows/inbox");
-    render();
+    await refreshAfterRunControlAction();
     nodes.launchState.textContent = shortId(result.traceId);
     setStatus(`Workflow ${result.status} - ${shortId(result.traceId)}`);
     await loadWorkflowDetail(result.traceId, { scroll: true });
@@ -629,9 +700,7 @@ async function resumeWorkflowRunFromWorkbench(traceId) {
       trustMode: nodes.runTrust.value,
       actor: "workbench-user",
     });
-    state.inbox = await get("/v1/inbox");
-    state.workflowInbox = await get("/v1/workflows/inbox");
-    render();
+    await refreshAfterRunControlAction();
     nodes.launchState.textContent = shortId(traceId);
     setStatus(`Workflow resume ${result.status} - ${shortId(traceId)}`);
     await loadWorkflowDetail(traceId, { scroll: true });
@@ -782,6 +851,17 @@ function render() {
     recentRuns: [],
   };
 
+  const approvalQueue = state.approvalQueue || {
+    status: "clear",
+    summary: {
+      total: 0,
+      pendingDecisionCount: 0,
+      readyToResumeCount: 0,
+      approvedUnresumableCount: 0,
+      completedCount: 0,
+    },
+    items: [],
+  };
   const skills = state.skills || [];
   const candidateSkills = state.candidateSkills || [];
   const skillEvaluations = state.skillEvaluations || [];
@@ -795,6 +875,7 @@ function render() {
   };
 
   nodes.pendingCount.textContent = inbox.summary.pendingApprovalCount;
+  nodes.decisionCount.textContent = approvalQueue.summary.pendingDecisionCount + approvalQueue.summary.readyToResumeCount;
   nodes.resumableCount.textContent = inbox.summary.resumableRunCount;
   nodes.recentCount.textContent = inbox.summary.recentRunCount;
   nodes.skillState.textContent = `${skills.length}`;
@@ -802,6 +883,7 @@ function render() {
   nodes.skillEvaluationState.textContent = `${skillEvaluations.length} reports`;
   nodes.workflowState.textContent = `${workflows.length}`;
   nodes.workflowRunState.textContent = `${workflowInbox.summary.workflowRunCount}`;
+  nodes.decisionQueueState.textContent = `${approvalQueue.summary.pendingDecisionCount} pending / ${approvalQueue.summary.readyToResumeCount} ready`;
   nodes.approvalState.textContent = `${inbox.pendingApprovals.length}`;
   nodes.resumeState.textContent = `${inbox.resumableRuns.length}`;
   nodes.recentState.textContent = `${inbox.recentRuns.length}`;
@@ -815,6 +897,7 @@ function render() {
   renderWorkflows(workflows);
   renderWorkflowVersions(state.workflowVersions);
   renderWorkflowRuns(workflowInbox.workflowRuns);
+  renderDecisionQueue(approvalQueue.items);
   renderPending(inbox.pendingApprovals);
   renderResumable(inbox.resumableRuns);
   renderRecent(inbox.recentRuns);
@@ -859,6 +942,24 @@ function renderWorkflowRuns(items) {
     actions: [
       workflowDetailButton(item.traceId),
       ...(item.canResume ? [workflowResumeButton(item.traceId)] : []),
+    ],
+  }));
+}
+
+function renderDecisionQueue(items) {
+  const activeItems = items.filter((item) => item.status !== "completed");
+  replaceList(nodes.decisionQueueList, activeItems, (item) => itemNode({
+    title: item.run?.goal || item.reason || item.approvalId,
+    meta: [
+      [statusClass(item.status), item.status],
+      [item.traceKind === "workflow.run" ? "workflow" : "agent", item.traceKind || "approval"],
+      [item.riskLevel || "risk", item.toolName],
+      ["trace", shortId(item.traceId)],
+      ["step", item.stepId || "-"],
+    ],
+    actions: [
+      decisionDetailButton(item),
+      ...item.actions.map((action) => decisionQueueButton(item, action)),
     ],
   }));
 }
@@ -1529,6 +1630,32 @@ function resumeButton(traceId, stepId, approvalId) {
   return button;
 }
 
+function decisionQueueButton(item, action) {
+  const button = document.createElement("button");
+  button.className = `item-action ${action.id === "reject" ? "danger" : ""}`.trim();
+  button.type = "button";
+  button.dataset.queueAction = action.id;
+  button.dataset.method = action.method;
+  button.dataset.path = action.path;
+  button.dataset.traceId = item.traceId || "";
+  button.dataset.traceKind = item.traceKind || "";
+  if (action.body) button.dataset.body = JSON.stringify(action.body);
+  const icon = action.id === "approve" ? "&#10003;" : action.id === "reject" ? "&#10005;" : "&#9654;";
+  button.innerHTML = `<span aria-hidden="true">${icon}</span><span>${action.label || titleCase(action.id)}</span>`;
+  return button;
+}
+
+function decisionDetailButton(item) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "decision-details";
+  button.dataset.traceId = item.traceId || "";
+  button.dataset.traceKind = item.traceKind || "";
+  button.innerHTML = '<span aria-hidden="true">&#9432;</span><span>Details</span>';
+  return button;
+}
+
 function detailButton(traceId) {
   const button = document.createElement("button");
   button.className = "item-action secondary";
@@ -1611,7 +1738,8 @@ function shortId(value) {
 function statusClass(value) {
   if (["completed", "dry_run", "approved", "passed"].includes(value)) return "completed";
   if (["failed", "blocked", "completed_with_blockers"].includes(value)) return "failed";
-  if (["requires_approval", "action_required", "candidate", "needs_review"].includes(value)) return "pending";
+  if (["requires_approval", "action_required", "pending_decision", "candidate", "needs_review"].includes(value)) return "pending";
+  if (["ready_to_resume", "approved_unresumable"].includes(value)) return "ready";
   return "";
 }
 
@@ -1637,4 +1765,10 @@ function splitCsv(value) {
 function setStatus(message, isError = false) {
   nodes.statusLine.textContent = message;
   nodes.statusLine.classList.toggle("error", isError);
+}
+
+function titleCase(value) {
+  return String(value || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

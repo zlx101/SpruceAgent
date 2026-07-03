@@ -35,6 +35,7 @@ The first screen is backed by `GET /v1/inbox` and renders:
 - workflows
 - workflow versions
 - workflow runs
+- decision queue
 - pending approvals
 - runs ready to resume
 - recent runs
@@ -64,6 +65,8 @@ Workbench v0 supports:
 - dry-run or run a workflow through `POST /v1/workflows/:workflowId/run`
 - inspect workflow runs through `GET /v1/workflows/runs/:traceId`
 - resume approval-gated workflow runs through `POST /v1/workflows/runs/:traceId/resume`
+- inspect the unified approval queue through `GET /v1/approval-queue`
+- approve, reject, and resume from queue action hints while preserving Gateway authority checks
 - refresh Inbox state
 - approve pending approval tickets
 - reject pending approval tickets
@@ -89,6 +92,7 @@ Workbench v0 does not bypass TrustKernel.
 - workflow execution calls use existing workflow routes
 - workflow detail calls use read-only workflow trace routes
 - workflow resume calls use Workflow Continuation v0 and matching approval tickets
+- decision queue calls use read-only queue action hints and existing approval or continuation routes
 - approve/reject calls use existing approval routes
 - resume calls use `POST /v1/runs/:traceId/resume`
 - detail calls use read-only `GET /v1/runs/:traceId`
