@@ -33,6 +33,8 @@ import {
   getGatewayRouteContract,
   getIndexedDocument,
   getApprovalTicket,
+  getApprovalQueue,
+  getApprovalQueueContract,
   getLlmAdapterContract,
   getPlannerPromotionContract,
   getRunInbox,
@@ -424,6 +426,21 @@ function handlePolicy(action, args) {
 }
 
 function handleApproval(action, args) {
+  if (action === "queue") {
+    const flags = parseFlags(args);
+    printJson(getApprovalQueue(store, {
+      limit: flags.limit,
+      traceKind: flags.traceKind,
+      status: flags.status,
+    }));
+    return;
+  }
+
+  if (action === "queue-contract") {
+    printJson(getApprovalQueueContract());
+    return;
+  }
+
   if (action === "list") {
     const flags = parseFlags(args);
     printJson(listApprovalTickets(store, flags.status));
@@ -459,7 +476,7 @@ function handleApproval(action, args) {
     return;
   }
 
-  throw new Error("usage: spruce approval <list|get|approve|reject>");
+  throw new Error("usage: spruce approval <queue|queue-contract|list|get|approve|reject>");
 }
 
 function handleContext(action, args) {
@@ -1262,6 +1279,7 @@ Usage:
   ${executable} tool run file.read --path README.md
   ${executable} tool run shell.execute --command "git status" --approved
   ${executable} approval list [--status pending]
+  ${executable} approval queue [--traceKind agent.run|workflow.run]
   ${executable} approval approve <approvalId>
   ${executable} tool run file.write --path notes.txt --content "hello" --approvalId <approvalId>
   ${executable} context index

@@ -32,6 +32,8 @@ export function createGatewayClient(options = {}) {
     status: () => request("GET", "/v1/status"),
     inbox: (input = {}) => request("GET", `/v1/inbox${input.limit ? `?limit=${encodeURIComponent(input.limit)}` : ""}`),
     inboxContract: () => request("GET", "/v1/inbox/contract"),
+    approvalQueue: (input = {}) => request("GET", `/v1/approval-queue${queueParams(input)}`),
+    approvalQueueContract: () => request("GET", "/v1/approval-queue/contract"),
     contract: () => request("GET", "/v1/contract"),
     llmContract: () => request("GET", "/v1/llm/contract"),
     workflowBuilderContract: () => request("GET", "/v1/workflow-builder/contract"),
@@ -104,6 +106,15 @@ export function createGatewayClient(options = {}) {
 
 function normalizeBaseUrl(value) {
   return String(value).replace(/\/+$/, "");
+}
+
+function queueParams(input = {}) {
+  const params = new URLSearchParams();
+  if (input.limit) params.set("limit", input.limit);
+  if (input.traceKind) params.set("traceKind", input.traceKind);
+  if (input.status) params.set("status", input.status);
+  const value = params.toString();
+  return value ? `?${value}` : "";
 }
 
 function encodePathPart(value) {

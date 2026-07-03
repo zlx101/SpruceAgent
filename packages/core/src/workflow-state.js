@@ -1,4 +1,5 @@
 import { listApprovalTickets } from "./approvals.js";
+import { getApprovalQueue } from "./approval-queue.js";
 import { createSourceMap } from "./context.js";
 import { listEvaluations } from "./evaluations.js";
 import { listTraces, readTraceEvents } from "./trace.js";
@@ -45,6 +46,9 @@ export function getWorkflowInbox(store, options = {}) {
   const approvals = listApprovalTickets(store);
   const workflowRuns = traces.map((trace) => workflowRunItem(store, trace, approvals));
   const pendingApprovalCount = workflowRuns.reduce((sum, item) => sum + item.pendingApprovalCount, 0);
+  const decisionQueue = getApprovalQueue(store, {
+    traceKind: "workflow.run",
+  });
 
   return {
     version: WORKFLOW_INBOX_CONTRACT.version,
@@ -53,7 +57,10 @@ export function getWorkflowInbox(store, options = {}) {
     summary: {
       workflowRunCount: workflowRuns.length,
       pendingApprovalCount,
+      decisionQueueCount: decisionQueue.summary.total,
+      readyToResumeCount: decisionQueue.summary.readyToResumeCount,
     },
+    decisionQueue,
     workflowRuns,
     limits: [
       "Workflow Inbox v0 is a read-only projection.",
@@ -110,6 +117,15 @@ export function getWorkflowRunDetail(store, traceId) {
     query: context.query,
     context,
   });
+  const decisionQueue = getApprovalQueue(store, {
+    traceKind: "workflow.run",
+  });
+  const traceDecisionQueue = {
+    ...decisionQueue,
+    items: decisionQueue.items.filter((item) => item.traceId === traceId),
+  };
+  traceDecisionQueue.summary = summarizeDecisionQueue(traceDecisionQueue.items);
+  traceDecisionQueue.status = deriveDecisionQueueStatus(traceDecisionQueue.items);
 
   return {
     version: WORKFLOW_DETAIL_CONTRACT.version,
@@ -123,6 +139,7 @@ export function getWorkflowRunDetail(store, traceId) {
       stepCount: output.workflow?.steps?.length ?? 0,
       resultCount: output.results?.length ?? 0,
       pendingApprovalCount: approvals.filter((approval) => approval.status === "pending").length,
+      decisionQueueCount: traceDecisionQueue.summary.total,
       resumableStepCount: countResumableWorkflowSteps(output.results ?? [], approvals),
       toolResultCount: toolResults.length,
       evaluationCount: evaluations.length,
@@ -132,6 +149,7 @@ export function getWorkflowRunDetail(store, traceId) {
     results: output.results ?? [],
     steps: buildWorkflowSteps(output.workflow, output.results ?? [], events),
     approvals,
+    decisionQueue: traceDecisionQueue,
     toolResults,
     resumeEvents,
     evaluations,
@@ -270,4 +288,26 @@ function latestTimestamp(values) {
   return values
     .filter(Boolean)
     .sort((a, b) => String(b).localeCompare(String(a)))[0] ?? null;
+}
+
+function deriveDecisionQueueStatus(items) {
+  if (items.some((item) => item.status === "pending_decision")) return "action_required";
+  if (items.some((item) => item.status === "ready_to_resume")) return "ready_to_resume";
+  return "clear";
+}
+
+function summarizeDecisionQueue(items) {
+  return items.reduce((summary, item) => ({
+    total: summary.total + 1,
+    pendingDecisionCount: summary.pendingDecisionCount + (item.status === "pending_decision" ? 1 : 0),
+    readyToResumeCount: summary.readyToResumeCount + (item.status === "ready_to_resume" ? 1 : 0),
+    approvedUnresumableCount: summary.approvedUnresumableCount + (item.status === "approved_unresumable" ? 1 : 0),
+    completedCount: summary.completedCount + (item.status === "completed" ? 1 : 0),
+  }), {
+    total: 0,
+    pendingDecisionCount: 0,
+    readyToResumeCount: 0,
+    approvedUnresumableCount: 0,
+    completedCount: 0,
+  });
 }

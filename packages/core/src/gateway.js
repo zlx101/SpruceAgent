@@ -4,6 +4,7 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { approveTicket, getApprovalTicket, listApprovalTickets, rejectTicket } from "./approvals.js";
+import { getApprovalQueue, getApprovalQueueContract } from "./approval-queue.js";
 import { assessWorkspaceIndexFreshness, buildWorkspaceIndex, readWorkspaceIndex, searchWorkspaceContext } from "./context.js";
 import { evaluateTrace, getEvaluation, listEvaluations } from "./evaluations.js";
 import {
@@ -136,6 +137,20 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/inbox/contract",
       authRequired: true,
       description: "Read the Run Inbox contract.",
+    },
+    {
+      id: "approval_queue",
+      method: "GET",
+      path: "/v1/approval-queue",
+      authRequired: true,
+      description: "Read the unified approval and resume decision queue.",
+    },
+    {
+      id: "approval_queue.contract",
+      method: "GET",
+      path: "/v1/approval-queue/contract",
+      authRequired: true,
+      description: "Read the Approval Queue contract.",
     },
     {
       id: "tools.list",
@@ -733,6 +748,18 @@ async function routeRequest(store, request, url, body) {
 
   if (request.method === "GET" && url.pathname === "/v1/inbox/contract") {
     return ok(getRunInboxContract());
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/approval-queue") {
+    return ok(getApprovalQueue(store, {
+      limit: url.searchParams.get("limit") ?? undefined,
+      traceKind: url.searchParams.get("traceKind") ?? undefined,
+      status: url.searchParams.get("status") ?? undefined,
+    }));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/approval-queue/contract") {
+    return ok(getApprovalQueueContract());
   }
 
   if (request.method === "GET" && url.pathname === "/v1/contract") {

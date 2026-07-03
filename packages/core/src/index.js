@@ -96,6 +96,10 @@ export {
   rejectTicket,
 } from "./approvals.js";
 export {
+  getApprovalQueue,
+  getApprovalQueueContract,
+} from "./approval-queue.js";
+export {
   assessWorkspaceIndexFreshness,
   buildWorkspaceIndex,
   createContextPack,

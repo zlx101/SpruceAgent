@@ -36,6 +36,8 @@ import {
   executeCandidatePlan,
   getEvaluation,
   getApprovedSkill,
+  getApprovalQueue,
+  getApprovalQueueContract,
   getIndexedDocument,
   getApprovalTicket,
   getGatewayRouteContract,
@@ -1426,18 +1428,23 @@ test("workflow continuation resumes approved workflow tool steps", async () => {
   const beforeApproval = await resumeWorkflowRun(store, { traceId: run.traceId });
   approveTicket(store, approvalId);
   const resumable = getWorkflowInbox(store);
+  const workflowQueue = getApprovalQueue(store, { traceKind: "workflow.run" });
   const resumed = await resumeWorkflowRun(store, { traceId: run.traceId });
   const completedDetail = getWorkflowRunDetail(store, run.traceId);
 
   assert.equal(run.status, "requires_approval");
   assert.equal(pendingDetail.summary.pendingApprovalCount, 1);
+  assert.equal(pendingDetail.decisionQueue.items[0].status, "pending_decision");
   assert.equal(beforeApproval.status, "requires_approval");
   assert.equal(resumable.workflowRuns[0].canResume, true);
+  assert.equal(resumable.decisionQueue.items[0].status, "ready_to_resume");
+  assert.equal(workflowQueue.items[0].actions[0].path, `/v1/workflows/runs/${run.traceId}/resume`);
   assert.equal(resumed.status, "completed");
   assert.equal(resumed.results[0].status, "succeeded");
   assert.equal(fs.readFileSync(path.join(dir, "resumed-workflow.txt"), "utf8"), "workflow resumed");
   assert.equal(getApprovalTicket(store, approvalId).status, "consumed");
   assert.equal(completedDetail.status, "completed");
+  assert.equal(completedDetail.decisionQueue.items[0].status, "completed");
   assert.equal(completedDetail.resumeEvents.length, 2);
 });
 
@@ -1579,6 +1586,8 @@ test("gateway route contract exposes stable route ids", () => {
   assert.ok(routeIds.includes("preflight.run"));
   assert.ok(routeIds.includes("inbox"));
   assert.ok(routeIds.includes("inbox.contract"));
+  assert.ok(routeIds.includes("approval_queue"));
+  assert.ok(routeIds.includes("approval_queue.contract"));
   assert.ok(routeIds.includes("runs.get"));
   assert.ok(routeIds.includes("run_detail.contract"));
   assert.ok(routeIds.includes("skills.list"));
@@ -1900,6 +1909,60 @@ test("gateway client reads run inbox projection", async () => {
     assert.equal(inbox.status, "action_required");
     assert.equal(inbox.pendingApprovals[0].traceId, run.traceId);
     assert.equal(inbox.recentRuns.some((item) => item.traceId === run.traceId), true);
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
+
+test("gateway client reads unified approval queue", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const client = createGatewayClient({
+    baseUrl: `http://${gateway.host}:${gateway.port}`,
+    token: gateway.token,
+  });
+  const provider = {
+    id: "gateway-approval-queue-test",
+    model: "gateway-approval-queue-test-v0",
+    async draftPlan() {
+      return {
+        planDraft: {
+          proposedSteps: [
+            {
+              id: "write_note",
+              kind: "tool",
+              description: "Write a queued approval note.",
+              toolName: "file.write",
+              input: {
+                path: "gateway-queue.txt",
+                content: "gateway queue",
+              },
+            },
+          ],
+        },
+      };
+    },
+  };
+
+  try {
+    const run = await runAgent(store, {
+      goal: "Gateway approval queue run",
+      llmProvider: provider,
+      promotePlan: true,
+      requestCandidateApprovals: true,
+    });
+    const pendingQueue = await client.approvalQueue({ traceKind: "agent.run" });
+    const approvalId = run.candidateApprovals.results[0].approval.id;
+    await client.approve(approvalId, { reason: "queue gateway test" });
+    const resumableQueue = await client.approvalQueue({ status: "ready_to_resume" });
+
+    assert.equal(pendingQueue.status, "action_required");
+    assert.equal(pendingQueue.items[0].traceId, run.traceId);
+    assert.equal(pendingQueue.items[0].status, "pending_decision");
+    assert.equal(pendingQueue.items[0].actions.some((action) => action.id === "approve"), true);
+    assert.equal(resumableQueue.status, "ready_to_resume");
+    assert.equal(resumableQueue.items[0].actions[0].path, `/v1/runs/${run.traceId}/resume`);
   } finally {
     await closeServer(gateway.server);
   }
@@ -2843,6 +2906,14 @@ test("run inbox contract exposes read-only workbench boundary", () => {
   assert.ok(contract.safetyBoundary.some((item) => item.includes("read-only")));
 });
 
+test("approval queue contract exposes read-only decision queue boundary", () => {
+  const contract = getApprovalQueueContract();
+
+  assert.equal(contract.interface, "spruceagent.approval-queue");
+  assert.equal(contract.outputKind, "decision_queue");
+  assert.ok(contract.safetyBoundary.some((item) => item.includes("read-only")));
+});
+
 test("run detail contract exposes read-only trace audit boundary", () => {
   const contract = getRunDetailContract();
 
@@ -2902,19 +2973,27 @@ test("agent run can request candidate approvals and resume after approval", asyn
     requestCandidateApprovals: true,
   });
   const approvalId = run.candidateApprovals.results[0].approval.id;
+  const queueBeforeApproval = getApprovalQueue(store, { traceKind: "agent.run" });
   const beforeApproval = await resumeAgentRun(store, { traceId: run.traceId });
   approveTicket(store, approvalId);
+  const queueAfterApproval = getApprovalQueue(store, { traceKind: "agent.run" });
   const resumed = await resumeAgentRun(store, { traceId: run.traceId });
+  const queueAfterResume = getApprovalQueue(store, { traceKind: "agent.run" });
   const events = readTraceEvents(store, run.traceId);
 
   assert.equal(run.status, "requires_approval");
   assert.equal(run.results.length, 0);
   assert.equal(run.candidateApprovals.results[0].status, "approval_created");
+  assert.equal(queueBeforeApproval.items[0].status, "pending_decision");
+  assert.equal(queueBeforeApproval.items[0].actions.some((action) => action.id === "approve"), true);
   assert.equal(beforeApproval.status, "requires_approval");
+  assert.equal(queueAfterApproval.items[0].status, "ready_to_resume");
+  assert.equal(queueAfterApproval.items[0].actions[0].path, `/v1/runs/${run.traceId}/resume`);
   assert.equal(resumed.status, "completed");
   assert.equal(resumed.results[0].status, "succeeded");
   assert.equal(fs.readFileSync(path.join(dir, "resumed.txt"), "utf8"), "resumed candidate write");
   assert.equal(getApprovalTicket(store, approvalId).status, "consumed");
+  assert.equal(queueAfterResume.items[0].status, "completed");
   assert.ok(events.some((event) => event.type === "agent.resume.started"));
   assert.ok(events.some((event) => event.type === "agent.resume.completed"));
 });
@@ -2959,11 +3038,13 @@ test("run detail reconstructs candidate approvals and resume trace", async () =>
 
   assert.equal(pending.status, "requires_approval");
   assert.equal(pending.summary.pendingApprovalCount, 1);
+  assert.equal(pending.decisionQueue.items[0].status, "pending_decision");
   assert.equal(pending.candidateSteps[0].id, "write_note");
   assert.equal(pending.candidateSteps[0].latestApprovalStatus, "pending");
   assert.ok(pending.timeline.some((event) => event.type === "planner.promotion"));
   assert.ok(pending.timeline.some((event) => event.type === "candidate.approval.created"));
   assert.equal(completed.status, "completed");
+  assert.equal(completed.decisionQueue.items[0].status, "completed");
   assert.equal(completed.summary.toolResultCount, 1);
   assert.equal(completed.resumeEvents.length, 1);
   assert.equal(completed.toolResults[0].toolName, "file.write");
@@ -3011,13 +3092,17 @@ test("run inbox tracks pending approvals, resumable runs, and recent runs", asyn
 
   assert.equal(pending.status, "action_required");
   assert.equal(pending.summary.pendingApprovalCount, 1);
+  assert.equal(pending.summary.decisionQueueCount, 1);
+  assert.equal(pending.decisionQueue.items[0].status, "pending_decision");
   assert.equal(pending.pendingApprovals[0].traceId, run.traceId);
   assert.equal(pending.pendingApprovals[0].stepId, "write_note");
   assert.equal(resumable.status, "ready_to_resume");
   assert.equal(resumable.summary.resumableRunCount, 1);
+  assert.equal(resumable.decisionQueue.items[0].status, "ready_to_resume");
   assert.equal(resumable.resumableRuns[0].traceId, run.traceId);
   assert.equal(resumable.resumableRuns[0].approvedSteps[0].approvalId, approvalId);
   assert.equal(completed.status, "clear");
+  assert.equal(completed.decisionQueue.items[0].status, "completed");
   assert.equal(completed.recentRuns[0].traceId, run.traceId);
   assert.equal(completed.recentRuns[0].continuationStatus, "completed");
 });

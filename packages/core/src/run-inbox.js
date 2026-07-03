@@ -1,4 +1,5 @@
 import { listApprovalTickets } from "./approvals.js";
+import { getApprovalQueue } from "./approval-queue.js";
 import { listTraces, readTraceEvents } from "./trace.js";
 
 export const RUN_INBOX_CONTRACT = Object.freeze({
@@ -31,6 +32,9 @@ export function getRunInbox(store, options = {}) {
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   const resumableRuns = buildResumableRuns(store, approvals);
   const recentRuns = traces.map((trace) => recentRunItem(store, trace, approvals));
+  const decisionQueue = getApprovalQueue(store, {
+    traceKind: "agent.run",
+  });
 
   return {
     version: RUN_INBOX_CONTRACT.version,
@@ -39,10 +43,12 @@ export function getRunInbox(store, options = {}) {
     summary: {
       pendingApprovalCount: pendingApprovals.length,
       resumableRunCount: resumableRuns.length,
+      decisionQueueCount: decisionQueue.summary.total,
       recentRunCount: recentRuns.length,
     },
     pendingApprovals,
     resumableRuns,
+    decisionQueue,
     recentRuns,
     limits: [
       "Run Inbox v0 is a read-only projection.",

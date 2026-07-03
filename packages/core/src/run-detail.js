@@ -1,4 +1,5 @@
 import { listApprovalTickets } from "./approvals.js";
+import { getApprovalQueue } from "./approval-queue.js";
 import { createSourceMap } from "./context.js";
 import { listEvaluations } from "./evaluations.js";
 import { readTraceEvents } from "./trace.js";
@@ -53,6 +54,15 @@ export function getRunDetail(store, traceId) {
       resultCount: event.payload?.resultCount ?? 0,
       results: event.payload?.results ?? [],
     }));
+  const decisionQueue = getApprovalQueue(store, {
+    traceKind: "agent.run",
+  });
+  const traceDecisionQueue = {
+    ...decisionQueue,
+    items: decisionQueue.items.filter((item) => item.traceId === traceId),
+  };
+  traceDecisionQueue.summary = summarizeDecisionQueue(traceDecisionQueue.items);
+  traceDecisionQueue.status = deriveDecisionQueueStatus(traceDecisionQueue.items);
 
   return {
     version: RUN_DETAIL_CONTRACT.version,
@@ -65,6 +75,7 @@ export function getRunDetail(store, traceId) {
       eventCount: events.length,
       approvalCount: approvals.length,
       pendingApprovalCount: approvals.filter((approval) => approval.status === "pending").length,
+      decisionQueueCount: traceDecisionQueue.summary.total,
       candidateStepCount: run.candidatePlan?.promotedSteps?.length ?? 0,
       toolResultCount: events.filter((event) => event.type === "tool.result").length,
       evaluationCount: evaluations.length,
@@ -89,6 +100,7 @@ export function getRunDetail(store, traceId) {
     sourceMap,
     candidateSteps: buildCandidateSteps(run.candidatePlan, approvals),
     approvals,
+    decisionQueue: traceDecisionQueue,
     toolResults: events
       .filter((event) => event.type === "tool.result")
       .map((event) => ({
@@ -181,4 +193,26 @@ function labelForEvent(event) {
 
 function latestEvent(events, type) {
   return [...events].reverse().find((event) => event.type === type) ?? null;
+}
+
+function deriveDecisionQueueStatus(items) {
+  if (items.some((item) => item.status === "pending_decision")) return "action_required";
+  if (items.some((item) => item.status === "ready_to_resume")) return "ready_to_resume";
+  return "clear";
+}
+
+function summarizeDecisionQueue(items) {
+  return items.reduce((summary, item) => ({
+    total: summary.total + 1,
+    pendingDecisionCount: summary.pendingDecisionCount + (item.status === "pending_decision" ? 1 : 0),
+    readyToResumeCount: summary.readyToResumeCount + (item.status === "ready_to_resume" ? 1 : 0),
+    approvedUnresumableCount: summary.approvedUnresumableCount + (item.status === "approved_unresumable" ? 1 : 0),
+    completedCount: summary.completedCount + (item.status === "completed" ? 1 : 0),
+  }), {
+    total: 0,
+    pendingDecisionCount: 0,
+    readyToResumeCount: 0,
+    approvedUnresumableCount: 0,
+    completedCount: 0,
+  });
 }

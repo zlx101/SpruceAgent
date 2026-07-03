@@ -57,6 +57,7 @@ Start here:
 - [ContextOS Staleness Guard v0](docs/contextos-staleness-guard-v0.md)
 - [Run Preflight / Auto-Reindex v0](docs/run-preflight-auto-reindex-v0.md)
 - [Run Risk Preflight v0](docs/run-risk-preflight-v0.md)
+- [Approval Queue v0](docs/approval-queue-v0.md)
 - [ContextOS Source Map v0](docs/contextos-source-map-v0.md)
 - [Agent Run Loop v0](docs/agent-run-loop-v0.md)
 - [SkillForge v0](docs/skillforge-v0.md)
