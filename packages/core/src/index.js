@@ -102,6 +102,11 @@ export {
   listArtifactsForTrace,
 } from "./artifacts.js";
 export {
+  getTraceReport,
+  getTraceReportContract,
+  renderTraceReportMarkdown,
+} from "./trace-report.js";
+export {
   getApprovalQueue,
   getApprovalQueueContract,
 } from "./approval-queue.js";

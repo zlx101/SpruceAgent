@@ -54,6 +54,8 @@ import {
   getRunContinuationContract,
   getRunDetail,
   getRunDetailContract,
+  getTraceReport,
+  getTraceReportContract,
   getWorkflowDetailContract,
   getWorkflowBuilderContract,
   getWorkflowInbox,
@@ -209,6 +211,11 @@ async function main() {
 
   if (command === "artifact" || command === "artifacts") {
     handleArtifact(subcommand, rest);
+    return;
+  }
+
+  if (command === "report" || command === "reports") {
+    handleReport(subcommand, rest);
     return;
   }
 
@@ -514,6 +521,31 @@ function handleArtifact(action, args) {
   }
 
   throw new Error("usage: spruce artifact <list|get|contract>");
+}
+
+function handleReport(action, args) {
+  if (action === "contract") {
+    printJson(getTraceReportContract());
+    return;
+  }
+
+  if (action === "trace") {
+    const [traceId, ...flagArgs] = args;
+    if (!traceId) throw new Error("usage: spruce report trace <traceId> [--format json|markdown] [--includeRaw] [--out report.md]");
+    const flags = parseFlags(flagArgs);
+    const format = flags.format ?? inferReportFormat(flags.out);
+    const report = getTraceReport(store, traceId, {
+      format,
+      includeRaw: Boolean(flags.includeRaw),
+    });
+    writeOrPrintReport(report, {
+      format,
+      out: flags.out,
+    });
+    return;
+  }
+
+  throw new Error("usage: spruce report <trace|contract>");
 }
 
 function handleContext(action, args) {
@@ -1275,6 +1307,30 @@ function readTextFile(filePath) {
   return fs.readFileSync(filePath, "utf8");
 }
 
+function inferReportFormat(outputPath) {
+  if (!outputPath) return "json";
+  return String(outputPath).toLowerCase().endsWith(".md") ? "markdown" : "json";
+}
+
+function writeOrPrintReport(report, options) {
+  const format = String(options.format ?? report.format ?? "json").toLowerCase();
+  const content = format === "markdown" || format === "md"
+    ? report.markdown
+    : `${JSON.stringify(report, null, 2)}\n`;
+  if (options.out) {
+    fs.mkdirSync(path.dirname(path.resolve(options.out)), { recursive: true });
+    fs.writeFileSync(options.out, content, "utf8");
+    printJson({
+      ok: true,
+      path: path.resolve(options.out),
+      traceId: report.traceId,
+      format: report.format,
+    });
+    return;
+  }
+  process.stdout.write(content.endsWith("\n") ? content : `${content}\n`);
+}
+
 async function clientRequest(client, method, routePath, body) {
   return client.request(String(method).toUpperCase(), routePath, body);
 }
@@ -1321,6 +1377,8 @@ Usage:
   ${executable} artifact list [--traceId <traceId>] [--kind tool_result]
   ${executable} artifact get <artifactId>
   ${executable} artifact contract
+  ${executable} report trace <traceId> [--format json|markdown] [--includeRaw] [--out trace-report.md]
+  ${executable} report contract
   ${executable} tool run file.write --path notes.txt --content "hello" --approvalId <approvalId>
   ${executable} context index
   ${executable} context freshness

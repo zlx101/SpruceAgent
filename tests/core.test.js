@@ -52,6 +52,8 @@ import {
   getRunContinuationContract,
   getRunDetail,
   getRunDetailContract,
+  getTraceReport,
+  getTraceReportContract,
   getSkillEvaluation,
   getSkillEvaluationContract,
   getSkillPackage,
@@ -1594,6 +1596,8 @@ test("gateway route contract exposes stable route ids", () => {
   assert.ok(routeIds.includes("artifacts.list"));
   assert.ok(routeIds.includes("artifacts.get"));
   assert.ok(routeIds.includes("artifacts.contract"));
+  assert.ok(routeIds.includes("trace_reports.get"));
+  assert.ok(routeIds.includes("trace_reports.contract"));
   assert.ok(routeIds.includes("runs.get"));
   assert.ok(routeIds.includes("run_detail.contract"));
   assert.ok(routeIds.includes("skills.list"));
@@ -1668,7 +1672,7 @@ test("gateway serves workbench static assets without API auth", async () => {
     assert.equal(mark.status, 200);
     assert.match(html.body, /Launch Run|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Workflow Versions|Workflow Runs|Decision Queue|decision-queue-list|Artifacts|artifact-list|artifact-panel|Run Detail/);
     assert.match(css.body, /Agent Workbench|summary-grid|work-section|detail-panel|run-form|draft-step-list|draft-step-fields|source-map-list|evaluation-preview|artifact-preview/);
-    assert.match(js.body, /submitRun|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|loadWorkflowDetail|loadArtifact|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|resume|inbox|approval/i);
+    assert.match(js.body, /submitRun|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|resume|inbox|approval/i);
     assert.match(mark.body, /SpruceAgent mark/);
   } finally {
     await closeServer(gateway.server);
@@ -2055,6 +2059,40 @@ test("gateway client reads run artifacts", async () => {
     assert.equal(summary.traceId, run.traceId);
     assert.equal(detail.id, summary.id);
     assert.equal(detail.payload.status, "dry_run");
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
+
+test("gateway client reads trace reports in json and markdown", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, "README.md"), "Gateway report context.", "utf8");
+  buildWorkspaceIndex(store);
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const client = createGatewayClient({
+    baseUrl: `http://${gateway.host}:${gateway.port}`,
+    token: gateway.token,
+  });
+
+  try {
+    const run = await client.runAgent({
+      goal: "Gateway report dry run",
+      contextQuery: "report",
+      dryRun: true,
+      trustMode: "approve",
+    });
+    const contract = await client.traceReportContract();
+    const report = await client.traceReport(run.traceId);
+    const markdown = await client.traceReport(run.traceId, { format: "markdown" });
+
+    assert.equal(contract.interface, "spruceagent.trace-report");
+    assert.equal(report.traceId, run.traceId);
+    assert.equal(report.format, "json");
+    assert.equal(report.summary.artifactCount > 0, true);
+    assert.equal(report.rawEvents, undefined);
+    assert.match(markdown.markdown, /# Agent Trace Report: Gateway report dry run/);
+    assert.match(markdown.markdown, /## Artifacts/);
   } finally {
     await closeServer(gateway.server);
   }
@@ -2965,6 +3003,16 @@ test("artifact contract exposes read-only execution journal boundary", () => {
   assert.ok(contract.safetyBoundary.some((item) => item.includes("read-only")));
 });
 
+test("trace report contract exposes export-only audit boundary", () => {
+  const contract = getTraceReportContract();
+
+  assert.equal(contract.interface, "spruceagent.trace-report");
+  assert.equal(contract.outputKind, "exportable_audit_report");
+  assert.ok(contract.formats.includes("markdown"));
+  assert.ok(contract.safetyBoundary.some((item) => item.includes("read-only")));
+  assert.ok(contract.safetyBoundary.some((item) => item.includes("execute tools")));
+});
+
 test("run detail contract exposes read-only trace audit boundary", () => {
   const contract = getRunDetailContract();
 
@@ -3157,6 +3205,98 @@ test("artifacts reconstruct an agent execution journal", async () => {
   assert.equal(detail.payload.output.path, "artifact.txt");
   assert.equal(runDetail.summary.artifactCount, artifacts.summary.total);
   assert.equal(runDetail.artifacts.some((item) => item.id === toolArtifact.id), true);
+});
+
+test("trace report composes source map decisions artifacts and markdown", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, "README.md"), "Trace report context.", "utf8");
+  buildWorkspaceIndex(store);
+  const provider = {
+    id: "report-test",
+    model: "report-test-v0",
+    async draftPlan() {
+      return {
+        planDraft: {
+          proposedSteps: [
+            {
+              id: "write_report_artifact",
+              kind: "tool",
+              description: "Write a report artifact note.",
+              toolName: "file.write",
+              input: {
+                path: "report-artifact.txt",
+                content: "trace report artifact",
+              },
+            },
+          ],
+        },
+      };
+    },
+  };
+
+  const run = await runAgent(store, {
+    goal: "Create trace report",
+    contextQuery: "report",
+    llmProvider: provider,
+    promotePlan: true,
+    requestCandidateApprovals: true,
+  });
+  approveTicket(store, run.candidateApprovals.results[0].approval.id);
+  await resumeAgentRun(store, { traceId: run.traceId });
+  evaluateTrace(store, run.traceId);
+
+  const report = getTraceReport(store, run.traceId);
+  const rawReport = getTraceReport(store, run.traceId, { includeRaw: true });
+  const markdown = getTraceReport(store, run.traceId, { format: "markdown" });
+
+  assert.equal(report.interface, "spruceagent.trace-report");
+  assert.equal(report.sourceKind, "agent.run");
+  assert.equal(report.summary.goal, "Create trace report");
+  assert.equal(report.summary.sourceCount > 0, true);
+  assert.equal(report.summary.approvalCount, 1);
+  assert.equal(report.summary.artifactCount > 0, true);
+  assert.equal(report.decisions.approvals[0].status, "consumed");
+  assert.equal(report.artifacts.some((artifact) => artifact.kind === "tool_result"), true);
+  assert.equal(report.rawEvents, undefined);
+  assert.equal(rawReport.rawEvents.length > 0, true);
+  assert.equal(markdown.format, "markdown");
+  assert.match(markdown.markdown, /# Agent Trace Report: Create trace report/);
+  assert.match(markdown.markdown, /## Safety Boundary/);
+});
+
+test("trace report supports workflow run traces", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, "README.md"), "Workflow report context.", "utf8");
+  buildWorkspaceIndex(store);
+  const workflow = createWorkflow(store, {
+    name: "Workflow Report",
+    steps: [
+      {
+        kind: "context",
+        query: "workflow report",
+      },
+      {
+        kind: "memory",
+        content: "workflow report complete",
+        tags: ["workflow-report"],
+      },
+    ],
+  });
+  const run = await runWorkflow(store, workflow.id, {
+    trustMode: "approve",
+  });
+
+  const report = getTraceReport(store, run.traceId);
+  const markdown = getTraceReport(store, run.traceId, { format: "markdown" });
+
+  assert.equal(report.sourceKind, "workflow.run");
+  assert.equal(report.summary.workflowId, workflow.id);
+  assert.equal(report.summary.operationStepCount, 2);
+  assert.equal(report.summary.artifactCount > 0, true);
+  assert.equal(report.subject.workflow.name, "Workflow Report");
+  assert.match(markdown.markdown, /# Workflow Trace Report: Workflow Report/);
 });
 
 test("run inbox tracks pending approvals, resumable runs, and recent runs", async () => {

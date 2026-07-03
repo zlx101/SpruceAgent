@@ -30,6 +30,7 @@ const REQUIRED_PATHS = [
   "docs/run-risk-preflight-v0.md",
   "docs/approval-queue-v0.md",
   "docs/run-artifact-store-v0.md",
+  "docs/trace-report-export-v0.md",
   "docs/public-showcase-v0.md",
   "docs/release-checklist.md",
 ];

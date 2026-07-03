@@ -274,6 +274,12 @@ document.addEventListener("click", async (event) => {
   await loadDetail(button.dataset.traceId);
 });
 
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action='report']");
+  if (!button) return;
+  await loadTraceReport(button.dataset.traceId);
+});
+
 render();
 if (state.token) {
   refresh();
@@ -1431,6 +1437,18 @@ async function loadArtifact(artifactId) {
   }
 }
 
+async function loadTraceReport(traceId) {
+  if (!traceId) return;
+  setStatus("Exporting trace report");
+  try {
+    const report = await get(`/v1/reports/traces/${encodeURIComponent(traceId)}?format=markdown`);
+    downloadText(`${traceId}-trace-report.md`, report.markdown);
+    setStatus(`Exported report - ${shortId(traceId)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 function renderDetail(detail) {
   nodes.detailPanel.replaceChildren();
   if (!detail) {
@@ -1503,6 +1521,7 @@ function renderWorkflowSummary(detail) {
   main.append(title, meta, grid);
   const actions = document.createElement("div");
   actions.className = "item-actions";
+  actions.appendChild(reportButton(detail.traceId));
   if (detail.summary.resumableStepCount > 0) {
     actions.appendChild(workflowResumeButton(detail.traceId));
   }
@@ -1581,6 +1600,7 @@ function renderDetailSummary(detail) {
   main.append(title, meta, grid);
   const actions = document.createElement("div");
   actions.className = "item-actions";
+  actions.appendChild(reportButton(detail.traceId));
   if (detail.summary.pendingApprovalCount === 0 && detail.approvals.some((approval) => approval.status === "approved")) {
     actions.appendChild(resumeButton(detail.traceId, "", ""));
   }
@@ -1831,6 +1851,16 @@ function artifactRunDetailButton(item) {
   return button;
 }
 
+function reportButton(traceId) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "report";
+  button.dataset.traceId = traceId;
+  button.innerHTML = '<span aria-hidden="true">&#8681;</span><span>Report</span>';
+  return button;
+}
+
 function libraryButton(action, id, iconHtml, label) {
   const button = document.createElement("button");
   button.className = "item-action secondary";
@@ -1905,4 +1935,16 @@ function titleCase(value) {
   return String(value || "")
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function downloadText(filename, content) {
+  const blob = new Blob([content || ""], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }

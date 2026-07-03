@@ -37,6 +37,8 @@ export function createGatewayClient(options = {}) {
     artifacts: (input = {}) => request("GET", `/v1/artifacts${artifactParams(input)}`),
     artifact: (artifactId) => request("GET", `/v1/artifacts/${encodePathPart(artifactId)}`),
     artifactContract: () => request("GET", "/v1/artifacts/contract"),
+    traceReport: (traceId, input = {}) => request("GET", `/v1/reports/traces/${encodePathPart(traceId)}${traceReportParams(input)}`),
+    traceReportContract: () => request("GET", "/v1/reports/contract"),
     contract: () => request("GET", "/v1/contract"),
     llmContract: () => request("GET", "/v1/llm/contract"),
     workflowBuilderContract: () => request("GET", "/v1/workflow-builder/contract"),
@@ -127,6 +129,14 @@ function artifactParams(input = {}) {
   if (input.kind) params.set("kind", input.kind);
   if (input.sourceKind) params.set("sourceKind", input.sourceKind);
   if (input.status) params.set("status", input.status);
+  const value = params.toString();
+  return value ? `?${value}` : "";
+}
+
+function traceReportParams(input = {}) {
+  const params = new URLSearchParams();
+  if (input.format) params.set("format", input.format);
+  if (input.includeRaw) params.set("includeRaw", "true");
   const value = params.toString();
   return value ? `?${value}` : "";
 }

@@ -44,6 +44,7 @@ import { getCandidateExecutionContract } from "./candidate-executor.js";
 import { getRunContinuationContract, resumeAgentRun } from "./agent-continuation.js";
 import { getRunDetail, getRunDetailContract } from "./run-detail.js";
 import { getRunInbox, getRunInboxContract } from "./run-inbox.js";
+import { getTraceReport, getTraceReportContract } from "./trace-report.js";
 import { getLlmAdapterContract } from "./llm.js";
 import { runAgent } from "./agent-runner.js";
 import { assessRunRisk, runPreflight } from "./preflight.js";
@@ -173,6 +174,20 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/artifacts/contract",
       authRequired: true,
       description: "Read the Artifacts contract.",
+    },
+    {
+      id: "trace_reports.get",
+      method: "GET",
+      path: "/v1/reports/traces/:traceId",
+      authRequired: true,
+      description: "Read an exportable trace report for an agent or workflow run.",
+    },
+    {
+      id: "trace_reports.contract",
+      method: "GET",
+      path: "/v1/reports/contract",
+      authRequired: true,
+      description: "Read the Trace Report contract.",
     },
     {
       id: "tools.list",
@@ -800,6 +815,17 @@ async function routeRequest(store, request, url, body) {
 
   if (request.method === "GET" && pathParts[1] === "artifacts" && pathParts[2]) {
     return ok(getArtifact(store, pathParts[2]));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/reports/contract") {
+    return ok(getTraceReportContract());
+  }
+
+  if (request.method === "GET" && pathParts[1] === "reports" && pathParts[2] === "traces" && pathParts[3]) {
+    return ok(getTraceReport(store, pathParts[3], {
+      format: url.searchParams.get("format") ?? "json",
+      includeRaw: url.searchParams.get("includeRaw") === "true",
+    }));
   }
 
   if (request.method === "GET" && url.pathname === "/v1/contract") {
