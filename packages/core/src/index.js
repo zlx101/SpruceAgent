@@ -107,6 +107,12 @@ export {
   renderTraceReportMarkdown,
 } from "./trace-report.js";
 export {
+  getAgentLaunch,
+  getAgentLauncherContract,
+  launchAgentWorkspace,
+  listAgentLaunches,
+} from "./agent-launcher.js";
+export {
   getAgentWorkspace,
   getAgentWorkspaceContract,
   listAgentWorkspaces,

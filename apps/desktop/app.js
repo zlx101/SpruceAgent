@@ -10,6 +10,8 @@ const state = {
   agentPlan: null,
   agentWorkspaces: null,
   agentWorkspaceDetail: null,
+  agentLaunches: null,
+  agentLaunchDetail: null,
   workflows: [],
   workflowVersions: null,
   workflowDraft: null,
@@ -76,6 +78,7 @@ const nodes = {
   artifactCount: document.querySelector("#artifact-count"),
   agentAdapterCount: document.querySelector("#agent-adapter-count"),
   agentWorkspaceCount: document.querySelector("#agent-workspace-count"),
+  agentLaunchCount: document.querySelector("#agent-launch-count"),
   decisionQueueState: document.querySelector("#decision-queue-state"),
   approvalState: document.querySelector("#approval-state"),
   resumeState: document.querySelector("#resume-state"),
@@ -83,6 +86,7 @@ const nodes = {
   artifactState: document.querySelector("#artifact-state"),
   agentAdapterState: document.querySelector("#agent-adapter-state"),
   agentWorkspaceState: document.querySelector("#agent-workspace-state"),
+  agentLaunchState: document.querySelector("#agent-launch-state"),
   decisionQueueList: document.querySelector("#decision-queue-list"),
   pendingList: document.querySelector("#pending-list"),
   skillList: document.querySelector("#skill-list"),
@@ -95,6 +99,8 @@ const nodes = {
   agentPlanPanel: document.querySelector("#agent-plan-panel"),
   agentWorkspaceList: document.querySelector("#agent-workspace-list"),
   agentWorkspacePanel: document.querySelector("#agent-workspace-panel"),
+  agentLaunchList: document.querySelector("#agent-launch-list"),
+  agentLaunchPanel: document.querySelector("#agent-launch-panel"),
   workflowList: document.querySelector("#workflow-list"),
   workflowVersionList: document.querySelector("#workflow-version-list"),
   workflowRunList: document.querySelector("#workflow-run-list"),
@@ -197,9 +203,20 @@ nodes.agentAdapterList.addEventListener("click", async (event) => {
 });
 
 nodes.agentWorkspaceList.addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-action='agent-workspace-view']");
+  const button = event.target.closest("[data-action]");
   if (!button) return;
-  await loadAgentWorkspace(button.dataset.workspaceId);
+  if (button.dataset.action === "agent-workspace-view") {
+    await loadAgentWorkspace(button.dataset.workspaceId);
+  }
+  if (button.dataset.action === "agent-launch-preview") {
+    await previewAgentLaunch(button.dataset.workspaceId);
+  }
+});
+
+nodes.agentLaunchList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action='agent-launch-view']");
+  if (!button) return;
+  await loadAgentLaunch(button.dataset.launchId);
 });
 
 nodes.workflowList.addEventListener("click", async (event) => {
@@ -319,7 +336,7 @@ async function refresh() {
   state.busy = true;
   setStatus("Loading");
   try {
-    const [inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces] = await Promise.all([
+    const [inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches] = await Promise.all([
       get("/v1/inbox"),
       get("/v1/skills?status=approved"),
       get("/v1/skills?status=candidates"),
@@ -330,6 +347,7 @@ async function refresh() {
       get("/v1/artifacts?limit=20"),
       get("/v1/agent-adapters"),
       get("/v1/agent-workspaces"),
+      get("/v1/agent-launches"),
     ]);
     state.inbox = inbox;
     state.skills = skills;
@@ -341,6 +359,7 @@ async function refresh() {
     state.artifacts = artifacts;
     state.agentAdapters = agentAdapters;
     state.agentWorkspaces = agentWorkspaces;
+    state.agentLaunches = agentLaunches;
     render();
     setStatus(`Connected - ${state.approvalQueue.status.replace(/_/g, " ")}`);
   } catch (error) {
@@ -963,6 +982,16 @@ function render() {
     },
     items: [],
   };
+  const agentLaunches = state.agentLaunches || {
+    summary: {
+      total: 0,
+      byStatus: {},
+      byAdapter: {},
+      completedCount: 0,
+      requiresApprovalCount: 0,
+    },
+    items: [],
+  };
 
   nodes.pendingCount.textContent = inbox.summary.pendingApprovalCount;
   nodes.decisionCount.textContent = approvalQueue.summary.pendingDecisionCount + approvalQueue.summary.readyToResumeCount;
@@ -971,6 +1000,7 @@ function render() {
   nodes.artifactCount.textContent = artifacts.summary.total;
   nodes.agentAdapterCount.textContent = agentAdapters.summary.total;
   nodes.agentWorkspaceCount.textContent = agentWorkspaces.summary.total;
+  nodes.agentLaunchCount.textContent = agentLaunches.summary.total;
   nodes.skillState.textContent = `${skills.length}`;
   nodes.candidateSkillState.textContent = `${candidateSkills.length} candidates`;
   nodes.skillEvaluationState.textContent = `${skillEvaluations.length} reports`;
@@ -983,6 +1013,7 @@ function render() {
   nodes.artifactState.textContent = `${artifacts.summary.total} artifacts / ${artifacts.summary.traceCount} traces`;
   nodes.agentAdapterState.textContent = `${agentAdapters.summary.total} planned`;
   nodes.agentWorkspaceState.textContent = `${agentWorkspaces.summary.total} prepared / ${agentWorkspaces.summary.gitWorktreeCount} worktrees`;
+  nodes.agentLaunchState.textContent = `${agentLaunches.summary.total} launches / ${agentLaunches.summary.requiresApprovalCount} approvals`;
 
   renderSkills(skills);
   renderCandidateSkills(candidateSkills);
@@ -992,6 +1023,8 @@ function render() {
   renderAgentPlanPanel(state.agentPlan);
   renderAgentWorkspaces(agentWorkspaces.items);
   renderAgentWorkspacePanel(state.agentWorkspaceDetail);
+  renderAgentLaunches(agentLaunches.items);
+  renderAgentLaunchPanel(state.agentLaunchDetail);
   renderWorkflowSkillOptions(skills);
   renderWorkflowDraft(state.workflowDraft);
   renderWorkflows(workflows);
@@ -1151,6 +1184,7 @@ function renderAgentWorkspaces(items) {
     ],
     actions: [
       agentWorkspaceViewButton(item.id),
+      agentLaunchPreviewButton(item.id),
     ],
   }));
 }
@@ -1173,6 +1207,47 @@ function renderAgentWorkspacePanel(workspace) {
     reviewGate: workspace.reviewGate,
     notes: workspace.notes,
     limits: workspace.limits,
+  }, null, 2);
+}
+
+function renderAgentLaunches(items) {
+  replaceList(nodes.agentLaunchList, items, (item) => itemNode({
+    title: item.goal || item.id,
+    meta: [
+      [statusClass(item.status), item.status],
+      ["mode", item.executionMode],
+      ["adapter", item.adapter?.id || "-"],
+      ["workspace", shortId(item.workspaceId)],
+      ["created", formatTime(item.createdAt)],
+    ],
+    actions: [
+      agentLaunchViewButton(item.id),
+    ],
+  }));
+}
+
+function renderAgentLaunchPanel(launch) {
+  if (!launch) {
+    nodes.agentLaunchPanel.textContent = "{}";
+    return;
+  }
+  nodes.agentLaunchPanel.textContent = JSON.stringify({
+    id: launch.id,
+    status: launch.status,
+    executionMode: launch.executionMode,
+    traceId: launch.traceId,
+    workspaceId: launch.workspaceId,
+    adapter: launch.adapter,
+    goal: launch.goal,
+    command: launch.command,
+    exitCode: launch.exitCode,
+    policyDecision: launch.policyDecision,
+    approval: launch.approval,
+    terminalLog: launch.terminalLog,
+    git: launch.git,
+    reviewGate: launch.reviewGate,
+    notes: launch.notes,
+    limits: launch.limits,
   }, null, 2);
 }
 
@@ -1636,6 +1711,34 @@ async function loadAgentWorkspace(workspaceId) {
   }
 }
 
+async function previewAgentLaunch(workspaceId) {
+  if (!workspaceId) return;
+  setStatus("Creating agent launch preview");
+  try {
+    state.agentLaunchDetail = await post("/v1/agent-launches", {
+      workspaceId,
+      execute: false,
+    });
+    state.agentLaunches = await get("/v1/agent-launches");
+    render();
+    setStatus(`Created launch preview - ${shortId(state.agentLaunchDetail.id)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+async function loadAgentLaunch(launchId) {
+  if (!launchId) return;
+  setStatus("Loading agent launch");
+  try {
+    state.agentLaunchDetail = await get(`/v1/agent-launches/${encodeURIComponent(launchId)}`);
+    renderAgentLaunchPanel(state.agentLaunchDetail);
+    setStatus(`Loaded launch - ${shortId(launchId)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 function renderDetail(detail) {
   nodes.detailPanel.replaceChildren();
   if (!detail) {
@@ -2074,6 +2177,26 @@ function agentWorkspaceViewButton(workspaceId) {
   button.type = "button";
   button.dataset.action = "agent-workspace-view";
   button.dataset.workspaceId = workspaceId;
+  button.innerHTML = '<span aria-hidden="true">&#128065;</span><span>View</span>';
+  return button;
+}
+
+function agentLaunchPreviewButton(workspaceId) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "agent-launch-preview";
+  button.dataset.workspaceId = workspaceId;
+  button.innerHTML = '<span aria-hidden="true">&#9655;</span><span>Preview</span>';
+  return button;
+}
+
+function agentLaunchViewButton(launchId) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "agent-launch-view";
+  button.dataset.launchId = launchId;
   button.innerHTML = '<span aria-hidden="true">&#128065;</span><span>View</span>';
   return button;
 }

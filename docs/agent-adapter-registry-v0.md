@@ -70,6 +70,10 @@ GET  /v1/agent-workspaces
 GET  /v1/agent-workspaces/:workspaceId
 POST /v1/agent-workspaces
 GET  /v1/agent-workspaces/contract
+GET  /v1/agent-launches
+GET  /v1/agent-launches/:launchId
+POST /v1/agent-launches
+GET  /v1/agent-launches/contract
 ```
 
 ## Workbench
@@ -88,6 +92,8 @@ The `Plan` action uses the current Launch Run goal and context query to preview:
 
 The `Prepare` action creates an isolated Agent Workspace record and, for coding CLI adapters, a git worktree under `.spruceagent/worktrees`.
 
+The `Launch Preview` action creates an Agent Launcher record without executing external CLI agents.
+
 ## Safety Boundary
 
 Adapter Registry v0 is intentionally conservative:
@@ -99,6 +105,8 @@ Adapter Registry v0 is intentionally conservative:
 - it only returns adapter specs and execution plan previews
 
 Agent Workspace v0 is the separate, explicit step that may create a local git worktree. It still does not execute external CLI agents, commit, push, merge, or approve changes.
+
+Agent Launcher v0 is the separate, explicit step after workspace preparation. It keeps external coding CLI adapters preview-only and executes only `local-shell-agent` commands after TrustKernel policy checks.
 
 Future execution must go through TrustKernel, isolated workspaces, artifact capture, diff review, and Trace Report export.
 

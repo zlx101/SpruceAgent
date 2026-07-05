@@ -70,14 +70,14 @@ Agent Workspace v0 is deliberately conservative:
 - it only creates local worktrees under `.spruceagent/worktrees`
 - it records enough metadata for later Trace Report and review gates
 
-External agent execution remains a future step and must go through TrustKernel, artifact capture, diff review, and explicit human approval.
+External coding agent execution remains disabled in v0. Agent Launcher v0 is the next gated layer: it can create launch previews and execute only `local-shell-agent` commands through TrustKernel approval checks.
 
 ## Why It Matters
 
 SuperAgent needs parallelism, but useful parallelism starts with isolation.
 
 ```text
-Goal -> Adapter Plan -> Isolated Workspace -> Future Agent Execution -> Diff -> Artifact -> Trace Report -> Review
+Goal -> Adapter Plan -> Isolated Workspace -> Gated Launch -> Diff -> Artifact -> Trace Report -> Review
 ```
 
 This turns adapter plans into a real fleet substrate without compromising safety.

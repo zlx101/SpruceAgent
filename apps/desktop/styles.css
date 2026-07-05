@@ -209,7 +209,7 @@ h2 {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -552,7 +552,8 @@ button:disabled {
 }
 
 .agent-plan-preview,
-.agent-workspace-preview {
+.agent-workspace-preview,
+.agent-launch-preview {
   margin-top: 12px;
 }
 

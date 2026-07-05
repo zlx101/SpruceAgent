@@ -12,6 +12,7 @@ export const ARTIFACT_CONTRACT = Object.freeze({
     "tool_result",
     "approval_decision",
     "continuation_result",
+    "agent_launch",
     "evaluation_report",
     "memory_write",
   ],
@@ -109,6 +110,10 @@ function traceArtifacts(store, trace, events, approvals, evaluations) {
 
   for (const event of events.filter((item) => item.type === "agent.resume.completed" || item.type === "workflow.resume.completed")) {
     artifacts.push(continuationArtifact(trace, event, sourceKind));
+  }
+
+  for (const event of events.filter((item) => item.type === "agent.launch.completed" || item.type === "agent.launch.blocked" || item.type === "agent.launch.planned" || item.type === "agent.launch.requires_approval")) {
+    artifacts.push(agentLaunchArtifact(trace, event, sourceKind));
   }
 
   for (const ticket of approvals) {
@@ -232,6 +237,36 @@ function continuationArtifact(trace, event, sourceKind) {
       resultCount: payload.resultCount ?? payload.results?.length ?? 0,
       status: payload.status ?? null,
       results: summarizeResultStatuses(payload.results ?? []),
+    },
+    payload,
+  };
+}
+
+function agentLaunchArtifact(trace, event, sourceKind) {
+  const payload = event.payload ?? {};
+  return {
+    id: `artifact_${trace.id}_agent_launch_${event.id}`,
+    kind: "agent_launch",
+    sourceKind,
+    traceId: trace.id,
+    title: `Agent launch: ${payload.status ?? "unknown"}`,
+    status: payload.status ?? "unknown",
+    createdAt: event.createdAt,
+    updatedAt: event.createdAt,
+    route: payload.id ? `/v1/agent-launches/${payload.id}` : detailRoute(sourceKind, trace.id),
+    refs: {
+      traceId: trace.id,
+      eventId: event.id,
+      launchId: payload.id ?? null,
+      workspaceId: payload.workspaceId ?? null,
+      terminalLogPath: payload.terminalLog?.path ?? null,
+    },
+    summary: {
+      executionMode: payload.executionMode ?? null,
+      adapterId: payload.adapter?.id ?? null,
+      exitCode: payload.exitCode ?? null,
+      changed: payload.git?.changed ?? false,
+      terminalLogPath: payload.terminalLog?.path ?? null,
     },
     payload,
   };

@@ -36,6 +36,7 @@ The first screen is backed by `GET /v1/inbox` and renders:
 - agent adapters
 - agent adapter run plan previews
 - agent workspace preparation records
+- agent launch previews and records
 - workflow versions
 - workflow runs
 - decision queue
@@ -86,6 +87,8 @@ Workbench v0 supports:
 - preview isolated adapter run plans through `POST /v1/agent-adapters/:adapterId/plan`
 - prepare isolated agent workspaces through `POST /v1/agent-workspaces`
 - inspect prepared agent workspaces through `GET /v1/agent-workspaces/:workspaceId`
+- create agent launch previews through `POST /v1/agent-launches`
+- inspect agent launch records through `GET /v1/agent-launches/:launchId`
 
 ## Safety Boundary
 
@@ -114,6 +117,8 @@ Workbench v0 does not bypass TrustKernel.
 - report export calls are read-only and compose existing trace evidence
 - agent adapter plan calls do not execute external CLIs or create worktrees
 - agent workspace prepare calls may create local git worktrees under `.spruceagent/worktrees`, but do not execute external CLIs, commit, push, merge, or approve changes
+- agent launch preview calls do not execute commands from the browser UI
+- Agent Launcher v0 external coding CLI execution remains disabled; only explicit `local-shell-agent` execution through CLI or Gateway payloads can run after TrustKernel policy checks
 - tool execution still flows through TrustKernel
 
 ## Files
@@ -130,7 +135,7 @@ Run Inbox v0 made the product state visible. Workbench v0 makes it actionable an
 This is the first real operating surface for SpruceAgent:
 
 ```text
-Draft Workflow -> Review Steps -> Save Workflow -> Version / Archive / Restore -> Evaluate Skill -> Plan Agent Adapter -> Prepare Workspace -> Launch / Skill / Workflow -> Inspect -> Approve / Reject -> Resume -> Artifact -> Report -> Audit
+Draft Workflow -> Review Steps -> Save Workflow -> Version / Archive / Restore -> Evaluate Skill -> Plan Agent Adapter -> Prepare Workspace -> Launch Preview -> Launch / Skill / Workflow -> Inspect -> Approve / Reject -> Resume -> Artifact -> Report -> Audit
 ```
 
 It is still local-first, conservative, and auditable.

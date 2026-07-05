@@ -47,6 +47,10 @@ export function createGatewayClient(options = {}) {
     getAgentWorkspace: (workspaceId) => request("GET", `/v1/agent-workspaces/${encodePathPart(workspaceId)}`),
     agentWorkspaceContract: () => request("GET", "/v1/agent-workspaces/contract"),
     prepareAgentWorkspace: (input = {}) => request("POST", "/v1/agent-workspaces", input),
+    listAgentLaunches: (input = {}) => request("GET", `/v1/agent-launches${agentLaunchParams(input)}`),
+    getAgentLaunch: (launchId) => request("GET", `/v1/agent-launches/${encodePathPart(launchId)}`),
+    agentLauncherContract: () => request("GET", "/v1/agent-launches/contract"),
+    launchAgentWorkspace: (input = {}) => request("POST", "/v1/agent-launches", input),
     contract: () => request("GET", "/v1/contract"),
     llmContract: () => request("GET", "/v1/llm/contract"),
     workflowBuilderContract: () => request("GET", "/v1/workflow-builder/contract"),
@@ -160,6 +164,15 @@ function agentAdapterParams(input = {}) {
 function agentWorkspaceParams(input = {}) {
   const params = new URLSearchParams();
   if (input.status) params.set("status", input.status);
+  if (input.adapterId) params.set("adapterId", input.adapterId);
+  const value = params.toString();
+  return value ? `?${value}` : "";
+}
+
+function agentLaunchParams(input = {}) {
+  const params = new URLSearchParams();
+  if (input.status) params.set("status", input.status);
+  if (input.workspaceId) params.set("workspaceId", input.workspaceId);
   if (input.adapterId) params.set("adapterId", input.adapterId);
   const value = params.toString();
   return value ? `?${value}` : "";

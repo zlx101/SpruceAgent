@@ -40,6 +40,8 @@ import {
   getArtifactContract,
   getAgentAdapter,
   getAgentAdapterContract,
+  getAgentLaunch,
+  getAgentLauncherContract,
   getAgentWorkspace,
   getAgentWorkspaceContract,
   getLlmAdapterContract,
@@ -71,6 +73,7 @@ import {
   getWorkflow,
   listApprovalTickets,
   listAgentAdapters,
+  listAgentLaunches,
   listAgentWorkspaces,
   listArtifacts,
   listEvaluations,
@@ -89,6 +92,7 @@ import {
   proposeSkill,
   promoteSkillCandidate,
   prepareAgentWorkspace,
+  launchAgentWorkspace,
   importSkillPackage,
   readSkillPackageFile,
   requestCandidateApprovals,
@@ -160,6 +164,7 @@ async function main() {
       workflowCount: listWorkflows(store).length,
       agentAdapterCount: listAgentAdapters().summary.total,
       agentWorkspaceCount: listAgentWorkspaces(store).summary.total,
+      agentLaunchCount: listAgentLaunches(store).summary.total,
       artifactCount: listArtifacts(store).summary.total,
       evaluationCount: listEvaluations(store).length,
       skillEvaluationCount: listSkillEvaluations(store).length,
@@ -270,7 +275,7 @@ async function main() {
   }
 
   if (command === "agent" || command === "agents") {
-    handleAgent(subcommand, rest);
+    await handleAgent(subcommand, rest);
     return;
   }
 
@@ -1201,7 +1206,7 @@ async function handleCandidate(action, args = []) {
   throw new Error("usage: spruce candidate <contract|approval-contract|continuation-contract|request-approvals|execute-approved>");
 }
 
-function handleAgent(action, args = []) {
+async function handleAgent(action, args = []) {
   if (!action || action === "adapters" || action === "adapter-list" || action === "list") {
     const flags = parseFlags(args);
     printJson(listAgentAdapters({
@@ -1272,12 +1277,51 @@ function handleAgent(action, args = []) {
     return;
   }
 
+  if (action === "launch") {
+    const [workspaceId, ...flagArgs] = args;
+    if (!workspaceId) throw new Error("usage: spruce agent launch <workspaceId> [--execute] [--command <command>] [--approvalId <approvalId>]");
+    const flags = parseFlags(flagArgs);
+    printJson(await launchAgentWorkspace(store, {
+      workspaceId,
+      command: flags.command,
+      execute: Boolean(flags.execute),
+      trustMode: flags.trustMode ?? "approve",
+      approvalId: flags.approvalId,
+      timeoutMs: flags.timeoutMs,
+      actor: flags.actor ?? "local-user",
+      channel: "cli",
+    }));
+    return;
+  }
+
+  if (action === "launches" || action === "launch-list") {
+    const flags = parseFlags(args);
+    printJson(listAgentLaunches(store, {
+      status: flags.status,
+      workspaceId: flags.workspaceId,
+      adapterId: flags.adapterId,
+    }));
+    return;
+  }
+
+  if (action === "launch-detail") {
+    const [launchId] = args;
+    if (!launchId) throw new Error("usage: spruce agent launch-detail <launchId>");
+    printJson(getAgentLaunch(store, launchId));
+    return;
+  }
+
+  if (action === "launcher-contract") {
+    printJson(getAgentLauncherContract());
+    return;
+  }
+
   if (action === "contract" || action === "adapter-contract") {
     printJson(getAgentAdapterContract());
     return;
   }
 
-  throw new Error("usage: spruce agent <adapters|adapter|plan|prepare|workspaces|workspace|contract|workspace-contract>");
+  throw new Error("usage: spruce agent <adapters|adapter|plan|prepare|workspaces|workspace|launch|launches|launch-detail|contract|workspace-contract|launcher-contract>");
 }
 
 function parseFlags(args) {
@@ -1518,8 +1562,13 @@ Usage:
   ${executable} agent prepare <adapterId> --goal "Implement task" [--context "query"]
   ${executable} agent workspaces [--adapterId codex-cli]
   ${executable} agent workspace <workspaceId>
+  ${executable} agent launch <workspaceId>
+  ${executable} agent launch <workspaceId> --execute --command "node -v" [--approvalId <approvalId>]
+  ${executable} agent launches [--workspaceId <workspaceId>]
+  ${executable} agent launch-detail <launchId>
   ${executable} agent contract
   ${executable} agent workspace-contract
+  ${executable} agent launcher-contract
   ${executable} gateway token
   ${executable} gateway token --rotate
   ${executable} gateway contract

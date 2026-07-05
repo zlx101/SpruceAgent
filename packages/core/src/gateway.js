@@ -15,6 +15,12 @@ import {
   listAgentWorkspaces,
   prepareAgentWorkspace,
 } from "./agent-workspaces.js";
+import {
+  getAgentLaunch,
+  getAgentLauncherContract,
+  launchAgentWorkspace,
+  listAgentLaunches,
+} from "./agent-launcher.js";
 import { approveTicket, getApprovalTicket, listApprovalTickets, rejectTicket } from "./approvals.js";
 import { getApprovalQueue, getApprovalQueueContract } from "./approval-queue.js";
 import { getArtifact, getArtifactContract, listArtifacts } from "./artifacts.js";
@@ -256,6 +262,34 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/agent-workspaces/contract",
       authRequired: true,
       description: "Read the Agent Workspace contract.",
+    },
+    {
+      id: "agent_launches.list",
+      method: "GET",
+      path: "/v1/agent-launches",
+      authRequired: true,
+      description: "List gated Agent Launcher records.",
+    },
+    {
+      id: "agent_launches.get",
+      method: "GET",
+      path: "/v1/agent-launches/:launchId",
+      authRequired: true,
+      description: "Read one gated Agent Launcher record.",
+    },
+    {
+      id: "agent_launches.create",
+      method: "POST",
+      path: "/v1/agent-launches",
+      authRequired: true,
+      description: "Plan or execute a gated Agent Workspace launch.",
+    },
+    {
+      id: "agent_launches.contract",
+      method: "GET",
+      path: "/v1/agent-launches/contract",
+      authRequired: true,
+      description: "Read the Agent Launcher contract.",
     },
     {
       id: "tools.list",
@@ -937,6 +971,30 @@ async function routeRequest(store, request, url, body) {
     return ok(prepareAgentWorkspace(store, body));
   }
 
+  if (request.method === "GET" && url.pathname === "/v1/agent-launches") {
+    return ok(listAgentLaunches(store, {
+      status: url.searchParams.get("status") ?? undefined,
+      workspaceId: url.searchParams.get("workspaceId") ?? undefined,
+      adapterId: url.searchParams.get("adapterId") ?? undefined,
+    }));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/agent-launches/contract") {
+    return ok(getAgentLauncherContract());
+  }
+
+  if (request.method === "GET" && pathParts[1] === "agent-launches" && pathParts[2]) {
+    return ok(getAgentLaunch(store, pathParts[2]));
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/agent-launches") {
+    return ok(await launchAgentWorkspace(store, {
+      ...body,
+      actor: body.actor ?? "gateway-user",
+      channel: "gateway",
+    }));
+  }
+
   if (request.method === "GET" && url.pathname === "/v1/contract") {
     return ok(getGatewayRouteContract());
   }
@@ -1417,6 +1475,7 @@ function gatewayStatus(store) {
     workflowCount: listWorkflows(store).length,
     agentAdapterCount: listAgentAdapters().summary.total,
     agentWorkspaceCount: listAgentWorkspaces(store).summary.total,
+    agentLaunchCount: listAgentLaunches(store).summary.total,
     artifactCount: listArtifacts(store).summary.total,
     evaluationCount: listEvaluations(store).length,
     skillEvaluationCount: listSkillEvaluations(store).length,

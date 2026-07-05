@@ -4,7 +4,7 @@ Run Artifact Store v0 gives SpruceAgent a read-only execution journal for agent 
 
 ## What It Does
 
-- Reconstructs run artifacts from local traces, approval tickets, evaluations, and memory references.
+- Reconstructs run artifacts from local traces, approval tickets, evaluations, agent launches, and memory references.
 - Lists artifacts across agent runs and workflow runs.
 - Reads artifact detail by stable artifact id.
 - Adds artifact references to Run Detail and Workflow Detail.
@@ -16,6 +16,7 @@ Run Artifact Store v0 gives SpruceAgent a read-only execution journal for agent 
 - `tool_result`: tool execution result captured in trace events.
 - `approval_decision`: approval ticket lifecycle record.
 - `continuation_result`: resume attempt result.
+- `agent_launch`: gated Agent Launcher record with terminal log and diff summary references.
 - `evaluation_report`: trace evaluation report.
 - `memory_write`: memory record created by a run or workflow step.
 
@@ -50,7 +51,7 @@ Artifact list items stay lightweight. Artifact detail can expose existing local 
 SpruceAgent needs durable task understanding, not just live execution state. Run Artifact Store v0 turns each run into a reviewable execution journal:
 
 ```text
-Run / Workflow -> Tool Results -> Approvals -> Resume Results -> Evaluations -> Memory Writes -> Artifacts
+Run / Workflow / Launch -> Tool Results -> Approvals -> Resume Results -> Evaluations -> Memory Writes -> Artifacts
 ```
 
 This becomes the base layer for later team handoff, reproducible task reports, artifact search, and publishable run evidence.

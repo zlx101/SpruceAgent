@@ -1,0 +1,434 @@
+import { exec, execFileSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { promisify } from "node:util";
+import { consumeApprovalTicket, createApprovalTicket, getApprovalTicket } from "./approvals.js";
+import { getAgentWorkspace } from "./agent-workspaces.js";
+import { createId, nowIso } from "./id.js";
+import { auditPolicyDecision, evaluatePolicy } from "./policy.js";
+import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { appendTraceEvent, startTrace } from "./trace.js";
+
+const execAsync = promisify(exec);
+
+export const AGENT_LAUNCHER_CONTRACT = Object.freeze({
+  version: "0.1.0",
+  interface: "spruceagent.agent-launcher",
+  sourceKind: "isolated_agent_workspace",
+  outputKind: "gated_agent_launch_record",
+  executableAdaptersInV0: ["local-shell-agent"],
+  safetyBoundary: [
+    "Agent Launcher v0 records and gates launches from prepared Agent Workspaces.",
+    "External coding CLI adapters are preview-only in v0.",
+    "Only local-shell-agent can execute a user-supplied command in v0.",
+    "Commands flow through TrustKernel policy and approval tickets.",
+    "Git commit, push, merge, rebase, reset, and worktree mutation commands are blocked by the launcher.",
+    "Launcher records terminal logs, git status, and diff summaries, but never commits, pushes, merges, or approves changes.",
+  ],
+});
+
+const FORBIDDEN_COMMAND_PATTERNS = [
+  /\bgit\s+commit\b/i,
+  /\bgit\s+push\b/i,
+  /\bgit\s+merge\b/i,
+  /\bgit\s+rebase\b/i,
+  /\bgit\s+reset\b/i,
+  /\bgit\s+worktree\b/i,
+  /\bgh\s+pr\s+merge\b/i,
+];
+
+export function getAgentLauncherContract() {
+  return AGENT_LAUNCHER_CONTRACT;
+}
+
+export async function launchAgentWorkspace(store, input = {}) {
+  const workspace = getAgentWorkspace(store, input.workspaceId);
+  const launchId = createId("agent_launch");
+  const createdAt = nowIso();
+  const execute = input.execute === true;
+  const trace = startTrace(store, {
+    goal: `Launch ${workspace.adapter.name}: ${workspace.goal}`,
+    actor: input.actor ?? "local-user",
+    channel: input.channel ?? "agent-launcher",
+    trustMode: input.trustMode ?? "approve",
+    metadata: {
+      kind: "agent.launch",
+      launchId,
+      workspaceId: workspace.id,
+      adapterId: workspace.adapter.id,
+    },
+  });
+
+  appendTraceEvent(store, trace.id, "agent.launch.started", {
+    launchId,
+    workspaceId: workspace.id,
+    adapter: workspace.adapter,
+    execute,
+  });
+
+  if (!execute) {
+    const record = buildLaunchRecord({
+      launchId,
+      createdAt,
+      status: "planned",
+      executionMode: "preview_only",
+      workspace,
+      traceId: trace.id,
+      command: plannedCommand(workspace, input),
+      notes: [
+        "Launch was planned only.",
+        "No external command was executed.",
+      ],
+    });
+    appendTraceEvent(store, trace.id, "agent.launch.planned", recordSummary(record));
+    persistLaunch(store, record);
+    return record;
+  }
+
+  if (workspace.adapter.id !== "local-shell-agent") {
+    const record = buildLaunchRecord({
+      launchId,
+      createdAt,
+      status: "blocked",
+      executionMode: "external_cli_disabled",
+      workspace,
+      traceId: trace.id,
+      command: plannedCommand(workspace, input),
+      notes: [
+        "External CLI agent execution is disabled in v0.",
+        "Prepare workspaces and inspect launch previews until TrustKernel launcher support is promoted.",
+      ],
+    });
+    appendTraceEvent(store, trace.id, "agent.launch.blocked", recordSummary(record));
+    persistLaunch(store, record);
+    return record;
+  }
+
+  const command = String(input.command ?? "").trim();
+  if (!command) throw new Error("command is required when executing local-shell-agent");
+  assertAllowedLauncherCommand(command);
+
+  const decision = evaluatePolicy({
+    toolName: "shell.execute",
+    trustMode: input.trustMode ?? "approve",
+    input: {
+      command,
+      cwd: workspace.workspacePath,
+    },
+  });
+  auditPolicyDecision(store, decision);
+  appendTraceEvent(store, trace.id, "agent.launch.policy", {
+    launchId,
+    command,
+    decision,
+  });
+
+  if (decision.decision === "deny") {
+    const record = buildLaunchRecord({
+      launchId,
+      createdAt,
+      status: "blocked",
+      executionMode: "policy_denied",
+      workspace,
+      traceId: trace.id,
+      command,
+      policyDecision: decision,
+      notes: ["TrustKernel denied the launch command."],
+    });
+    appendTraceEvent(store, trace.id, "agent.launch.blocked", recordSummary(record));
+    persistLaunch(store, record);
+    return record;
+  }
+
+  if (decision.decision === "requires_approval" && !input.approvalId) {
+    const approval = createApprovalTicket(store, {
+      toolName: "shell.execute",
+      input: {
+        command,
+        cwd: workspace.workspacePath,
+      },
+      decision,
+      traceId: trace.id,
+      requester: input.actor ?? "local-user",
+      reason: "Agent Launcher command requires approval before execution.",
+      metadata: {
+        launchId,
+        workspaceId: workspace.id,
+      },
+    });
+    appendTraceEvent(store, trace.id, "approval.created", {
+      approvalId: approval.id,
+      launchId,
+      toolName: "shell.execute",
+      riskLevel: decision.riskLevel,
+    });
+    const record = buildLaunchRecord({
+      launchId,
+      createdAt,
+      status: "requires_approval",
+      executionMode: "approval_required",
+      workspace,
+      traceId: trace.id,
+      command,
+      policyDecision: decision,
+      approval,
+      notes: ["Approval ticket created. Re-run with approvalId after approval."],
+    });
+    appendTraceEvent(store, trace.id, "agent.launch.requires_approval", recordSummary(record));
+    persistLaunch(store, record);
+    return record;
+  }
+
+  if (input.approvalId) {
+    const ticket = getApprovalTicket(store, input.approvalId);
+    assertApprovalMatchesLaunch(ticket, command, workspace.workspacePath);
+    consumeApprovalTicket(store, input.approvalId);
+  }
+
+  const startedAt = nowIso();
+  const beforeGit = readGitSnapshot(workspace.workspacePath);
+  const execution = await runCommand(command, workspace.workspacePath, input);
+  const afterGit = readGitSnapshot(workspace.workspacePath);
+  const terminalLog = writeTerminalLog(store, launchId, {
+    command,
+    cwd: workspace.workspacePath,
+    startedAt,
+    finishedAt: execution.finishedAt,
+    stdout: execution.stdout,
+    stderr: execution.stderr,
+    exitCode: execution.exitCode,
+  });
+  const record = buildLaunchRecord({
+    launchId,
+    createdAt,
+    status: execution.exitCode === 0 ? "completed" : "failed",
+    executionMode: "local_shell",
+    workspace,
+    traceId: trace.id,
+    command,
+    policyDecision: decision,
+    startedAt,
+    finishedAt: execution.finishedAt,
+    exitCode: execution.exitCode,
+    terminalLog,
+    git: {
+      before: beforeGit,
+      after: afterGit,
+      changed: afterGit.status.length > 0,
+    },
+    notes: [
+      "Executed local-shell-agent command through Agent Launcher v0.",
+      "Review required before any merge or promotion.",
+    ],
+  });
+  appendTraceEvent(store, trace.id, "agent.launch.completed", recordSummary(record));
+  persistLaunch(store, record);
+  return record;
+}
+
+export function listAgentLaunches(store, options = {}) {
+  const items = readJsonl(launchIndexPath(store))
+    .filter((item) => !options.status || item.status === options.status)
+    .filter((item) => !options.workspaceId || item.workspaceId === options.workspaceId)
+    .filter((item) => !options.adapterId || item.adapter?.id === options.adapterId)
+    .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
+
+  return {
+    version: AGENT_LAUNCHER_CONTRACT.version,
+    createdAt: nowIso(),
+    status: items.length ? "available" : "empty",
+    summary: {
+      total: items.length,
+      byStatus: countBy(items, (item) => item.status),
+      byAdapter: countBy(items, (item) => item.adapter?.id ?? "unknown"),
+      completedCount: items.filter((item) => item.status === "completed").length,
+      requiresApprovalCount: items.filter((item) => item.status === "requires_approval").length,
+    },
+    items,
+    limits: AGENT_LAUNCHER_CONTRACT.safetyBoundary,
+  };
+}
+
+export function getAgentLaunch(store, launchId) {
+  if (!launchId) throw new Error("launchId is required");
+  const filePath = path.join(store.root, "agent-launches", `${launchId}.json`);
+  if (!fs.existsSync(filePath)) throw new Error(`agent launch not found: ${launchId}`);
+  return readJson(filePath);
+}
+
+function buildLaunchRecord(input) {
+  return {
+    version: AGENT_LAUNCHER_CONTRACT.version,
+    id: input.launchId,
+    createdAt: input.createdAt,
+    startedAt: input.startedAt ?? null,
+    finishedAt: input.finishedAt ?? null,
+    status: input.status,
+    executionMode: input.executionMode,
+    traceId: input.traceId,
+    workspaceId: input.workspace.id,
+    workspacePath: input.workspace.workspacePath,
+    adapter: input.workspace.adapter,
+    goal: input.workspace.goal,
+    command: input.command,
+    exitCode: input.exitCode ?? null,
+    policyDecision: input.policyDecision ?? null,
+    approval: input.approval ?? null,
+    terminalLog: input.terminalLog ?? null,
+    git: input.git ?? null,
+    reviewGate: {
+      required: true,
+      mergeAllowedInV0: false,
+      requiredArtifacts: ["terminal_log", "diff_summary", "trace_report"],
+    },
+    notes: input.notes ?? [],
+    limits: AGENT_LAUNCHER_CONTRACT.safetyBoundary,
+  };
+}
+
+function persistLaunch(store, record) {
+  writeJson(path.join(store.root, "agent-launches", `${record.id}.json`), record);
+  appendJsonl(launchIndexPath(store), {
+    id: record.id,
+    createdAt: record.createdAt,
+    status: record.status,
+    executionMode: record.executionMode,
+    traceId: record.traceId,
+    workspaceId: record.workspaceId,
+    adapter: record.adapter,
+    goal: record.goal,
+    command: record.command,
+    exitCode: record.exitCode,
+    terminalLogPath: record.terminalLog?.path ?? null,
+    changed: record.git?.changed ?? false,
+    reviewRequired: true,
+  });
+}
+
+function plannedCommand(workspace, input) {
+  return input.command ?? `${workspace.launchPreview.command} ${workspace.launchPreview.args.join(" ")}`.trim();
+}
+
+async function runCommand(command, cwd, input) {
+  try {
+    const result = await execAsync(command, {
+      cwd,
+      timeout: Number(input.timeoutMs ?? 30000),
+      maxBuffer: Number(input.maxBuffer ?? 1024 * 1024),
+      windowsHide: true,
+    });
+    return {
+      stdout: result.stdout,
+      stderr: result.stderr,
+      exitCode: 0,
+      finishedAt: nowIso(),
+    };
+  } catch (error) {
+    return {
+      stdout: error.stdout ?? "",
+      stderr: error.stderr ?? "",
+      exitCode: Number.isInteger(error.code) ? error.code : 1,
+      finishedAt: nowIso(),
+    };
+  }
+}
+
+function writeTerminalLog(store, launchId, input) {
+  const relativePath = path.join("agent-launches", `${launchId}.log`);
+  const logPath = path.join(store.root, relativePath);
+  const content = [
+    `launchId: ${launchId}`,
+    `cwd: ${input.cwd}`,
+    `command: ${input.command}`,
+    `startedAt: ${input.startedAt}`,
+    `finishedAt: ${input.finishedAt}`,
+    `exitCode: ${input.exitCode}`,
+    "",
+    "----- stdout -----",
+    input.stdout ?? "",
+    "----- stderr -----",
+    input.stderr ?? "",
+  ].join("\n");
+  fs.writeFileSync(logPath, content.endsWith("\n") ? content : `${content}\n`, "utf8");
+  return {
+    path: relativePath,
+    bytes: Buffer.byteLength(content, "utf8"),
+  };
+}
+
+function readGitSnapshot(cwd) {
+  try {
+    return {
+      insideWorkTree: runGit(cwd, ["rev-parse", "--is-inside-work-tree"]).trim() === "true",
+      head: runGit(cwd, ["rev-parse", "--short", "HEAD"]).trim(),
+      branch: runGit(cwd, ["branch", "--show-current"]).trim() || null,
+      status: runGit(cwd, ["status", "--porcelain"]).trim().split(/\r?\n/).filter(Boolean),
+      diffNameStatus: runGit(cwd, ["diff", "--name-status"]).trim().split(/\r?\n/).filter(Boolean),
+      diffStat: runGit(cwd, ["diff", "--stat"]).trim(),
+    };
+  } catch {
+    return {
+      insideWorkTree: false,
+      head: null,
+      branch: null,
+      status: [],
+      diffNameStatus: [],
+      diffStat: "",
+    };
+  }
+}
+
+function runGit(cwd, args) {
+  return execFileSync("git", ["-C", cwd, ...args], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+}
+
+function assertAllowedLauncherCommand(command) {
+  const blocked = FORBIDDEN_COMMAND_PATTERNS.find((pattern) => pattern.test(command));
+  if (blocked) {
+    throw new Error("agent launcher blocks git mutation commands in v0");
+  }
+}
+
+function assertApprovalMatchesLaunch(ticket, command, cwd) {
+  if (ticket.status !== "approved") {
+    throw new Error(`approval is not approved: ${ticket.id}`);
+  }
+  if (ticket.toolName !== "shell.execute") {
+    throw new Error(`approval tool mismatch: ${ticket.toolName} !== shell.execute`);
+  }
+  if (ticket.input?.command !== command || ticket.input?.cwd !== cwd) {
+    throw new Error("approval input mismatch");
+  }
+}
+
+function recordSummary(record) {
+  return {
+    id: record.id,
+    status: record.status,
+    executionMode: record.executionMode,
+    traceId: record.traceId,
+    workspaceId: record.workspaceId,
+    adapter: record.adapter,
+    command: record.command,
+    exitCode: record.exitCode,
+    terminalLog: record.terminalLog,
+    git: record.git,
+    reviewGate: record.reviewGate,
+    notes: record.notes,
+  };
+}
+
+function launchIndexPath(store) {
+  return path.join(store.root, "agent-launch-index.jsonl");
+}
+
+function countBy(items, keyFn) {
+  return items.reduce((counts, item) => {
+    const key = keyFn(item);
+    counts[key] = (counts[key] ?? 0) + 1;
+    return counts;
+  }, {});
+}
