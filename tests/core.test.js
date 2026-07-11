@@ -17,6 +17,7 @@ import {
   createApprovalTicket,
   createAgentAdapterRunPlan,
   createLaunchReview,
+  createTaskRoute,
   createSkillReplayFixture,
   createStore,
   createWorkflow,
@@ -52,6 +53,10 @@ import {
   getAgentWorkspaceContract,
   getLaunchReview,
   getLaunchReviewContract,
+  getCapabilityProbe,
+  getCapabilityProbeContract,
+  getTaskRoute,
+  getTaskRouterContract,
   getIndexedDocument,
   getApprovalTicket,
   getGatewayRouteContract,
@@ -88,6 +93,8 @@ import {
   listAgentLaunches,
   listAgentWorkspaces,
   listLaunchReviews,
+  listCapabilityProbes,
+  listTaskRoutes,
   listTools,
   listEvaluations,
   listSkillEvaluations,
@@ -103,6 +110,7 @@ import {
   proposeSkill,
   promoteSkillCandidate,
   prepareAgentWorkspace,
+  probeAgentCapabilities,
   launchAgentWorkspace,
   importSkillPackage,
   promoteLlmDraftToCandidatePlan,
@@ -144,6 +152,8 @@ test("workspace store initializes core files", () => {
   assert.ok(fs.existsSync(path.join(store.root, "agent-workspace-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "agent-launch-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "launch-review-index.jsonl")));
+  assert.ok(fs.existsSync(path.join(store.root, "capability-probe-index.jsonl")));
+  assert.ok(fs.existsSync(path.join(store.root, "agent-route-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "evaluations")));
   assert.ok(fs.existsSync(path.join(store.root, "skill-evaluations")));
   assert.ok(fs.existsSync(path.join(store.root, "skill-history")));
@@ -154,6 +164,8 @@ test("workspace store initializes core files", () => {
   assert.ok(fs.existsSync(path.join(store.root, "agent-workspaces")));
   assert.ok(fs.existsSync(path.join(store.root, "agent-launches")));
   assert.ok(fs.existsSync(path.join(store.root, "launch-reviews")));
+  assert.ok(fs.existsSync(path.join(store.root, "capability-probes")));
+  assert.ok(fs.existsSync(path.join(store.root, "agent-routes")));
   assert.ok(fs.existsSync(path.join(store.root, "worktrees")));
 });
 
@@ -1640,6 +1652,14 @@ test("gateway route contract exposes stable route ids", () => {
   assert.ok(routeIds.includes("launch_reviews.create"));
   assert.ok(routeIds.includes("launch_reviews.decide"));
   assert.ok(routeIds.includes("launch_reviews.contract"));
+  assert.ok(routeIds.includes("capability_probes.list"));
+  assert.ok(routeIds.includes("capability_probes.get"));
+  assert.ok(routeIds.includes("capability_probes.create"));
+  assert.ok(routeIds.includes("capability_probes.contract"));
+  assert.ok(routeIds.includes("task_routes.list"));
+  assert.ok(routeIds.includes("task_routes.get"));
+  assert.ok(routeIds.includes("task_routes.create"));
+  assert.ok(routeIds.includes("task_routes.contract"));
   assert.ok(routeIds.includes("runs.get"));
   assert.ok(routeIds.includes("run_detail.contract"));
   assert.ok(routeIds.includes("skills.list"));
@@ -1712,9 +1732,9 @@ test("gateway serves workbench static assets without API auth", async () => {
     assert.equal(css.status, 200);
     assert.equal(js.status, 200);
     assert.equal(mark.status, 200);
-    assert.match(html.body, /Launch Run|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Agent Adapters|agent-adapter-list|agent-plan-panel|Agent Workspaces|agent-workspace-list|agent-workspace-panel|Agent Launches|agent-launch-list|agent-launch-panel|Launch Reviews|launch-review-list|launch-review-panel|Workflow Versions|Workflow Runs|Decision Queue|decision-queue-list|Artifacts|artifact-list|artifact-panel|Run Detail/);
+    assert.match(html.body, /Launch Run|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Agent Adapters|agent-adapter-list|agent-plan-panel|Agent Workspaces|agent-workspace-list|agent-workspace-panel|Agent Launches|agent-launch-list|agent-launch-panel|Launch Reviews|launch-review-list|launch-review-panel|Agent Routing|capability-probe-button|task-route-button|task-route-list|task-route-panel|Workflow Versions|Workflow Runs|Decision Queue|decision-queue-list|Artifacts|artifact-list|artifact-panel|Run Detail/);
     assert.match(css.body, /Agent Workbench|summary-grid|work-section|detail-panel|run-form|draft-step-list|draft-step-fields|source-map-list|evaluation-preview|artifact-preview|agent-plan-preview|agent-workspace-preview|agent-launch-preview/);
-    assert.match(js.body, /submitRun|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|prepareAgentWorkspaceFromWorkbench|previewAgentLaunch|loadAgentWorkspace|loadAgentLaunch|createLaunchReviewFromWorkbench|loadLaunchReview|renderAgentAdapters|renderAgentPlanPanel|renderAgentWorkspaces|renderAgentWorkspacePanel|renderAgentLaunches|renderAgentLaunchPanel|renderLaunchReviews|renderLaunchReviewPanel|agentPlanButton|agentPrepareButton|agentWorkspaceViewButton|agentLaunchPreviewButton|agentLaunchViewButton|launchReviewCreateButton|launchReviewViewButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|agentWorkspaces|agentLaunches|launchReviews|resume|inbox|approval/i);
+    assert.match(js.body, /submitRun|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|prepareAgentWorkspaceFromWorkbench|previewAgentLaunch|loadAgentWorkspace|loadAgentLaunch|createLaunchReviewFromWorkbench|loadLaunchReview|probeCapabilitiesFromWorkbench|routeTaskFromWorkbench|loadTaskRoute|renderAgentAdapters|renderAgentPlanPanel|renderAgentWorkspaces|renderAgentWorkspacePanel|renderAgentLaunches|renderAgentLaunchPanel|renderLaunchReviews|renderLaunchReviewPanel|renderCapabilityProbePanel|renderTaskRoutes|renderTaskRoutePanel|taskRouteViewButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|agentWorkspaces|agentLaunches|launchReviews|capabilityProbes|taskRoutes|resume|inbox|approval/i);
     assert.match(mark.body, /SpruceAgent mark/);
   } finally {
     await closeServer(gateway.server);
@@ -2179,6 +2199,52 @@ test("gateway client reads and plans agent adapters without execution", async ()
     assert.equal(plan.isolation.requiresGitWorktree, true);
     assert.equal(plan.reviewGate.mergeAllowedInV0, false);
     assert.equal(plan.sourceMap.sources.length > 0, true);
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
+
+test("gateway client probes capabilities and creates explainable task routes", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const client = createGatewayClient({
+    baseUrl: `http://${gateway.host}:${gateway.port}`,
+    token: gateway.token,
+  });
+
+  try {
+    const probeContract = await client.capabilityProbeContract();
+    const routerContract = await client.taskRouterContract();
+    const probe = await client.probeAgentCapabilities({
+      adapterIds: ["local-shell-agent"],
+      versionCheck: false,
+    });
+    const route = await client.createTaskRoute({
+      goal: "Run a deterministic local verification",
+      roles: ["deterministic_automation"],
+      mode: "execute",
+      probeId: probe.id,
+    });
+    const probes = await client.listCapabilityProbes();
+    const probeDetail = await client.getCapabilityProbe(probe.id);
+    const routes = await client.listTaskRoutes({ status: "routed" });
+    const routeDetail = await client.getTaskRoute(route.id);
+    const status = await client.status();
+
+    assert.equal(probeContract.interface, "spruceagent.capability-probe");
+    assert.equal(routerContract.interface, "spruceagent.task-router");
+    assert.equal(probe.summary.availableAdapterCount, 1);
+    assert.equal(route.status, "routed");
+    assert.equal(route.executionMode, "preview_only");
+    assert.equal(route.assignments[0].selectedAdapterId, "local-shell-agent");
+    assert.equal(route.selectionPolicy.qualityScore, null);
+    assert.equal(probes.summary.total, 1);
+    assert.equal(probeDetail.id, probe.id);
+    assert.equal(routes.summary.total, 1);
+    assert.equal(routeDetail.id, route.id);
+    assert.equal(status.capabilityProbeCount, 1);
+    assert.equal(status.taskRouteCount, 1);
   } finally {
     await closeServer(gateway.server);
   }
@@ -3223,6 +3289,110 @@ test("agent adapter registry exposes planned CLI adapters without execution", ()
   assert.equal(codex.id, "codex-cli");
   assert.equal(codex.capabilities.directExecution, false);
   assert.ok(codex.integrationChecklist.some((item) => item.includes("isolated workspace")));
+});
+
+test("capability probe records allowlisted local evidence without provider secrets", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const binDir = path.join(dir, "bin");
+  fs.mkdirSync(binDir);
+  const commandPath = process.platform === "win32"
+    ? path.join(binDir, "codex.cmd")
+    : path.join(binDir, "codex");
+  fs.writeFileSync(commandPath, process.platform === "win32" ? "@echo off\r\necho fake-codex\r\n" : "#!/bin/sh\necho fake-codex\n", "utf8");
+  if (process.platform !== "win32") fs.chmodSync(commandPath, 0o755);
+  const store = ensureStore(createStore(dir));
+  const probe = probeAgentCapabilities(store, {
+    adapterIds: ["codex-cli", "local-shell-agent"],
+    versionCheck: false,
+  }, {
+    env: {
+      PATH: binDir,
+      PATHEXT: ".CMD",
+    },
+  });
+
+  assert.equal(getCapabilityProbeContract().interface, "spruceagent.capability-probe");
+  assert.equal(probe.summary.adapterCount, 2);
+  assert.equal(probe.summary.availableAdapterCount, 2);
+  assert.equal(probe.adapters.find((item) => item.adapterId === "codex-cli").availability, "found_on_path");
+  assert.equal(probe.adapters.find((item) => item.adapterId === "local-shell-agent").launcherExecutionSupported, true);
+  assert.equal(probe.llmProviders.every((item) => item.evidence.every((value) => !value.includes("sk-"))), true);
+  assert.equal(getCapabilityProbe(store, probe.id).id, probe.id);
+  assert.equal(listCapabilityProbes(store).summary.latestProbeId, probe.id);
+});
+
+test("task router assigns roles separately and blocks unsupported execute routes", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const binDir = path.join(dir, "bin");
+  fs.mkdirSync(binDir);
+  const commandPath = process.platform === "win32"
+    ? path.join(binDir, "codex.cmd")
+    : path.join(binDir, "codex");
+  fs.writeFileSync(commandPath, process.platform === "win32" ? "@echo off\r\necho fake-codex\r\n" : "#!/bin/sh\necho fake-codex\n", "utf8");
+  if (process.platform !== "win32") fs.chmodSync(commandPath, 0o755);
+  const store = ensureStore(createStore(dir));
+  const probe = probeAgentCapabilities(store, {
+    adapterIds: ["codex-cli", "local-shell-agent"],
+    versionCheck: false,
+  }, {
+    env: { PATH: binDir, PATHEXT: ".CMD" },
+  });
+  const planned = createTaskRoute(store, {
+    goal: "Implement a feature and automate its deterministic check",
+    roles: ["coding", "deterministic_automation"],
+    probeId: probe.id,
+    mode: "plan",
+  });
+  const executeRoute = createTaskRoute(store, {
+    goal: "Execute coding and automation",
+    roles: ["coding", "deterministic_automation"],
+    probeId: probe.id,
+    mode: "execute",
+  });
+  const ambiguousReview = createTaskRoute(store, {
+    goal: "Review the result",
+    roles: ["review"],
+    probeId: probe.id,
+    mode: "plan",
+  });
+  const preferredReview = createTaskRoute(store, {
+    goal: "Review the result with an explicit adapter",
+    roles: ["review"],
+    probeId: probe.id,
+    preferredAdapterIds: ["codex-cli"],
+    mode: "plan",
+  });
+
+  assert.equal(getTaskRouterContract().interface, "spruceagent.task-router");
+  assert.equal(planned.status, "routed");
+  assert.equal(planned.assignments.find((item) => item.role === "coding").selectedAdapterId, "codex-cli");
+  assert.equal(planned.assignments.find((item) => item.role === "deterministic_automation").selectedAdapterId, "local-shell-agent");
+  assert.equal(planned.selectionPolicy.qualityScore, null);
+  assert.equal(executeRoute.status, "blocked");
+  assert.equal(executeRoute.assignments.find((item) => item.role === "coding").status, "blocked");
+  assert.equal(executeRoute.assignments.find((item) => item.role === "deterministic_automation").selectedAdapterId, "local-shell-agent");
+  assert.ok(executeRoute.candidates.find((item) => item.adapterId === "codex-cli").exclusionReasons.includes("launcher_execution_not_enabled"));
+  assert.equal(ambiguousReview.status, "needs_input");
+  assert.equal(ambiguousReview.assignments[0].status, "requires_preference");
+  assert.equal(ambiguousReview.assignments[0].selectedAdapterId, null);
+  assert.equal(preferredReview.status, "routed");
+  assert.equal(preferredReview.assignments[0].selectedAdapterId, "codex-cli");
+  assert.equal(getTaskRoute(store, planned.id).id, planned.id);
+  assert.equal(listTaskRoutes(store).summary.total, 4);
+  assert.equal(listTaskRoutes(store).summary.needsInputCount, 1);
+
+  fs.writeFileSync(path.join(store.root, "capability-probes", `${probe.id}.json`), `${JSON.stringify({
+    ...probe,
+    createdAt: "2020-01-01T00:00:00.000Z",
+  }, null, 2)}\n`, "utf8");
+  assert.throws(
+    () => createTaskRoute(store, {
+      goal: "Do not route from stale evidence",
+      roles: ["coding"],
+      probeId: probe.id,
+    }),
+    /capability probe is stale/,
+  );
 });
 
 test("agent launcher contract exposes gated local execution boundary", () => {

@@ -56,6 +56,14 @@ export function createGatewayClient(options = {}) {
     launchReviewContract: () => request("GET", "/v1/launch-reviews/contract"),
     createLaunchReview: (input = {}) => request("POST", "/v1/launch-reviews", input),
     decideLaunchReview: (reviewId, input = {}) => request("POST", `/v1/launch-reviews/${encodePathPart(reviewId)}/decision`, input),
+    listCapabilityProbes: () => request("GET", "/v1/capability-probes"),
+    getCapabilityProbe: (probeId) => request("GET", `/v1/capability-probes/${encodePathPart(probeId)}`),
+    capabilityProbeContract: () => request("GET", "/v1/capability-probes/contract"),
+    probeAgentCapabilities: (input = {}) => request("POST", "/v1/capability-probes", input),
+    listTaskRoutes: (input = {}) => request("GET", `/v1/agent-routes${taskRouteParams(input)}`),
+    getTaskRoute: (routeId) => request("GET", `/v1/agent-routes/${encodePathPart(routeId)}`),
+    taskRouterContract: () => request("GET", "/v1/agent-routes/contract"),
+    createTaskRoute: (input = {}) => request("POST", "/v1/agent-routes", input),
     contract: () => request("GET", "/v1/contract"),
     llmContract: () => request("GET", "/v1/llm/contract"),
     workflowBuilderContract: () => request("GET", "/v1/workflow-builder/contract"),
@@ -187,6 +195,13 @@ function launchReviewParams(input = {}) {
   const params = new URLSearchParams();
   if (input.status) params.set("status", input.status);
   if (input.launchId) params.set("launchId", input.launchId);
+  const value = params.toString();
+  return value ? `?${value}` : "";
+}
+
+function taskRouteParams(input = {}) {
+  const params = new URLSearchParams();
+  if (input.status) params.set("status", input.status);
   const value = params.toString();
   return value ? `?${value}` : "";
 }

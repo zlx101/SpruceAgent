@@ -95,6 +95,10 @@
             <span class="metric-label">Reviews</span>
             <strong id="launch-review-count">0</strong>
           </article>
+          <article class="metric">
+            <span class="metric-label">Routes</span>
+            <strong id="task-route-count">0</strong>
+          </article>
         </section>
 
         <section id="launch" class="work-section">
@@ -309,6 +313,17 @@
           </div>
           <div id="launch-review-list" class="item-list"></div>
           <pre id="launch-review-panel" class="json-view agent-launch-preview">{}</pre>
+          <div class="section-heading subheading">
+            <h2>Agent Routing</h2>
+            <span id="task-route-state" class="section-state">No capability probe</span>
+          </div>
+          <div class="toolbar section-toolbar">
+            <button id="capability-probe-button" class="secondary-button" type="button">Probe</button>
+            <button id="task-route-button" class="secondary-button" type="button">Route Goal</button>
+          </div>
+          <pre id="capability-probe-panel" class="json-view agent-plan-preview">{}</pre>
+          <div id="task-route-list" class="item-list"></div>
+          <pre id="task-route-panel" class="json-view agent-plan-preview">{}</pre>
         </section>
 
         <section id="workflow-versions" class="work-section">

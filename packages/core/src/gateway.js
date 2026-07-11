@@ -28,6 +28,18 @@ import {
   getLaunchReviewContract,
   listLaunchReviews,
 } from "./launch-review.js";
+import {
+  getCapabilityProbe,
+  getCapabilityProbeContract,
+  listCapabilityProbes,
+  probeAgentCapabilities,
+} from "./capability-probe.js";
+import {
+  createTaskRoute,
+  getTaskRoute,
+  getTaskRouterContract,
+  listTaskRoutes,
+} from "./task-router.js";
 import { approveTicket, getApprovalTicket, listApprovalTickets, rejectTicket } from "./approvals.js";
 import { getApprovalQueue, getApprovalQueueContract } from "./approval-queue.js";
 import { getArtifact, getArtifactContract, listArtifacts } from "./artifacts.js";
@@ -332,6 +344,62 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/launch-reviews/contract",
       authRequired: true,
       description: "Read the Launch Review contract.",
+    },
+    {
+      id: "capability_probes.list",
+      method: "GET",
+      path: "/v1/capability-probes",
+      authRequired: true,
+      description: "List redacted local Agent capability snapshots.",
+    },
+    {
+      id: "capability_probes.get",
+      method: "GET",
+      path: "/v1/capability-probes/:probeId",
+      authRequired: true,
+      description: "Read one Agent capability snapshot.",
+    },
+    {
+      id: "capability_probes.create",
+      method: "POST",
+      path: "/v1/capability-probes",
+      authRequired: true,
+      description: "Probe allowlisted local Agent commands and redacted provider configuration.",
+    },
+    {
+      id: "capability_probes.contract",
+      method: "GET",
+      path: "/v1/capability-probes/contract",
+      authRequired: true,
+      description: "Read the Capability Probe contract.",
+    },
+    {
+      id: "task_routes.list",
+      method: "GET",
+      path: "/v1/agent-routes",
+      authRequired: true,
+      description: "List explainable Agent route drafts.",
+    },
+    {
+      id: "task_routes.get",
+      method: "GET",
+      path: "/v1/agent-routes/:routeId",
+      authRequired: true,
+      description: "Read one explainable Agent route draft.",
+    },
+    {
+      id: "task_routes.create",
+      method: "POST",
+      path: "/v1/agent-routes",
+      authRequired: true,
+      description: "Create a non-executing route draft from task constraints and observed capabilities.",
+    },
+    {
+      id: "task_routes.contract",
+      method: "GET",
+      path: "/v1/agent-routes/contract",
+      authRequired: true,
+      description: "Read the Task Router contract.",
     },
     {
       id: "tools.list",
@@ -1066,6 +1134,46 @@ async function routeRequest(store, request, url, body) {
     }));
   }
 
+  if (request.method === "GET" && url.pathname === "/v1/capability-probes") {
+    return ok(listCapabilityProbes(store));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/capability-probes/contract") {
+    return ok(getCapabilityProbeContract());
+  }
+
+  if (request.method === "GET" && pathParts[1] === "capability-probes" && pathParts[2]) {
+    return ok(getCapabilityProbe(store, pathParts[2]));
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/capability-probes") {
+    return ok(probeAgentCapabilities(store, {
+      ...body,
+      actor: body.actor ?? "gateway-user",
+    }));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/agent-routes") {
+    return ok(listTaskRoutes(store, {
+      status: url.searchParams.get("status") ?? undefined,
+    }));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/agent-routes/contract") {
+    return ok(getTaskRouterContract());
+  }
+
+  if (request.method === "GET" && pathParts[1] === "agent-routes" && pathParts[2]) {
+    return ok(getTaskRoute(store, pathParts[2]));
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/agent-routes") {
+    return ok(createTaskRoute(store, {
+      ...body,
+      actor: body.actor ?? "gateway-user",
+    }));
+  }
+
   if (request.method === "GET" && url.pathname === "/v1/contract") {
     return ok(getGatewayRouteContract());
   }
@@ -1548,6 +1656,8 @@ function gatewayStatus(store) {
     agentWorkspaceCount: listAgentWorkspaces(store).summary.total,
     agentLaunchCount: listAgentLaunches(store).summary.total,
     launchReviewCount: listLaunchReviews(store).summary.total,
+    capabilityProbeCount: listCapabilityProbes(store).summary.total,
+    taskRouteCount: listTaskRoutes(store).summary.total,
     artifactCount: listArtifacts(store).summary.total,
     evaluationCount: listEvaluations(store).length,
     skillEvaluationCount: listSkillEvaluations(store).length,

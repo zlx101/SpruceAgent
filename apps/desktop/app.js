@@ -14,6 +14,10 @@ const state = {
   agentLaunchDetail: null,
   launchReviews: null,
   launchReviewDetail: null,
+  capabilityProbes: null,
+  capabilityProbeDetail: null,
+  taskRoutes: null,
+  taskRouteDetail: null,
   workflows: [],
   workflowVersions: null,
   workflowDraft: null,
@@ -82,6 +86,7 @@ const nodes = {
   agentWorkspaceCount: document.querySelector("#agent-workspace-count"),
   agentLaunchCount: document.querySelector("#agent-launch-count"),
   launchReviewCount: document.querySelector("#launch-review-count"),
+  taskRouteCount: document.querySelector("#task-route-count"),
   decisionQueueState: document.querySelector("#decision-queue-state"),
   approvalState: document.querySelector("#approval-state"),
   resumeState: document.querySelector("#resume-state"),
@@ -91,6 +96,7 @@ const nodes = {
   agentWorkspaceState: document.querySelector("#agent-workspace-state"),
   agentLaunchState: document.querySelector("#agent-launch-state"),
   launchReviewState: document.querySelector("#launch-review-state"),
+  taskRouteState: document.querySelector("#task-route-state"),
   decisionQueueList: document.querySelector("#decision-queue-list"),
   pendingList: document.querySelector("#pending-list"),
   skillList: document.querySelector("#skill-list"),
@@ -107,6 +113,11 @@ const nodes = {
   agentLaunchPanel: document.querySelector("#agent-launch-panel"),
   launchReviewList: document.querySelector("#launch-review-list"),
   launchReviewPanel: document.querySelector("#launch-review-panel"),
+  capabilityProbeButton: document.querySelector("#capability-probe-button"),
+  taskRouteButton: document.querySelector("#task-route-button"),
+  capabilityProbePanel: document.querySelector("#capability-probe-panel"),
+  taskRouteList: document.querySelector("#task-route-list"),
+  taskRoutePanel: document.querySelector("#task-route-panel"),
   workflowList: document.querySelector("#workflow-list"),
   workflowVersionList: document.querySelector("#workflow-version-list"),
   workflowRunList: document.querySelector("#workflow-run-list"),
@@ -232,6 +243,14 @@ nodes.launchReviewList.addEventListener("click", async (event) => {
   await loadLaunchReview(button.dataset.reviewId);
 });
 
+nodes.capabilityProbeButton.addEventListener("click", probeCapabilitiesFromWorkbench);
+nodes.taskRouteButton.addEventListener("click", routeTaskFromWorkbench);
+nodes.taskRouteList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action='task-route-view']");
+  if (!button) return;
+  await loadTaskRoute(button.dataset.routeId);
+});
+
 nodes.workflowList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action]");
   if (!button) return;
@@ -349,7 +368,7 @@ async function refresh() {
   state.busy = true;
   setStatus("Loading");
   try {
-    const [inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches, launchReviews] = await Promise.all([
+    const [inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches, launchReviews, capabilityProbes, taskRoutes] = await Promise.all([
       get("/v1/inbox"),
       get("/v1/skills?status=approved"),
       get("/v1/skills?status=candidates"),
@@ -362,6 +381,8 @@ async function refresh() {
       get("/v1/agent-workspaces"),
       get("/v1/agent-launches"),
       get("/v1/launch-reviews"),
+      get("/v1/capability-probes"),
+      get("/v1/agent-routes"),
     ]);
     state.inbox = inbox;
     state.skills = skills;
@@ -375,6 +396,8 @@ async function refresh() {
     state.agentWorkspaces = agentWorkspaces;
     state.agentLaunches = agentLaunches;
     state.launchReviews = launchReviews;
+    state.capabilityProbes = capabilityProbes;
+    state.taskRoutes = taskRoutes;
     render();
     setStatus(`Connected - ${state.approvalQueue.status.replace(/_/g, " ")}`);
   } catch (error) {
@@ -1016,6 +1039,14 @@ function render() {
     },
     items: [],
   };
+  const capabilityProbes = state.capabilityProbes || {
+    summary: { total: 0, latestProbeId: null, latestCreatedAt: null },
+    items: [],
+  };
+  const taskRoutes = state.taskRoutes || {
+    summary: { total: 0, routedCount: 0, blockedCount: 0, needsInputCount: 0 },
+    items: [],
+  };
 
   nodes.pendingCount.textContent = inbox.summary.pendingApprovalCount;
   nodes.decisionCount.textContent = approvalQueue.summary.pendingDecisionCount + approvalQueue.summary.readyToResumeCount;
@@ -1026,6 +1057,7 @@ function render() {
   nodes.agentWorkspaceCount.textContent = agentWorkspaces.summary.total;
   nodes.agentLaunchCount.textContent = agentLaunches.summary.total;
   nodes.launchReviewCount.textContent = launchReviews.summary.total;
+  nodes.taskRouteCount.textContent = taskRoutes.summary.total;
   nodes.skillState.textContent = `${skills.length}`;
   nodes.candidateSkillState.textContent = `${candidateSkills.length} candidates`;
   nodes.skillEvaluationState.textContent = `${skillEvaluations.length} reports`;
@@ -1040,6 +1072,9 @@ function render() {
   nodes.agentWorkspaceState.textContent = `${agentWorkspaces.summary.total} prepared / ${agentWorkspaces.summary.gitWorktreeCount} worktrees`;
   nodes.agentLaunchState.textContent = `${agentLaunches.summary.total} launches / ${agentLaunches.summary.requiresApprovalCount} approvals`;
   nodes.launchReviewState.textContent = `${launchReviews.summary.pendingCount} pending / ${launchReviews.summary.approvedCount} approved`;
+  nodes.taskRouteState.textContent = capabilityProbes.summary.total
+    ? `${taskRoutes.summary.routedCount} routed / ${taskRoutes.summary.needsInputCount ?? 0} needs input / ${taskRoutes.summary.blockedCount} blocked`
+    : "No capability probe";
 
   renderSkills(skills);
   renderCandidateSkills(candidateSkills);
@@ -1053,6 +1088,9 @@ function render() {
   renderAgentLaunchPanel(state.agentLaunchDetail);
   renderLaunchReviews(launchReviews.items);
   renderLaunchReviewPanel(state.launchReviewDetail);
+  renderCapabilityProbePanel(state.capabilityProbeDetail);
+  renderTaskRoutes(taskRoutes.items);
+  renderTaskRoutePanel(state.taskRouteDetail);
   renderWorkflowSkillOptions(skills);
   renderWorkflowDraft(state.workflowDraft);
   renderWorkflows(workflows);
@@ -1270,6 +1308,35 @@ function renderLaunchReviews(items) {
 
 function renderLaunchReviewPanel(review) {
   nodes.launchReviewPanel.textContent = review ? JSON.stringify(review, null, 2) : "{}";
+}
+
+function renderCapabilityProbePanel(probe) {
+  nodes.capabilityProbePanel.textContent = probe ? JSON.stringify({
+    id: probe.id,
+    createdAt: probe.createdAt,
+    platform: probe.platform,
+    summary: probe.summary,
+    adapters: probe.adapters,
+    llmProviders: probe.llmProviders,
+    limits: probe.limits,
+  }, null, 2) : "{}";
+}
+
+function renderTaskRoutes(items) {
+  replaceList(nodes.taskRouteList, items, (item) => itemNode({
+    title: item.goal || item.id,
+    meta: [
+      [statusClass(item.status), item.status],
+      ["mode", item.mode],
+      ["roles", (item.roles || []).join(", ") || "-"],
+      ["created", formatTime(item.createdAt)],
+    ],
+    actions: [taskRouteViewButton(item.id)],
+  }));
+}
+
+function renderTaskRoutePanel(route) {
+  nodes.taskRoutePanel.textContent = route ? JSON.stringify(route, null, 2) : "{}";
 }
 
 function renderAgentLaunchPanel(launch) {
@@ -1810,6 +1877,56 @@ async function loadLaunchReview(reviewId) {
   }
 }
 
+async function probeCapabilitiesFromWorkbench() {
+  setStatus("Probing local agent capabilities");
+  try {
+    state.capabilityProbeDetail = await post("/v1/capability-probes", {});
+    state.capabilityProbes = await get("/v1/capability-probes");
+    render();
+    setStatus(`Capability probe complete - ${state.capabilityProbeDetail.summary.availableAdapterCount} adapters available`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+async function routeTaskFromWorkbench() {
+  const goal = nodes.runGoal.value.trim();
+  if (!goal) {
+    setStatus("Enter a run goal before routing", true);
+    nodes.runGoal.focus();
+    return;
+  }
+  setStatus("Creating explainable agent route");
+  try {
+    state.taskRouteDetail = await post("/v1/agent-routes", {
+      goal,
+      mode: "plan",
+      refreshCapabilities: !state.capabilityProbes?.summary?.total,
+    });
+    state.capabilityProbes = await get("/v1/capability-probes");
+    state.taskRoutes = await get("/v1/agent-routes");
+    if (!state.capabilityProbeDetail && state.taskRouteDetail.capabilityProbe?.id) {
+      state.capabilityProbeDetail = await get(`/v1/capability-probes/${encodeURIComponent(state.taskRouteDetail.capabilityProbe.id)}`);
+    }
+    render();
+    setStatus(`Agent route ${state.taskRouteDetail.status} - ${shortId(state.taskRouteDetail.id)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+async function loadTaskRoute(routeId) {
+  if (!routeId) return;
+  setStatus("Loading agent route");
+  try {
+    state.taskRouteDetail = await get(`/v1/agent-routes/${encodeURIComponent(routeId)}`);
+    renderTaskRoutePanel(state.taskRouteDetail);
+    setStatus(`Loaded agent route - ${shortId(routeId)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 function renderDetail(detail) {
   nodes.detailPanel.replaceChildren();
   if (!detail) {
@@ -2288,6 +2405,16 @@ function launchReviewViewButton(reviewId) {
   button.type = "button";
   button.dataset.action = "launch-review-view";
   button.dataset.reviewId = reviewId;
+  button.innerHTML = '<span aria-hidden="true">&#128065;</span><span>View</span>';
+  return button;
+}
+
+function taskRouteViewButton(routeId) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "task-route-view";
+  button.dataset.routeId = routeId;
   button.innerHTML = '<span aria-hidden="true">&#128065;</span><span>View</span>';
   return button;
 }

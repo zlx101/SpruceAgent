@@ -35,6 +35,7 @@ const REQUIRED_PATHS = [
   "docs/isolated-agent-workspace-v0.md",
   "docs/agent-launcher-v0.md",
   "docs/launch-review-gate-v0.md",
+  "docs/capability-probe-task-router-v0.md",
   "docs/public-showcase-v0.md",
   "docs/release-checklist.md",
 ];

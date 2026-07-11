@@ -120,6 +120,19 @@ export {
   listLaunchReviews,
 } from "./launch-review.js";
 export {
+  getCapabilityProbe,
+  getCapabilityProbeContract,
+  getLatestCapabilityProbe,
+  listCapabilityProbes,
+  probeAgentCapabilities,
+} from "./capability-probe.js";
+export {
+  createTaskRoute,
+  getTaskRoute,
+  getTaskRouterContract,
+  listTaskRoutes,
+} from "./task-router.js";
+export {
   getAgentWorkspace,
   getAgentWorkspaceContract,
   listAgentWorkspaces,

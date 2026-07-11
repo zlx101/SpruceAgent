@@ -91,6 +91,8 @@ Workbench v0 supports:
 - inspect agent launch records through `GET /v1/agent-launches/:launchId`
 - create evidence-backed launch review packages through `POST /v1/launch-reviews`
 - inspect launch review packages through `GET /v1/launch-reviews/:reviewId`
+- create redacted local capability snapshots through `POST /v1/capability-probes`
+- create and inspect explainable task route drafts through `/v1/agent-routes`
 
 ## Safety Boundary
 

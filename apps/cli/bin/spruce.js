@@ -12,6 +12,7 @@ import {
   auditPolicyDecision,
   createAgentAdapterRunPlan,
   createLaunchReview,
+  createTaskRoute,
   createContextPack,
   createSkillReplayFixture,
   createGatewayClient,
@@ -48,6 +49,10 @@ import {
   getAgentWorkspaceContract,
   getLaunchReview,
   getLaunchReviewContract,
+  getCapabilityProbe,
+  getCapabilityProbeContract,
+  getTaskRoute,
+  getTaskRouterContract,
   getLlmAdapterContract,
   getPlannerPromotionContract,
   getRunInbox,
@@ -80,6 +85,8 @@ import {
   listAgentLaunches,
   listAgentWorkspaces,
   listLaunchReviews,
+  listCapabilityProbes,
+  listTaskRoutes,
   listArtifacts,
   listEvaluations,
   listSkillEvaluations,
@@ -97,6 +104,7 @@ import {
   proposeSkill,
   promoteSkillCandidate,
   prepareAgentWorkspace,
+  probeAgentCapabilities,
   launchAgentWorkspace,
   importSkillPackage,
   readSkillPackageFile,
@@ -171,6 +179,8 @@ async function main() {
       agentWorkspaceCount: listAgentWorkspaces(store).summary.total,
       agentLaunchCount: listAgentLaunches(store).summary.total,
       launchReviewCount: listLaunchReviews(store).summary.total,
+      capabilityProbeCount: listCapabilityProbes(store).summary.total,
+      taskRouteCount: listTaskRoutes(store).summary.total,
       artifactCount: listArtifacts(store).summary.total,
       evaluationCount: listEvaluations(store).length,
       skillEvaluationCount: listSkillEvaluations(store).length,
@@ -1367,12 +1377,81 @@ async function handleAgent(action, args = []) {
     return;
   }
 
+  if (action === "probe") {
+    const flags = parseFlags(args);
+    printJson(probeAgentCapabilities(store, {
+      adapterIds: splitCsv(flags.adapterIds),
+      versionCheck: Boolean(flags.version),
+      versionTimeoutMs: flags.timeoutMs,
+      actor: flags.actor ?? "local-user",
+    }));
+    return;
+  }
+
+  if (action === "probes" || action === "probe-list") {
+    printJson(listCapabilityProbes(store));
+    return;
+  }
+
+  if (action === "probe-detail") {
+    const [probeId] = args;
+    if (!probeId) throw new Error("usage: spruce agent probe-detail <probeId>");
+    printJson(getCapabilityProbe(store, probeId));
+    return;
+  }
+
+  if (action === "probe-contract") {
+    printJson(getCapabilityProbeContract());
+    return;
+  }
+
+  if (action === "route") {
+    const flags = parseFlags(args);
+    const goal = flags.goal ?? flags._.join(" ").trim();
+    if (!goal) throw new Error("usage: spruce agent route --goal <goal> [--roles coding,review] [--refreshCapabilities]");
+    printJson(createTaskRoute(store, {
+      goal,
+      roles: splitCsv(flags.roles),
+      taskType: flags.taskType,
+      mode: flags.mode ?? "plan",
+      requiredCapabilities: splitCsv(flags.requiredCapabilities),
+      preferredAdapterIds: splitCsv(flags.preferredAdapterIds),
+      preferredProviders: splitCsv(flags.preferredProviders),
+      preferredLlmProviders: splitCsv(flags.preferredLlmProviders),
+      maxAlternatives: flags.maxAlternatives,
+      probeId: flags.probeId,
+      refreshCapabilities: Boolean(flags.refreshCapabilities),
+      versionCheck: Boolean(flags.version),
+      maxProbeAgeMs: flags.maxProbeAgeMs,
+      actor: flags.actor ?? "local-user",
+    }));
+    return;
+  }
+
+  if (action === "routes" || action === "route-list") {
+    const flags = parseFlags(args);
+    printJson(listTaskRoutes(store, { status: flags.status }));
+    return;
+  }
+
+  if (action === "route-detail") {
+    const [routeId] = args;
+    if (!routeId) throw new Error("usage: spruce agent route-detail <routeId>");
+    printJson(getTaskRoute(store, routeId));
+    return;
+  }
+
+  if (action === "router-contract") {
+    printJson(getTaskRouterContract());
+    return;
+  }
+
   if (action === "contract" || action === "adapter-contract") {
     printJson(getAgentAdapterContract());
     return;
   }
 
-  throw new Error("usage: spruce agent <adapters|adapter|plan|prepare|workspaces|workspace|launch|launches|launch-detail|review|reviews|review-detail|review-decide|contract|workspace-contract|launcher-contract|review-contract>");
+  throw new Error("usage: spruce agent <adapters|adapter|probe|probes|route|routes|plan|prepare|workspaces|workspace|launch|launches|review|reviews|contract>");
 }
 
 function parseFlags(args) {
@@ -1625,6 +1704,15 @@ Usage:
   ${executable} agent workspace-contract
   ${executable} agent launcher-contract
   ${executable} agent review-contract
+  ${executable} agent probe [--adapterIds codex-cli,claude-code] [--version]
+  ${executable} agent probes
+  ${executable} agent probe-detail <probeId>
+  ${executable} agent route --goal "Implement task" --roles coding,review --refreshCapabilities
+  ${executable} agent route --goal "Execute script" --roles deterministic_automation --mode execute
+  ${executable} agent routes [--status routed|blocked]
+  ${executable} agent route-detail <routeId>
+  ${executable} agent probe-contract
+  ${executable} agent router-contract
   ${executable} gateway token
   ${executable} gateway token --rotate
   ${executable} gateway contract

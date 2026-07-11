@@ -110,6 +110,8 @@ Agent Launcher v0 is the separate, explicit step after workspace preparation. It
 
 Future execution must go through TrustKernel, isolated workspaces, artifact capture, diff review, and Trace Report export.
 
+Capability Probe and Task Router v0 now distinguish declared adapters from locally observed availability and produce explainable route drafts. See `docs/capability-probe-task-router-v0.md`.
+
 ## Why It Matters
 
 Orca shows that parallel CLI agents become valuable when they are isolated, visible, and comparable.
