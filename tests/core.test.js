@@ -16,6 +16,7 @@ import {
   createSourceMap,
   createApprovalTicket,
   createAgentAdapterRunPlan,
+  createLaunchReview,
   createSkillReplayFixture,
   createStore,
   createWorkflow,
@@ -34,6 +35,7 @@ import {
   createGatewayClient,
   createOpenAiCompatibleLlmProvider,
   draftWorkflow,
+  decideLaunchReview,
   draftLlmPlan,
   executeCandidatePlan,
   getEvaluation,
@@ -48,6 +50,8 @@ import {
   getAgentLauncherContract,
   getAgentWorkspace,
   getAgentWorkspaceContract,
+  getLaunchReview,
+  getLaunchReviewContract,
   getIndexedDocument,
   getApprovalTicket,
   getGatewayRouteContract,
@@ -83,6 +87,7 @@ import {
   listAgentAdapters,
   listAgentLaunches,
   listAgentWorkspaces,
+  listLaunchReviews,
   listTools,
   listEvaluations,
   listSkillEvaluations,
@@ -138,6 +143,7 @@ test("workspace store initializes core files", () => {
   assert.ok(fs.existsSync(path.join(store.root, "skill-package-import-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "agent-workspace-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "agent-launch-index.jsonl")));
+  assert.ok(fs.existsSync(path.join(store.root, "launch-review-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "evaluations")));
   assert.ok(fs.existsSync(path.join(store.root, "skill-evaluations")));
   assert.ok(fs.existsSync(path.join(store.root, "skill-history")));
@@ -147,6 +153,7 @@ test("workspace store initializes core files", () => {
   assert.ok(fs.existsSync(path.join(store.root, "skill-imports")));
   assert.ok(fs.existsSync(path.join(store.root, "agent-workspaces")));
   assert.ok(fs.existsSync(path.join(store.root, "agent-launches")));
+  assert.ok(fs.existsSync(path.join(store.root, "launch-reviews")));
   assert.ok(fs.existsSync(path.join(store.root, "worktrees")));
 });
 
@@ -1628,6 +1635,11 @@ test("gateway route contract exposes stable route ids", () => {
   assert.ok(routeIds.includes("agent_launches.get"));
   assert.ok(routeIds.includes("agent_launches.create"));
   assert.ok(routeIds.includes("agent_launches.contract"));
+  assert.ok(routeIds.includes("launch_reviews.list"));
+  assert.ok(routeIds.includes("launch_reviews.get"));
+  assert.ok(routeIds.includes("launch_reviews.create"));
+  assert.ok(routeIds.includes("launch_reviews.decide"));
+  assert.ok(routeIds.includes("launch_reviews.contract"));
   assert.ok(routeIds.includes("runs.get"));
   assert.ok(routeIds.includes("run_detail.contract"));
   assert.ok(routeIds.includes("skills.list"));
@@ -1700,9 +1712,9 @@ test("gateway serves workbench static assets without API auth", async () => {
     assert.equal(css.status, 200);
     assert.equal(js.status, 200);
     assert.equal(mark.status, 200);
-    assert.match(html.body, /Launch Run|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Agent Adapters|agent-adapter-list|agent-plan-panel|Agent Workspaces|agent-workspace-list|agent-workspace-panel|Agent Launches|agent-launch-list|agent-launch-panel|Workflow Versions|Workflow Runs|Decision Queue|decision-queue-list|Artifacts|artifact-list|artifact-panel|Run Detail/);
+    assert.match(html.body, /Launch Run|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Agent Adapters|agent-adapter-list|agent-plan-panel|Agent Workspaces|agent-workspace-list|agent-workspace-panel|Agent Launches|agent-launch-list|agent-launch-panel|Launch Reviews|launch-review-list|launch-review-panel|Workflow Versions|Workflow Runs|Decision Queue|decision-queue-list|Artifacts|artifact-list|artifact-panel|Run Detail/);
     assert.match(css.body, /Agent Workbench|summary-grid|work-section|detail-panel|run-form|draft-step-list|draft-step-fields|source-map-list|evaluation-preview|artifact-preview|agent-plan-preview|agent-workspace-preview|agent-launch-preview/);
-    assert.match(js.body, /submitRun|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|prepareAgentWorkspaceFromWorkbench|previewAgentLaunch|loadAgentWorkspace|loadAgentLaunch|renderAgentAdapters|renderAgentPlanPanel|renderAgentWorkspaces|renderAgentWorkspacePanel|renderAgentLaunches|renderAgentLaunchPanel|agentPlanButton|agentPrepareButton|agentWorkspaceViewButton|agentLaunchPreviewButton|agentLaunchViewButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|agentWorkspaces|agentLaunches|resume|inbox|approval/i);
+    assert.match(js.body, /submitRun|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|prepareAgentWorkspaceFromWorkbench|previewAgentLaunch|loadAgentWorkspace|loadAgentLaunch|createLaunchReviewFromWorkbench|loadLaunchReview|renderAgentAdapters|renderAgentPlanPanel|renderAgentWorkspaces|renderAgentWorkspacePanel|renderAgentLaunches|renderAgentLaunchPanel|renderLaunchReviews|renderLaunchReviewPanel|agentPlanButton|agentPrepareButton|agentWorkspaceViewButton|agentLaunchPreviewButton|agentLaunchViewButton|launchReviewCreateButton|launchReviewViewButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|agentWorkspaces|agentLaunches|launchReviews|resume|inbox|approval/i);
     assert.match(mark.body, /SpruceAgent mark/);
   } finally {
     await closeServer(gateway.server);
@@ -2242,6 +2254,17 @@ test("gateway client gates and records local agent workspace launches", async ()
     });
     const launches = await client.listAgentLaunches();
     const detail = await client.getAgentLaunch(completed.id);
+    const reviewContract = await client.launchReviewContract();
+    const review = await client.createLaunchReview({
+      launchIds: [preview.id, completed.id],
+    });
+    const decidedReview = await client.decideLaunchReview(review.id, {
+      decision: "approved",
+      selectedLaunchId: completed.id,
+      reason: "Completed candidate has terminal and diff evidence.",
+    });
+    const reviews = await client.listLaunchReviews({ launchId: completed.id });
+    const reviewDetail = await client.getLaunchReview(review.id);
     const artifacts = await client.artifacts({ kind: "agent_launch" });
     const status = await client.status();
 
@@ -2256,8 +2279,17 @@ test("gateway client gates and records local agent workspace launches", async ()
     assert.equal(fs.readFileSync(path.join(dir, "launch-output.txt"), "utf8"), "ok");
     assert.equal(launches.summary.total, 3);
     assert.equal(detail.id, completed.id);
+    assert.equal(reviewContract.interface, "spruceagent.launch-review");
+    assert.equal(review.candidateCount, 2);
+    assert.equal(review.comparison.automaticRecommendation, null);
+    assert.equal(decidedReview.status, "approved_for_manual_followup");
+    assert.equal(decidedReview.decision.effect, "record_only");
+    assert.equal(decidedReview.reviewGate.mergeAllowedInV0, false);
+    assert.equal(reviews.summary.total, 1);
+    assert.equal(reviewDetail.decision.selectedLaunchId, completed.id);
     assert.equal(artifacts.summary.byKind.agent_launch >= 3, true);
     assert.equal(status.agentLaunchCount, 3);
+    assert.equal(status.launchReviewCount, 1);
   } finally {
     await closeServer(gateway.server);
   }
@@ -3633,6 +3665,80 @@ test("agent launcher rejects git mutation commands before approval", async () =>
       command: "git commit -m blocked",
     }),
     /blocks git mutation/,
+  );
+});
+
+test("launch review packages evidence and records decisions without Git mutation", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  initGitRepo(dir);
+  const headBefore = execFileSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  const store = ensureStore(createStore(dir));
+  const workspace = prepareAgentWorkspace(store, {
+    adapterId: "local-shell-agent",
+    goal: "Produce review evidence",
+  });
+  const command = "node -e \"require('fs').writeFileSync('review-output.txt','reviewed')\"";
+  const pending = await launchAgentWorkspace(store, {
+    workspaceId: workspace.id,
+    execute: true,
+    command,
+  });
+  approveTicket(store, pending.approval.id, { reason: "review gate test" });
+  const completed = await launchAgentWorkspace(store, {
+    workspaceId: workspace.id,
+    execute: true,
+    command,
+    approvalId: pending.approval.id,
+  });
+  const preview = await launchAgentWorkspace(store, { workspaceId: workspace.id });
+  const review = createLaunchReview(store, {
+    launchIds: [preview.id, completed.id],
+    actor: "test-reviewer",
+  });
+
+  assert.equal(getLaunchReviewContract().interface, "spruceagent.launch-review");
+  assert.equal(review.status, "pending_review");
+  assert.equal(review.candidateCount, 2);
+  assert.equal(review.candidates.find((item) => item.launchId === completed.id).terminal.available, true);
+  assert.equal(review.candidates.find((item) => item.launchId === completed.id).reviewable, true);
+  assert.equal(review.candidates.find((item) => item.launchId === completed.id).diff.patch.available, true);
+  assert.equal(review.candidates.find((item) => item.launchId === completed.id).diff.patch.untracked.some((item) => item.path === "review-output.txt"), true);
+  assert.equal(review.candidates.find((item) => item.launchId === preview.id).reviewable, false);
+  assert.equal(review.comparison.automaticRecommendation, null);
+  assert.equal(review.reviewGate.commitAllowedInV0, false);
+  assert.equal(review.reviewGate.mergeAllowedInV0, false);
+  assert.equal(listLaunchReviews(store).summary.multiCandidateCount, 1);
+  assert.equal(getLaunchReview(store, review.id).id, review.id);
+
+  assert.throws(
+    () => decideLaunchReview(store, review.id, {
+      decision: "approved",
+      selectedLaunchId: preview.id,
+      reason: "Preview should not be selectable.",
+    }),
+    /not reviewable/,
+  );
+
+  const decided = decideLaunchReview(store, review.id, {
+    decision: "approved",
+    selectedLaunchId: completed.id,
+    reason: "Evidence inspected and command completed.",
+    actor: "test-reviewer",
+  });
+  assert.equal(decided.status, "approved_for_manual_followup");
+  assert.equal(decided.decision.effect, "record_only");
+  assert.equal(execFileSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" }).trim(), headBefore);
+  assert.match(execFileSync("git", ["-C", dir, "status", "--porcelain"], { encoding: "utf8" }), /\?\? review-output\.txt/);
+
+  const driftReview = createLaunchReview(store, { launchId: completed.id });
+  fs.appendFileSync(path.join(store.root, completed.terminalLog.path), "tampered\n", "utf8");
+  assert.throws(
+    () => decideLaunchReview(store, driftReview.id, {
+      decision: "approved",
+      selectedLaunchId: completed.id,
+      reason: "This must fail because evidence drifted.",
+    }),
+    /terminal evidence changed/,
   );
 });
 

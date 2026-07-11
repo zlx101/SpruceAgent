@@ -113,6 +113,13 @@ export {
   listAgentLaunches,
 } from "./agent-launcher.js";
 export {
+  createLaunchReview,
+  decideLaunchReview,
+  getLaunchReview,
+  getLaunchReviewContract,
+  listLaunchReviews,
+} from "./launch-review.js";
+export {
   getAgentWorkspace,
   getAgentWorkspaceContract,
   listAgentWorkspaces,

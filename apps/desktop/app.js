@@ -12,6 +12,8 @@ const state = {
   agentWorkspaceDetail: null,
   agentLaunches: null,
   agentLaunchDetail: null,
+  launchReviews: null,
+  launchReviewDetail: null,
   workflows: [],
   workflowVersions: null,
   workflowDraft: null,
@@ -79,6 +81,7 @@ const nodes = {
   agentAdapterCount: document.querySelector("#agent-adapter-count"),
   agentWorkspaceCount: document.querySelector("#agent-workspace-count"),
   agentLaunchCount: document.querySelector("#agent-launch-count"),
+  launchReviewCount: document.querySelector("#launch-review-count"),
   decisionQueueState: document.querySelector("#decision-queue-state"),
   approvalState: document.querySelector("#approval-state"),
   resumeState: document.querySelector("#resume-state"),
@@ -87,6 +90,7 @@ const nodes = {
   agentAdapterState: document.querySelector("#agent-adapter-state"),
   agentWorkspaceState: document.querySelector("#agent-workspace-state"),
   agentLaunchState: document.querySelector("#agent-launch-state"),
+  launchReviewState: document.querySelector("#launch-review-state"),
   decisionQueueList: document.querySelector("#decision-queue-list"),
   pendingList: document.querySelector("#pending-list"),
   skillList: document.querySelector("#skill-list"),
@@ -101,6 +105,8 @@ const nodes = {
   agentWorkspacePanel: document.querySelector("#agent-workspace-panel"),
   agentLaunchList: document.querySelector("#agent-launch-list"),
   agentLaunchPanel: document.querySelector("#agent-launch-panel"),
+  launchReviewList: document.querySelector("#launch-review-list"),
+  launchReviewPanel: document.querySelector("#launch-review-panel"),
   workflowList: document.querySelector("#workflow-list"),
   workflowVersionList: document.querySelector("#workflow-version-list"),
   workflowRunList: document.querySelector("#workflow-run-list"),
@@ -214,9 +220,16 @@ nodes.agentWorkspaceList.addEventListener("click", async (event) => {
 });
 
 nodes.agentLaunchList.addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-action='agent-launch-view']");
+  const button = event.target.closest("[data-action]");
   if (!button) return;
-  await loadAgentLaunch(button.dataset.launchId);
+  if (button.dataset.action === "agent-launch-view") await loadAgentLaunch(button.dataset.launchId);
+  if (button.dataset.action === "launch-review-create") await createLaunchReviewFromWorkbench(button.dataset.launchId);
+});
+
+nodes.launchReviewList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action='launch-review-view']");
+  if (!button) return;
+  await loadLaunchReview(button.dataset.reviewId);
 });
 
 nodes.workflowList.addEventListener("click", async (event) => {
@@ -336,7 +349,7 @@ async function refresh() {
   state.busy = true;
   setStatus("Loading");
   try {
-    const [inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches] = await Promise.all([
+    const [inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches, launchReviews] = await Promise.all([
       get("/v1/inbox"),
       get("/v1/skills?status=approved"),
       get("/v1/skills?status=candidates"),
@@ -348,6 +361,7 @@ async function refresh() {
       get("/v1/agent-adapters"),
       get("/v1/agent-workspaces"),
       get("/v1/agent-launches"),
+      get("/v1/launch-reviews"),
     ]);
     state.inbox = inbox;
     state.skills = skills;
@@ -360,6 +374,7 @@ async function refresh() {
     state.agentAdapters = agentAdapters;
     state.agentWorkspaces = agentWorkspaces;
     state.agentLaunches = agentLaunches;
+    state.launchReviews = launchReviews;
     render();
     setStatus(`Connected - ${state.approvalQueue.status.replace(/_/g, " ")}`);
   } catch (error) {
@@ -992,6 +1007,15 @@ function render() {
     },
     items: [],
   };
+  const launchReviews = state.launchReviews || {
+    summary: {
+      total: 0,
+      pendingCount: 0,
+      approvedCount: 0,
+      multiCandidateCount: 0,
+    },
+    items: [],
+  };
 
   nodes.pendingCount.textContent = inbox.summary.pendingApprovalCount;
   nodes.decisionCount.textContent = approvalQueue.summary.pendingDecisionCount + approvalQueue.summary.readyToResumeCount;
@@ -1001,6 +1025,7 @@ function render() {
   nodes.agentAdapterCount.textContent = agentAdapters.summary.total;
   nodes.agentWorkspaceCount.textContent = agentWorkspaces.summary.total;
   nodes.agentLaunchCount.textContent = agentLaunches.summary.total;
+  nodes.launchReviewCount.textContent = launchReviews.summary.total;
   nodes.skillState.textContent = `${skills.length}`;
   nodes.candidateSkillState.textContent = `${candidateSkills.length} candidates`;
   nodes.skillEvaluationState.textContent = `${skillEvaluations.length} reports`;
@@ -1014,6 +1039,7 @@ function render() {
   nodes.agentAdapterState.textContent = `${agentAdapters.summary.total} planned`;
   nodes.agentWorkspaceState.textContent = `${agentWorkspaces.summary.total} prepared / ${agentWorkspaces.summary.gitWorktreeCount} worktrees`;
   nodes.agentLaunchState.textContent = `${agentLaunches.summary.total} launches / ${agentLaunches.summary.requiresApprovalCount} approvals`;
+  nodes.launchReviewState.textContent = `${launchReviews.summary.pendingCount} pending / ${launchReviews.summary.approvedCount} approved`;
 
   renderSkills(skills);
   renderCandidateSkills(candidateSkills);
@@ -1025,6 +1051,8 @@ function render() {
   renderAgentWorkspacePanel(state.agentWorkspaceDetail);
   renderAgentLaunches(agentLaunches.items);
   renderAgentLaunchPanel(state.agentLaunchDetail);
+  renderLaunchReviews(launchReviews.items);
+  renderLaunchReviewPanel(state.launchReviewDetail);
   renderWorkflowSkillOptions(skills);
   renderWorkflowDraft(state.workflowDraft);
   renderWorkflows(workflows);
@@ -1222,8 +1250,26 @@ function renderAgentLaunches(items) {
     ],
     actions: [
       agentLaunchViewButton(item.id),
+      launchReviewCreateButton(item.id),
     ],
   }));
+}
+
+function renderLaunchReviews(items) {
+  replaceList(nodes.launchReviewList, items, (item) => itemNode({
+    title: item.goal || item.id,
+    meta: [
+      [statusClass(item.status), item.status],
+      ["candidates", `${item.candidateCount ?? 0}`],
+      ["reviewable", `${item.reviewableCount ?? 0}`],
+      ["created", formatTime(item.createdAt)],
+    ],
+    actions: [launchReviewViewButton(item.id)],
+  }));
+}
+
+function renderLaunchReviewPanel(review) {
+  nodes.launchReviewPanel.textContent = review ? JSON.stringify(review, null, 2) : "{}";
 }
 
 function renderAgentLaunchPanel(launch) {
@@ -1739,6 +1785,31 @@ async function loadAgentLaunch(launchId) {
   }
 }
 
+async function createLaunchReviewFromWorkbench(launchId) {
+  if (!launchId) return;
+  setStatus("Creating launch review package");
+  try {
+    state.launchReviewDetail = await post("/v1/launch-reviews", { launchId });
+    state.launchReviews = await get("/v1/launch-reviews");
+    render();
+    setStatus(`Created launch review - ${shortId(state.launchReviewDetail.id)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+async function loadLaunchReview(reviewId) {
+  if (!reviewId) return;
+  setStatus("Loading launch review");
+  try {
+    state.launchReviewDetail = await get(`/v1/launch-reviews/${encodeURIComponent(reviewId)}`);
+    renderLaunchReviewPanel(state.launchReviewDetail);
+    setStatus(`Loaded launch review - ${shortId(reviewId)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 function renderDetail(detail) {
   nodes.detailPanel.replaceChildren();
   if (!detail) {
@@ -2197,6 +2268,26 @@ function agentLaunchViewButton(launchId) {
   button.type = "button";
   button.dataset.action = "agent-launch-view";
   button.dataset.launchId = launchId;
+  button.innerHTML = '<span aria-hidden="true">&#128065;</span><span>View</span>';
+  return button;
+}
+
+function launchReviewCreateButton(launchId) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "launch-review-create";
+  button.dataset.launchId = launchId;
+  button.innerHTML = '<span aria-hidden="true">&#9878;</span><span>Review</span>';
+  return button;
+}
+
+function launchReviewViewButton(reviewId) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "launch-review-view";
+  button.dataset.reviewId = reviewId;
   button.innerHTML = '<span aria-hidden="true">&#128065;</span><span>View</span>';
   return button;
 }

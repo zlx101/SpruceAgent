@@ -89,6 +89,8 @@ Workbench v0 supports:
 - inspect prepared agent workspaces through `GET /v1/agent-workspaces/:workspaceId`
 - create agent launch previews through `POST /v1/agent-launches`
 - inspect agent launch records through `GET /v1/agent-launches/:launchId`
+- create evidence-backed launch review packages through `POST /v1/launch-reviews`
+- inspect launch review packages through `GET /v1/launch-reviews/:reviewId`
 
 ## Safety Boundary
 

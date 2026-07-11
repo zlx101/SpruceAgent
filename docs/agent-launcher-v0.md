@@ -59,6 +59,8 @@ POST /v1/agent-launches
 GET  /v1/agent-launches/contract
 ```
 
+Completed launches can be assembled into single- or multi-candidate evidence packages through Launch Review Gate v0. See `docs/launch-review-gate-v0.md`.
+
 ## Workbench
 
 Workbench shows Agent Launches and can create launch previews from prepared workspaces.

@@ -11,6 +11,7 @@ import {
   buildWorkspaceIndex,
   auditPolicyDecision,
   createAgentAdapterRunPlan,
+  createLaunchReview,
   createContextPack,
   createSkillReplayFixture,
   createGatewayClient,
@@ -18,6 +19,7 @@ import {
   createWorkflow,
   createWorkflowFromDraft,
   draftWorkflow,
+  decideLaunchReview,
   ensureStore,
   ensureGatewayToken,
   evaluatePolicy,
@@ -44,6 +46,8 @@ import {
   getAgentLauncherContract,
   getAgentWorkspace,
   getAgentWorkspaceContract,
+  getLaunchReview,
+  getLaunchReviewContract,
   getLlmAdapterContract,
   getPlannerPromotionContract,
   getRunInbox,
@@ -75,6 +79,7 @@ import {
   listAgentAdapters,
   listAgentLaunches,
   listAgentWorkspaces,
+  listLaunchReviews,
   listArtifacts,
   listEvaluations,
   listSkillEvaluations,
@@ -165,6 +170,7 @@ async function main() {
       agentAdapterCount: listAgentAdapters().summary.total,
       agentWorkspaceCount: listAgentWorkspaces(store).summary.total,
       agentLaunchCount: listAgentLaunches(store).summary.total,
+      launchReviewCount: listLaunchReviews(store).summary.total,
       artifactCount: listArtifacts(store).summary.total,
       evaluationCount: listEvaluations(store).length,
       skillEvaluationCount: listSkillEvaluations(store).length,
@@ -1316,12 +1322,57 @@ async function handleAgent(action, args = []) {
     return;
   }
 
+  if (action === "review") {
+    const flags = parseFlags(args);
+    const launchIds = splitCsv(flags.launchIds).length ? splitCsv(flags.launchIds) : flags._;
+    if (!launchIds.length) throw new Error("usage: spruce agent review <launchId> [moreLaunchIds...] [--launchIds id1,id2]");
+    printJson(createLaunchReview(store, {
+      launchIds,
+      actor: flags.actor ?? "local-user",
+    }));
+    return;
+  }
+
+  if (action === "reviews" || action === "review-list") {
+    const flags = parseFlags(args);
+    printJson(listLaunchReviews(store, {
+      status: flags.status,
+      launchId: flags.launchId,
+    }));
+    return;
+  }
+
+  if (action === "review-detail") {
+    const [reviewId] = args;
+    if (!reviewId) throw new Error("usage: spruce agent review-detail <reviewId>");
+    printJson(getLaunchReview(store, reviewId));
+    return;
+  }
+
+  if (action === "review-decide") {
+    const [reviewId, ...flagArgs] = args;
+    if (!reviewId) throw new Error("usage: spruce agent review-decide <reviewId> --decision <approved|rejected|needs_changes> --reason <reason> [--selectedLaunchId <launchId>]");
+    const flags = parseFlags(flagArgs);
+    printJson(decideLaunchReview(store, reviewId, {
+      decision: flags.decision,
+      selectedLaunchId: flags.selectedLaunchId,
+      reason: flags.reason,
+      actor: flags.actor ?? "local-user",
+    }));
+    return;
+  }
+
+  if (action === "review-contract") {
+    printJson(getLaunchReviewContract());
+    return;
+  }
+
   if (action === "contract" || action === "adapter-contract") {
     printJson(getAgentAdapterContract());
     return;
   }
 
-  throw new Error("usage: spruce agent <adapters|adapter|plan|prepare|workspaces|workspace|launch|launches|launch-detail|contract|workspace-contract|launcher-contract>");
+  throw new Error("usage: spruce agent <adapters|adapter|plan|prepare|workspaces|workspace|launch|launches|launch-detail|review|reviews|review-detail|review-decide|contract|workspace-contract|launcher-contract|review-contract>");
 }
 
 function parseFlags(args) {
@@ -1566,9 +1617,14 @@ Usage:
   ${executable} agent launch <workspaceId> --execute --command "node -v" [--approvalId <approvalId>]
   ${executable} agent launches [--workspaceId <workspaceId>]
   ${executable} agent launch-detail <launchId>
+  ${executable} agent review <launchId> [moreLaunchIds...]
+  ${executable} agent reviews [--status pending_review]
+  ${executable} agent review-detail <reviewId>
+  ${executable} agent review-decide <reviewId> --decision approved --selectedLaunchId <launchId> --reason "reviewed"
   ${executable} agent contract
   ${executable} agent workspace-contract
   ${executable} agent launcher-contract
+  ${executable} agent review-contract
   ${executable} gateway token
   ${executable} gateway token --rotate
   ${executable} gateway contract

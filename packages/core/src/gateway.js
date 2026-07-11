@@ -21,6 +21,13 @@ import {
   launchAgentWorkspace,
   listAgentLaunches,
 } from "./agent-launcher.js";
+import {
+  createLaunchReview,
+  decideLaunchReview,
+  getLaunchReview,
+  getLaunchReviewContract,
+  listLaunchReviews,
+} from "./launch-review.js";
 import { approveTicket, getApprovalTicket, listApprovalTickets, rejectTicket } from "./approvals.js";
 import { getApprovalQueue, getApprovalQueueContract } from "./approval-queue.js";
 import { getArtifact, getArtifactContract, listArtifacts } from "./artifacts.js";
@@ -290,6 +297,41 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/agent-launches/contract",
       authRequired: true,
       description: "Read the Agent Launcher contract.",
+    },
+    {
+      id: "launch_reviews.list",
+      method: "GET",
+      path: "/v1/launch-reviews",
+      authRequired: true,
+      description: "List Agent Launch review packages.",
+    },
+    {
+      id: "launch_reviews.get",
+      method: "GET",
+      path: "/v1/launch-reviews/:reviewId",
+      authRequired: true,
+      description: "Read one evidence-backed Agent Launch review package.",
+    },
+    {
+      id: "launch_reviews.create",
+      method: "POST",
+      path: "/v1/launch-reviews",
+      authRequired: true,
+      description: "Create a review package from one or more Agent Launch records.",
+    },
+    {
+      id: "launch_reviews.decide",
+      method: "POST",
+      path: "/v1/launch-reviews/:reviewId/decision",
+      authRequired: true,
+      description: "Record an approve, reject, or needs-changes review decision without Git mutation.",
+    },
+    {
+      id: "launch_reviews.contract",
+      method: "GET",
+      path: "/v1/launch-reviews/contract",
+      authRequired: true,
+      description: "Read the Launch Review contract.",
     },
     {
       id: "tools.list",
@@ -995,6 +1037,35 @@ async function routeRequest(store, request, url, body) {
     }));
   }
 
+  if (request.method === "GET" && url.pathname === "/v1/launch-reviews") {
+    return ok(listLaunchReviews(store, {
+      status: url.searchParams.get("status") ?? undefined,
+      launchId: url.searchParams.get("launchId") ?? undefined,
+    }));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/launch-reviews/contract") {
+    return ok(getLaunchReviewContract());
+  }
+
+  if (request.method === "GET" && pathParts[1] === "launch-reviews" && pathParts[2]) {
+    return ok(getLaunchReview(store, pathParts[2]));
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/launch-reviews") {
+    return ok(createLaunchReview(store, {
+      ...body,
+      actor: body.actor ?? "gateway-user",
+    }));
+  }
+
+  if (request.method === "POST" && pathParts[1] === "launch-reviews" && pathParts[2] && pathParts[3] === "decision") {
+    return ok(decideLaunchReview(store, pathParts[2], {
+      ...body,
+      actor: body.actor ?? "gateway-user",
+    }));
+  }
+
   if (request.method === "GET" && url.pathname === "/v1/contract") {
     return ok(getGatewayRouteContract());
   }
@@ -1476,6 +1547,7 @@ function gatewayStatus(store) {
     agentAdapterCount: listAgentAdapters().summary.total,
     agentWorkspaceCount: listAgentWorkspaces(store).summary.total,
     agentLaunchCount: listAgentLaunches(store).summary.total,
+    launchReviewCount: listLaunchReviews(store).summary.total,
     artifactCount: listArtifacts(store).summary.total,
     evaluationCount: listEvaluations(store).length,
     skillEvaluationCount: listSkillEvaluations(store).length,
