@@ -45,6 +45,8 @@ import {
   getAgentAdapterContract,
   getAgentLaunch,
   getAgentLauncherContract,
+  getAgentTrial,
+  getAgentTrialContract,
   getAgentWorkspace,
   getAgentWorkspaceContract,
   getLaunchReview,
@@ -83,6 +85,7 @@ import {
   listApprovalTickets,
   listAgentAdapters,
   listAgentLaunches,
+  listAgentTrials,
   listAgentWorkspaces,
   listLaunchReviews,
   listCapabilityProbes,
@@ -105,6 +108,7 @@ import {
   promoteSkillCandidate,
   prepareAgentWorkspace,
   probeAgentCapabilities,
+  recordAgentTrial,
   launchAgentWorkspace,
   importSkillPackage,
   readSkillPackageFile,
@@ -1377,6 +1381,49 @@ async function handleAgent(action, args = []) {
     return;
   }
 
+  if (action === "trial-record") {
+    const [adapterId, ...flagArgs] = args;
+    if (!adapterId) throw new Error("usage: spruce agent trial-record <adapterId> --processExitCode <code> --changedFileCount <count> --acceptanceStatus <passed|failed|not_run> [--acceptanceExitCode <code>] --policyStatus <allowed|blocked>");
+    const flags = parseFlags(flagArgs);
+    printJson(recordAgentTrial(store, {
+      adapterId,
+      taskId: flags.taskId,
+      category: flags.category,
+      source: flags.source,
+      processExitCode: flags.processExitCode,
+      durationMs: flags.durationMs,
+      changedFileCount: flags.changedFileCount,
+      acceptanceStatus: flags.acceptanceStatus,
+      acceptanceExitCode: flags.acceptanceExitCode,
+      policyStatus: flags.policyStatus,
+      failureCode: flags.failureCode,
+      expectedWorkspaceChange: !Boolean(flags.noWorkspaceChange),
+      actor: flags.actor ?? "local-user",
+    }));
+    return;
+  }
+
+  if (action === "trials" || action === "trial-list") {
+    const flags = parseFlags(args);
+    printJson(listAgentTrials(store, {
+      adapterId: flags.adapterId,
+      status: flags.status,
+    }));
+    return;
+  }
+
+  if (action === "trial-detail") {
+    const [trialId] = args;
+    if (!trialId) throw new Error("usage: spruce agent trial-detail <trialId>");
+    printJson(getAgentTrial(store, trialId));
+    return;
+  }
+
+  if (action === "trial-contract") {
+    printJson(getAgentTrialContract());
+    return;
+  }
+
   if (action === "probe") {
     const flags = parseFlags(args);
     printJson(probeAgentCapabilities(store, {
@@ -1704,6 +1751,10 @@ Usage:
   ${executable} agent workspace-contract
   ${executable} agent launcher-contract
   ${executable} agent review-contract
+  ${executable} agent trial-record <adapterId> --processExitCode 0 --changedFileCount 1 --acceptanceStatus passed --acceptanceExitCode 0 --policyStatus allowed
+  ${executable} agent trials [--adapterId codex-cli] [--status passed|failed]
+  ${executable} agent trial-detail <trialId>
+  ${executable} agent trial-contract
   ${executable} agent probe [--adapterIds codex-cli,claude-code] [--version]
   ${executable} agent probes
   ${executable} agent probe-detail <probeId>

@@ -49,6 +49,8 @@ import {
   getAgentAdapterContract,
   getAgentLaunch,
   getAgentLauncherContract,
+  getAgentTrial,
+  getAgentTrialContract,
   getAgentWorkspace,
   getAgentWorkspaceContract,
   getLaunchReview,
@@ -91,6 +93,7 @@ import {
   listArtifacts,
   listAgentAdapters,
   listAgentLaunches,
+  listAgentTrials,
   listAgentWorkspaces,
   listLaunchReviews,
   listCapabilityProbes,
@@ -111,6 +114,7 @@ import {
   promoteSkillCandidate,
   prepareAgentWorkspace,
   probeAgentCapabilities,
+  recordAgentTrial,
   launchAgentWorkspace,
   importSkillPackage,
   promoteLlmDraftToCandidatePlan,
@@ -148,6 +152,7 @@ test("workspace store initializes core files", () => {
   assert.ok(fs.existsSync(path.join(store.root, "skill-replay-fixture-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "skill-replay-result-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "skill-package-index.jsonl")));
+  assert.ok(fs.existsSync(path.join(store.root, "agent-trial-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "skill-package-import-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "agent-workspace-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "agent-launch-index.jsonl")));
@@ -4137,3 +4142,134 @@ function jsonResponse(body, init = {}) {
     },
   });
 }
+
+test("agent trials require process, workspace, acceptance, and policy evidence", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const misleadingZeroExit = recordAgentTrial(store, {
+    adapterId: "codex-cli",
+    category: "coding_smoke",
+    source: "controlled_smoke",
+    processExitCode: 0,
+    durationMs: 55_000,
+    changedFileCount: 0,
+    acceptanceStatus: "failed",
+    acceptanceExitCode: 1,
+    policyStatus: "blocked",
+    failureCode: "read_only",
+  });
+  const passed = recordAgentTrial(store, {
+    adapterId: "claude-code",
+    category: "coding_smoke",
+    source: "controlled_smoke",
+    processExitCode: 0,
+    durationMs: 12_000,
+    changedFileCount: 1,
+    acceptanceStatus: "passed",
+    acceptanceExitCode: 0,
+    policyStatus: "allowed",
+  });
+
+  assert.equal(getAgentTrialContract().interface, "spruceagent.agent-trials");
+  assert.equal(misleadingZeroExit.status, "failed");
+  assert.ok(misleadingZeroExit.failureCodes.includes("workspace_effect_missing"));
+  assert.ok(misleadingZeroExit.failureCodes.includes("acceptance_not_passed"));
+  assert.ok(misleadingZeroExit.failureCodes.includes("policy_blocked"));
+  assert.equal(passed.status, "passed");
+  assert.equal(passed.evidenceLevel, "reported_execution_diff_and_acceptance");
+  assert.equal(passed.provenance.attestedByLauncher, false);
+  assert.equal(getAgentTrial(store, passed.id).id, passed.id);
+  const listed = listAgentTrials(store);
+  assert.equal(listed.summary.total, 2);
+  assert.equal(listed.summary.passedCount, 1);
+  assert.equal(listed.summary.byAdapter["codex-cli"].passRate, 0);
+  assert.equal(listed.summary.byAdapter["claude-code"].passRate, 1);
+  assert.throws(
+    () => recordAgentTrial(store, {
+      adapterId: "codex-cli",
+      processExitCode: 0,
+      changedFileCount: 1,
+      acceptanceStatus: "passed",
+      acceptanceExitCode: 1,
+      policyStatus: "allowed",
+    }),
+    /acceptanceExitCode must be 0/,
+  );
+});
+
+test("capability probe carries empirical trial evidence without treating installation as validation", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const binDir = path.join(dir, "bin");
+  fs.mkdirSync(binDir);
+  const commandPath = process.platform === "win32"
+    ? path.join(binDir, "codex.cmd")
+    : path.join(binDir, "codex");
+  fs.writeFileSync(commandPath, process.platform === "win32" ? "@echo off\r\necho fake-codex\r\n" : "#!/bin/sh\necho fake-codex\n", "utf8");
+  if (process.platform !== "win32") fs.chmodSync(commandPath, 0o755);
+  const store = ensureStore(createStore(dir));
+  const trial = recordAgentTrial(store, {
+    adapterId: "codex-cli",
+    processExitCode: 0,
+    durationMs: 100,
+    changedFileCount: 0,
+    acceptanceStatus: "failed",
+    policyStatus: "blocked",
+    failureCode: "read_only",
+  });
+  const probe = probeAgentCapabilities(store, {
+    adapterIds: ["codex-cli", "local-shell-agent"],
+  }, {
+    env: { PATH: binDir, PATHEXT: ".CMD" },
+  });
+
+  const codex = probe.adapters.find((item) => item.adapterId === "codex-cli");
+  const local = probe.adapters.find((item) => item.adapterId === "local-shell-agent");
+  assert.equal(codex.status, "available");
+  assert.equal(codex.empiricalValidation.status, "reported");
+  assert.equal(codex.empiricalValidation.reportedOutcome, "failed");
+  assert.equal(codex.empiricalValidation.attestation, "supplied_observation");
+  assert.equal(codex.empiricalValidation.latestTrialId, trial.id);
+  assert.equal(local.empiricalValidation.status, "unverified");
+  assert.equal(probe.summary.adaptersWithReportedFailureCount, 1);
+  assert.equal(probe.summary.adaptersWithReportedPassCount, 0);
+  const route = createTaskRoute(store, {
+    goal: "Execute coding after a failed reported trial",
+    roles: ["coding"],
+    mode: "execute",
+    probeId: probe.id,
+  });
+  assert.ok(route.candidates
+    .find((item) => item.adapterId === "codex-cli")
+    .exclusionReasons.includes("latest_reported_trial_failed"));
+});
+
+test("gateway client records and lists agent trial evidence", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const client = createGatewayClient({
+    baseUrl: `http://${gateway.host}:${gateway.port}`,
+    token: gateway.token,
+  });
+  try {
+    const contract = await client.agentTrialContract();
+    const trial = await client.recordAgentTrial({
+      adapterId: "codex-cli",
+      processExitCode: 1,
+      durationMs: 900,
+      changedFileCount: 0,
+      acceptanceStatus: "not_run",
+      policyStatus: "allowed",
+      failureCode: "insufficient_credit",
+    });
+    const listed = await client.listAgentTrials({ adapterId: "codex-cli" });
+    const loaded = await client.getAgentTrial(trial.id);
+
+    assert.equal(contract.interface, "spruceagent.agent-trials");
+    assert.equal(trial.status, "failed");
+    assert.equal(listed.summary.total, 1);
+    assert.equal(loaded.id, trial.id);
+  } finally {
+    await closeServer(gateway.server);
+  }
+});

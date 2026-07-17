@@ -35,6 +35,12 @@ import {
   probeAgentCapabilities,
 } from "./capability-probe.js";
 import {
+  getAgentTrial,
+  getAgentTrialContract,
+  listAgentTrials,
+  recordAgentTrial,
+} from "./agent-trials.js";
+import {
   createTaskRoute,
   getTaskRoute,
   getTaskRouterContract,
@@ -344,6 +350,34 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/launch-reviews/contract",
       authRequired: true,
       description: "Read the Launch Review contract.",
+    },
+    {
+      id: "agent_trials.list",
+      method: "GET",
+      path: "/v1/agent-trials",
+      authRequired: true,
+      description: "List empirical Agent execution trial evidence and descriptive statistics.",
+    },
+    {
+      id: "agent_trials.get",
+      method: "GET",
+      path: "/v1/agent-trials/:trialId",
+      authRequired: true,
+      description: "Read one empirical Agent execution trial.",
+    },
+    {
+      id: "agent_trials.create",
+      method: "POST",
+      path: "/v1/agent-trials",
+      authRequired: true,
+      description: "Record a controlled execution observation without prompts, logs, diffs, or credentials.",
+    },
+    {
+      id: "agent_trials.contract",
+      method: "GET",
+      path: "/v1/agent-trials/contract",
+      authRequired: true,
+      description: "Read the Agent Trial evidence contract.",
     },
     {
       id: "capability_probes.list",
@@ -1138,6 +1172,28 @@ async function routeRequest(store, request, url, body) {
     return ok(listCapabilityProbes(store));
   }
 
+  if (request.method === "GET" && url.pathname === "/v1/agent-trials") {
+    return ok(listAgentTrials(store, {
+      adapterId: url.searchParams.get("adapterId") ?? undefined,
+      status: url.searchParams.get("status") ?? undefined,
+    }));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/agent-trials/contract") {
+    return ok(getAgentTrialContract());
+  }
+
+  if (request.method === "GET" && pathParts[1] === "agent-trials" && pathParts[2]) {
+    return ok(getAgentTrial(store, pathParts[2]));
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/agent-trials") {
+    return ok(recordAgentTrial(store, {
+      ...body,
+      actor: body.actor ?? "gateway-user",
+    }));
+  }
+
   if (request.method === "GET" && url.pathname === "/v1/capability-probes/contract") {
     return ok(getCapabilityProbeContract());
   }
@@ -1657,6 +1713,7 @@ function gatewayStatus(store) {
     agentLaunchCount: listAgentLaunches(store).summary.total,
     launchReviewCount: listLaunchReviews(store).summary.total,
     capabilityProbeCount: listCapabilityProbes(store).summary.total,
+    agentTrialCount: listAgentTrials(store).summary.total,
     taskRouteCount: listTaskRoutes(store).summary.total,
     artifactCount: listArtifacts(store).summary.total,
     evaluationCount: listEvaluations(store).length,

@@ -133,6 +133,13 @@ export {
   listTaskRoutes,
 } from "./task-router.js";
 export {
+  getAgentTrial,
+  getAgentTrialContract,
+  listAgentTrials,
+  recordAgentTrial,
+  summarizeAgentTrials,
+} from "./agent-trials.js";
+export {
   getAgentWorkspace,
   getAgentWorkspaceContract,
   listAgentWorkspaces,

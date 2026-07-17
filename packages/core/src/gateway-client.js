@@ -56,6 +56,10 @@ export function createGatewayClient(options = {}) {
     launchReviewContract: () => request("GET", "/v1/launch-reviews/contract"),
     createLaunchReview: (input = {}) => request("POST", "/v1/launch-reviews", input),
     decideLaunchReview: (reviewId, input = {}) => request("POST", `/v1/launch-reviews/${encodePathPart(reviewId)}/decision`, input),
+    listAgentTrials: (input = {}) => request("GET", `/v1/agent-trials${agentTrialParams(input)}`),
+    getAgentTrial: (trialId) => request("GET", `/v1/agent-trials/${encodePathPart(trialId)}`),
+    agentTrialContract: () => request("GET", "/v1/agent-trials/contract"),
+    recordAgentTrial: (input = {}) => request("POST", "/v1/agent-trials", input),
     listCapabilityProbes: () => request("GET", "/v1/capability-probes"),
     getCapabilityProbe: (probeId) => request("GET", `/v1/capability-probes/${encodePathPart(probeId)}`),
     capabilityProbeContract: () => request("GET", "/v1/capability-probes/contract"),
@@ -201,6 +205,14 @@ function launchReviewParams(input = {}) {
 
 function taskRouteParams(input = {}) {
   const params = new URLSearchParams();
+  if (input.status) params.set("status", input.status);
+  const value = params.toString();
+  return value ? `?${value}` : "";
+}
+
+function agentTrialParams(input = {}) {
+  const params = new URLSearchParams();
+  if (input.adapterId) params.set("adapterId", input.adapterId);
   if (input.status) params.set("status", input.status);
   const value = params.toString();
   return value ? `?${value}` : "";

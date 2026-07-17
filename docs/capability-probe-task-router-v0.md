@@ -2,7 +2,7 @@
 
 SpruceAgent can only orchestrate an Agent fleet honestly when it distinguishes declared integrations from capabilities observed on the current machine.
 
-Capability Probe v0 creates that evidence. Task Router v0 consumes the evidence and produces an explainable, non-executing route draft.
+Capability Probe v0 creates that evidence. Task Router v0 consumes the evidence and produces an explainable, non-executing route draft. Reported execution outcomes follow the separate [Agent Trial Evidence v0](agent-trial-evidence-v0.md) contract.
 
 ## Capability Probe
 
@@ -12,7 +12,8 @@ The `spruceagent.capability-probe` contract records:
 - an optional bounded `--version` result where shell-free execution is safe and the caller explicitly requests it;
 - whether the gated Agent Launcher currently supports execution for that adapter;
 - declared isolation and review capabilities;
-- whether supported LLM provider configuration is present.
+- whether supported LLM provider configuration is present;
+- reported Agent Trial outcomes and their non-attested provenance.
 
 Provider configuration is redacted. The snapshot records property presence without returning or persisting its value.
 
@@ -54,7 +55,7 @@ The route order is deterministic:
 
 There is no model-quality score in v0. If multiple adapters satisfy the same role and hard constraints, the assignment becomes `requires_preference` instead of selecting an arbitrary winner. If several real LLM providers are configured, the router likewise requires an explicit preference because SpruceAgent does not yet have benchmark evidence for a quality-based choice.
 
-In `execute` mode, external CLI adapters remain ineligible until Agent Launcher support is promoted. `local-shell-agent` is the only executable adapter in v0, and subsequent execution still requires Workspace, TrustKernel, Launcher, and Review gates.
+In `execute` mode, external CLI adapters remain ineligible until Agent Launcher support is promoted. A latest reported failed trial also conservatively blocks execute routing. Reported trials never create an automatic winner. `local-shell-agent` is the only executable adapter in v0, and subsequent execution still requires Workspace, TrustKernel, Launcher, and Review gates.
 
 ## Storage
 
@@ -113,4 +114,4 @@ The Workbench exposes `Probe` and `Route Goal` actions. Both create inspectable 
 
 ## Next Boundary
 
-The next step is a benchmark-backed Model Registry and orchestration manifest. It should add measured latency, cost, context limits, structured-output reliability, task evaluations, and policy constraints before SpruceAgent attempts automatic model selection or parallel external execution.
+The next step is Launcher-attested Agent Trials followed by a benchmark-backed Model Registry and orchestration manifest. Repeated comparable trials must add measured latency, cost, context limits, structured-output reliability, task evaluations, and policy constraints before SpruceAgent attempts automatic model selection.

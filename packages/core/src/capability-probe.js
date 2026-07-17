@@ -2,16 +2,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { getAgentAdapter, listAgentAdapters } from "./agent-adapters.js";
+import { listAgentTrials } from "./agent-trials.js";
 import { createId, nowIso } from "./id.js";
 import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
 
 export const CAPABILITY_PROBE_CONTRACT = Object.freeze({
-  version: "0.1.0",
+  version: "0.2.0",
   interface: "spruceagent.capability-probe",
   sourceKind: "local_runtime_and_redacted_provider_configuration",
   outputKind: "agent_capability_snapshot",
   safetyBoundary: [
-    "Capability Probe v0 detects allowlisted adapter commands and redacted provider configuration only.",
+    "Capability Probe v0 detects allowlisted adapter commands, redacted provider configuration, and local Agent Trial summaries.",
     "It never launches an agent task, sends a model request, opens a network connection, or mutates a repository.",
     "Version checks use only a fixed --version argument with a short timeout.",
     "Windows command wrappers are detected but not executed during version checks.",
@@ -34,6 +35,7 @@ export function probeAgentCapabilities(store, input = {}, runtime = {}) {
   }
 
   const createdAt = nowIso();
+  const trialSummary = listAgentTrials(store).summary;
   const snapshot = {
     version: CAPABILITY_PROBE_CONTRACT.version,
     interface: CAPABILITY_PROBE_CONTRACT.interface,
@@ -46,8 +48,9 @@ export function probeAgentCapabilities(store, input = {}, runtime = {}) {
       arch: process.arch,
       node: process.version,
     },
-    adapters: adapterItems.map((item) => probeAdapter(item, input, runtime)),
+    adapters: adapterItems.map((item) => probeAdapter(item, input, runtime, trialSummary.byAdapter[item.id])),
     llmProviders: probeLlmProviders(),
+    agentTrials: trialSummary,
     limits: CAPABILITY_PROBE_CONTRACT.safetyBoundary,
   };
   snapshot.summary = summarizeSnapshot(snapshot);
@@ -95,7 +98,7 @@ export function getLatestCapabilityProbe(store) {
   return latest ? getCapabilityProbe(store, latest.id) : null;
 }
 
-function probeAdapter(item, input, runtime) {
+function probeAdapter(item, input, runtime, trialStats = null) {
   const adapter = getAgentAdapter(item.id);
   if (adapter.id === "local-shell-agent") {
     return {
@@ -110,6 +113,7 @@ function probeAdapter(item, input, runtime) {
       version: null,
       versionStatus: "not_applicable",
       launcherExecutionSupported: true,
+      empiricalValidation: empiricalValidation(trialStats),
       capabilities: adapter.capabilities,
       evidence: ["Adapter is implemented by SpruceAgent's gated local launcher."],
     };
@@ -129,6 +133,7 @@ function probeAdapter(item, input, runtime) {
       version: null,
       versionStatus: "not_checked",
       launcherExecutionSupported: false,
+      empiricalValidation: empiricalValidation(trialStats),
       capabilities: adapter.capabilities,
       evidence: [`${adapter.command} was not found on PATH.`],
     };
@@ -149,6 +154,7 @@ function probeAdapter(item, input, runtime) {
     version: version.version,
     versionStatus: version.status,
     launcherExecutionSupported: false,
+    empiricalValidation: empiricalValidation(trialStats),
     capabilities: adapter.capabilities,
     evidence: [
       `${adapter.command} resolved to a local executable.`,
@@ -253,8 +259,37 @@ function summarizeSnapshot(snapshot) {
     availableAdapterCount: snapshot.adapters.filter((item) => item.status === "available").length,
     unavailableAdapterCount: snapshot.adapters.filter((item) => item.status !== "available").length,
     launcherExecutableAdapterCount: snapshot.adapters.filter((item) => item.launcherExecutionSupported).length,
+    adaptersWithReportedPassCount: snapshot.adapters.filter((item) => item.empiricalValidation.reportedOutcome === "passed").length,
+    adaptersWithReportedFailureCount: snapshot.adapters.filter((item) => item.empiricalValidation.reportedOutcome === "failed").length,
     llmProviderCount: snapshot.llmProviders.length,
     configuredLlmProviderCount: snapshot.llmProviders.filter((item) => item.configured && item.id !== "mock").length,
+  };
+}
+
+function empiricalValidation(stats) {
+  if (!stats) {
+    return {
+      status: "unverified",
+      reportedOutcome: null,
+      attestation: "none",
+      trialCount: 0,
+      passedCount: 0,
+      failedCount: 0,
+      passRate: null,
+      latestTrialId: null,
+      evidence: "No supplied execution trial has been recorded for this adapter.",
+    };
+  }
+  return {
+    status: "reported",
+    reportedOutcome: stats.latestStatus,
+    attestation: "supplied_observation",
+    trialCount: stats.total,
+    passedCount: stats.passedCount,
+    failedCount: stats.failedCount,
+    passRate: stats.passRate,
+    latestTrialId: stats.latestTrialId,
+    evidence: "Outcome is derived from supplied process, workspace-effect, acceptance, and policy observations; Launcher attestation is not available in v0.",
   };
 }
 
