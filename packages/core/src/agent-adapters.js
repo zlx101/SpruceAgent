@@ -3,18 +3,18 @@ import { createContextPack, createSourceMap } from "./context.js";
 import { createId, nowIso } from "./id.js";
 
 export const AGENT_ADAPTER_CONTRACT = Object.freeze({
-  version: "0.1.0",
+  version: "0.2.0",
   interface: "spruceagent.agent-adapters",
   sourceKind: "cli_agent_adapter_registry",
   outputKind: "agent_fleet_control_plane",
   safetyBoundary: [
     "Agent Adapter Registry v0 is read-only except for returning an execution plan object.",
-    "It does not start external CLI agents.",
+    "It does not start external CLI agents; execution flows through Agent Launcher.",
     "It does not create git worktrees, branches, commits, or pull requests.",
-    "Adapter run plans are previews that must flow through a future TrustKernel-approved launcher before execution.",
+    "Codex CLI plans can flow through the TrustKernel-approved External CLI Launcher v1; other external adapters remain preview-only.",
   ],
   adapterKinds: ["coding_cli", "local_cli", "research_cli"],
-  plannedIsolationModes: ["git_worktree", "current_workspace_readonly"],
+  plannedIsolationModes: ["git_worktree", "current_workspace_approved", "current_workspace_readonly"],
 });
 
 const BUILTIN_ADAPTERS = Object.freeze([
@@ -24,16 +24,16 @@ const BUILTIN_ADAPTERS = Object.freeze([
     kind: "coding_cli",
     provider: "openai",
     command: "codex",
-    status: "planned",
-    maturity: "adapter_spec",
+    status: "executable_gated",
+    maturity: "controlled_execution_v1",
     summary: "OpenAI Codex command-line coding agent adapter.",
     strengths: ["repo editing", "test-driven coding", "patch review", "terminal-native workflows"],
-    limitations: ["requires local Codex CLI installation", "execution is not enabled in v0"],
+    limitations: ["requires local Codex CLI installation and authentication", "requires an isolated Git worktree and exact approval"],
     recommendedIsolation: "git_worktree",
     promptDelivery: "stdin_or_arg",
     outputCapture: "terminal_log_and_diff",
     safetyNotes: [
-      "Run only in an isolated worktree when execution is enabled.",
+      "Run only in an isolated worktree through the shell-free launcher.",
       "Require Trace Report and diff review before merge.",
     ],
   },
@@ -119,17 +119,17 @@ const BUILTIN_ADAPTERS = Object.freeze([
     kind: "local_cli",
     provider: "local",
     command: "shell",
-    status: "planned",
-    maturity: "adapter_spec",
+    status: "executable_gated",
+    maturity: "controlled_execution_v0",
     summary: "Local scripted agent adapter for deterministic shell workflows.",
     strengths: ["repeatable scripts", "local-only execution", "deterministic automation"],
-    limitations: ["not a general reasoning agent", "execution is not enabled in v0"],
-    recommendedIsolation: "current_workspace_readonly",
+    limitations: ["not a general reasoning agent", "approved commands may modify the current workspace"],
+    recommendedIsolation: "current_workspace_approved",
     promptDelivery: "config_file",
     outputCapture: "terminal_log_artifacts",
     safetyNotes: [
-      "Default to read-only until a policy allowlist is configured.",
-      "Use explicit tool policy checks for every write action.",
+      "Treat every command as high risk and require exact approval.",
+      "Use an isolated Git worktree instead when source mutation needs stronger containment.",
     ],
   },
 ]);
@@ -155,9 +155,9 @@ export function listAgentAdapters(options = {}) {
     },
     items: adapters,
     limits: [
-      "Adapter Registry v0 exposes specifications only.",
-      "No external CLI is detected or executed in v0.",
-      "Use plan routes to preview isolation and launch requirements before future execution support.",
+      "Adapter Registry returns specifications and execution plans; it does not launch processes itself.",
+      "Codex CLI is the only external adapter enabled by External CLI Launcher v1.",
+      "Use Capability Probe before preparing and approving an external launch.",
     ],
   };
 }
@@ -174,7 +174,7 @@ export function getAgentAdapter(adapterId) {
       worktreeIsolation: adapter.recommendedIsolation === "git_worktree",
       diffReview: true,
       traceReportRequired: true,
-      directExecution: false,
+      directExecution: adapter.id === "codex-cli",
     },
     integrationChecklist: [
       "Verify CLI binary and version.",
@@ -246,8 +246,10 @@ export function createAgentAdapterRunPlan(store, input = {}) {
     },
     limits: [
       ...AGENT_ADAPTER_CONTRACT.safetyBoundary,
-      "This plan is intentionally not executable in v0.",
-      "Future execution must create the isolated workspace before launching the adapter.",
+      adapter.id === "codex-cli"
+        ? "This plan becomes executable only after isolated workspace preparation and exact approval."
+        : "This external adapter remains preview-only.",
+      "Execution must create the isolated workspace before launching the adapter.",
     ],
   };
 }
@@ -270,12 +272,21 @@ function buildLaunchArgs(adapter, input) {
   if (adapter.promptDelivery === "config_file") {
     return ["--config", "<spruce-agent-plan.json>"];
   }
-  return [
-    "--worktree",
-    input.workspacePath,
-    "--prompt",
-    input.goal,
-  ];
+  if (adapter.id === "codex-cli") {
+    return [
+      "exec",
+      "--sandbox",
+      "workspace-write",
+      "--ephemeral",
+      "--json",
+      "--color",
+      "never",
+      "--cd",
+      input.workspacePath,
+      "-",
+    ];
+  }
+  return ["<adapter-contract-not-yet-verified>"];
 }
 
 function sanitizeBranchName(value) {

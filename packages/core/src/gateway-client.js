@@ -50,6 +50,7 @@ export function createGatewayClient(options = {}) {
     listAgentLaunches: (input = {}) => request("GET", `/v1/agent-launches${agentLaunchParams(input)}`),
     getAgentLaunch: (launchId) => request("GET", `/v1/agent-launches/${encodePathPart(launchId)}`),
     agentLauncherContract: () => request("GET", "/v1/agent-launches/contract"),
+    externalCliLauncherContract: () => request("GET", "/v1/external-cli-launcher/contract"),
     launchAgentWorkspace: (input = {}) => request("POST", "/v1/agent-launches", input),
     listLaunchReviews: (input = {}) => request("GET", `/v1/launch-reviews${launchReviewParams(input)}`),
     getLaunchReview: (reviewId) => request("GET", `/v1/launch-reviews/${encodePathPart(reviewId)}`),

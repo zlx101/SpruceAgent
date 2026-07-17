@@ -21,6 +21,7 @@ import {
   launchAgentWorkspace,
   listAgentLaunches,
 } from "./agent-launcher.js";
+import { getExternalCliLauncherContract } from "./external-cli-launcher.js";
 import {
   createLaunchReview,
   decideLaunchReview,
@@ -324,6 +325,13 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/agent-launches/contract",
       authRequired: true,
       description: "Read the Agent Launcher contract.",
+    },
+    {
+      id: "external_cli_launcher.contract",
+      method: "GET",
+      path: "/v1/external-cli-launcher/contract",
+      authRequired: true,
+      description: "Read the shell-free External CLI Launcher contract.",
     },
     {
       id: "launch_reviews.list",
@@ -1189,6 +1197,10 @@ async function routeRequest(store, request, url, body) {
 
   if (request.method === "GET" && url.pathname === "/v1/agent-launches/contract") {
     return ok(getAgentLauncherContract());
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/external-cli-launcher/contract") {
+    return ok(getExternalCliLauncherContract());
   }
 
   if (request.method === "GET" && pathParts[1] === "agent-launches" && pathParts[2]) {

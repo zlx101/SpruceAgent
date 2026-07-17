@@ -123,6 +123,10 @@ export {
   listAgentLaunches,
 } from "./agent-launcher.js";
 export {
+  EXTERNAL_CLI_LAUNCHER_CONTRACT,
+  getExternalCliLauncherContract,
+} from "./external-cli-launcher.js";
+export {
   createLaunchReview,
   decideLaunchReview,
   getLaunchReview,

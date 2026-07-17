@@ -2,22 +2,25 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { createAgentAdapterRunPlan } from "./agent-adapters.js";
+import { assessWorkspaceIndexFreshness } from "./context.js";
 import { createId, nowIso } from "./id.js";
 import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
 
 export const AGENT_WORKSPACE_CONTRACT = Object.freeze({
-  version: "0.1.0",
+  version: "0.2.0",
   interface: "spruceagent.agent-workspaces",
   sourceKind: "agent_adapter_run_plan",
   outputKind: "isolated_workspace",
   safetyBoundary: [
-    "Agent Workspace v0 prepares isolated workspaces only.",
+    "Agent Workspace prepares Git-isolated coding workspaces and explicit current-workspace records for local adapters.",
     "It may create a git worktree under the local .spruceagent/worktrees directory.",
     "It does not start external CLI agents.",
     "It does not commit, push, merge, approve, or execute adapter commands.",
     "Workspace paths must stay inside the SpruceAgent store worktrees directory.",
+    "Codex workspaces require a clean source repository and fresh ContextOS evidence when context is attached.",
+    "Current-workspace approved mode is not read-only and still requires the Agent Launcher approval gate before execution.",
   ],
-  modes: ["git_worktree", "current_workspace_readonly"],
+  modes: ["git_worktree", "current_workspace_approved", "current_workspace_readonly"],
 });
 
 export function getAgentWorkspaceContract() {
@@ -40,12 +43,14 @@ export function prepareAgentWorkspace(store, input = {}) {
       workspaceId,
       createdAt,
       plan,
-      status: "prepared_readonly",
+      status: mode === "current_workspace_readonly" ? "prepared_readonly" : "prepared_approval_gated",
       mode,
       workspacePath: store.cwd,
       git: readGitState(store),
       notes: [
-        "Readonly workspace mode uses the current workspace as context.",
+        mode === "current_workspace_readonly"
+          ? "Readonly workspace mode uses the current workspace as context."
+          : "Approved current-workspace mode may execute only after an exact TrustKernel approval.",
         "No external adapter was launched.",
       ],
     });
@@ -59,6 +64,15 @@ export function prepareAgentWorkspace(store, input = {}) {
   }
 
   const gitBefore = readGitState(store);
+  if (plan.adapter?.id === "codex-cli" && hasSourceChanges(store)) {
+    throw new Error("codex-cli workspace preparation requires a clean source repository");
+  }
+  if (plan.adapter?.id === "codex-cli" && plan.context) {
+    const freshness = assessWorkspaceIndexFreshness(store);
+    if (freshness.status !== "fresh") {
+      throw new Error("codex-cli workspace preparation requires a fresh ContextOS index");
+    }
+  }
   const branchName = plan.isolation.branchName;
   const baseRef = input.baseRef ?? "HEAD";
   fs.mkdirSync(path.dirname(workspacePath), { recursive: true });
@@ -182,6 +196,16 @@ function readGitState(store) {
       dirty: null,
     };
   }
+}
+
+function hasSourceChanges(store) {
+  return runGit(store, [
+    "status",
+    "--porcelain",
+    "--",
+    ".",
+    ":(exclude).spruceagent/**",
+  ]).trim().length > 0;
 }
 
 function runGit(store, args) {

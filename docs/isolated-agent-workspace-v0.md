@@ -2,7 +2,7 @@
 
 SpruceAgent now prepares isolated agent workspaces from Agent Adapter run plans.
 
-This is the next Orca-inspired control-plane step after the read-only Adapter Registry. The value is narrow and concrete: give each future CLI agent run a separate git worktree before any external agent is allowed to execute.
+This is the next Orca-inspired control-plane step after the read-only Adapter Registry. The value is narrow and concrete: give each supported coding CLI run a separate git worktree before execution.
 
 ## What It Provides
 
@@ -11,7 +11,7 @@ This is the next Orca-inspired control-plane step after the read-only Adapter Re
 - workspace records under `.spruceagent/agent-workspaces`
 - a JSONL workspace index for Workbench, Gateway, and CLI
 - adapter, goal, branch, workspace path, git state, launch preview, and review gate metadata
-- readonly fallback records for adapters that do not require git worktrees
+- explicit current-workspace records for approval-gated local adapters; these records do not claim the workspace is read-only
 
 ## CLI
 
@@ -62,15 +62,16 @@ The Agent Adapters panel now has:
 
 Agent Workspace v0 is deliberately conservative:
 
-- it does not start Codex CLI, Claude Code, OpenCode, Hermes, Gemini, or shell agents
+- the workspace component does not start Codex CLI, Claude Code, OpenCode, Hermes, Gemini, or shell agents
 - it does not commit
 - it does not push
 - it does not merge
 - it does not approve changes
 - it only creates local worktrees under `.spruceagent/worktrees`
 - it records enough metadata for later Trace Report and review gates
+- Codex workspace preparation rejects a dirty source repository and stale attached ContextOS evidence
 
-External coding agent execution remains disabled in v0. Agent Launcher v0 is the next gated layer: it can create launch previews and execute only `local-shell-agent` commands through TrustKernel approval checks.
+Agent Launcher v0.2 is the next gated layer. It can create launch previews, execute `local-shell-agent`, and execute Codex CLI through External CLI Launcher v1 after exact TrustKernel approval. Other external adapters remain disabled.
 
 ## Why It Matters
 

@@ -51,6 +51,7 @@ import {
   getAgentAdapterContract,
   getAgentLaunch,
   getAgentLauncherContract,
+  getExternalCliLauncherContract,
   getAgentTrial,
   getAgentTrialContract,
   getAgentTrialAttestationContract,
@@ -146,6 +147,7 @@ import {
   updateWorkflow,
   validateLlmProviderConfig,
 } from "../packages/core/src/index.js";
+import { buildExternalCliInvocation } from "../packages/core/src/external-cli-launcher.js";
 
 test("workspace store initializes core files", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
@@ -2183,7 +2185,7 @@ test("gateway client reads trace reports in json and markdown", async () => {
   }
 });
 
-test("gateway client reads and plans agent adapters without execution", async () => {
+test("gateway client reads and plans gated agent adapters without starting execution", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   const store = ensureStore(createStore(dir));
   fs.writeFileSync(path.join(dir, "README.md"), "Agent adapter gateway context.", "utf8");
@@ -2206,7 +2208,7 @@ test("gateway client reads and plans agent adapters without execution", async ()
     assert.equal(contract.interface, "spruceagent.agent-adapters");
     assert.equal(adapters.summary.total >= 5, true);
     assert.equal(adapter.id, "codex-cli");
-    assert.equal(adapter.capabilities.directExecution, false);
+    assert.equal(adapter.capabilities.directExecution, true);
     assert.equal(plan.status, "planned");
     assert.equal(plan.executionMode, "preview_only");
     assert.equal(plan.adapter.id, "codex-cli");
@@ -2317,6 +2319,7 @@ test("gateway client gates and records local agent workspace launches", async ()
       goal: "Run local launcher command",
     });
     const contract = await client.agentLauncherContract();
+    const externalContract = await client.externalCliLauncherContract();
     const preview = await client.launchAgentWorkspace({
       workspaceId: workspace.id,
     });
@@ -2349,6 +2352,7 @@ test("gateway client gates and records local agent workspace launches", async ()
     const status = await client.status();
 
     assert.equal(contract.interface, "spruceagent.agent-launcher");
+    assert.equal(externalContract.interface, "spruceagent.external-cli-launcher");
     assert.equal(preview.status, "planned");
     assert.equal(blocked.status, "requires_approval");
     assert.equal(completed.status, "completed");
@@ -3477,7 +3481,7 @@ test("trace report contract exposes export-only audit boundary", () => {
   assert.ok(contract.safetyBoundary.some((item) => item.includes("execute tools")));
 });
 
-test("agent adapter registry exposes planned CLI adapters without execution", () => {
+test("agent adapter registry exposes gated Codex execution and preview-only peers", () => {
   const contract = getAgentAdapterContract();
   const adapters = listAgentAdapters();
   const codex = getAgentAdapter("codex-cli");
@@ -3488,7 +3492,8 @@ test("agent adapter registry exposes planned CLI adapters without execution", ()
   assert.equal(adapters.status, "available");
   assert.equal(adapters.summary.byKind.coding_cli >= 3, true);
   assert.equal(codex.id, "codex-cli");
-  assert.equal(codex.capabilities.directExecution, false);
+  assert.equal(codex.status, "executable_gated");
+  assert.equal(codex.capabilities.directExecution, true);
   assert.ok(codex.integrationChecklist.some((item) => item.includes("isolated workspace")));
 });
 
@@ -3497,7 +3502,7 @@ test("capability probe records allowlisted local evidence without provider secre
   const binDir = path.join(dir, "bin");
   fs.mkdirSync(binDir);
   const commandPath = process.platform === "win32"
-    ? path.join(binDir, "codex.cmd")
+    ? path.join(binDir, "codex.exe")
     : path.join(binDir, "codex");
   fs.writeFileSync(commandPath, process.platform === "win32" ? "@echo off\r\necho fake-codex\r\n" : "#!/bin/sh\necho fake-codex\n", "utf8");
   if (process.platform !== "win32") fs.chmodSync(commandPath, 0o755);
@@ -3508,7 +3513,7 @@ test("capability probe records allowlisted local evidence without provider secre
   }, {
     env: {
       PATH: binDir,
-      PATHEXT: ".CMD",
+      PATHEXT: ".EXE",
     },
   });
 
@@ -3516,18 +3521,19 @@ test("capability probe records allowlisted local evidence without provider secre
   assert.equal(probe.summary.adapterCount, 2);
   assert.equal(probe.summary.availableAdapterCount, 2);
   assert.equal(probe.adapters.find((item) => item.adapterId === "codex-cli").availability, "found_on_path");
+  assert.equal(probe.adapters.find((item) => item.adapterId === "codex-cli").launcherExecutionSupported, true);
   assert.equal(probe.adapters.find((item) => item.adapterId === "local-shell-agent").launcherExecutionSupported, true);
   assert.equal(probe.llmProviders.every((item) => item.evidence.every((value) => !value.includes("sk-"))), true);
   assert.equal(getCapabilityProbe(store, probe.id).id, probe.id);
   assert.equal(listCapabilityProbes(store).summary.latestProbeId, probe.id);
 });
 
-test("task router assigns roles separately and blocks unsupported execute routes", () => {
+test("task router assigns roles separately and routes supported execute adapters", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   const binDir = path.join(dir, "bin");
   fs.mkdirSync(binDir);
   const commandPath = process.platform === "win32"
-    ? path.join(binDir, "codex.cmd")
+    ? path.join(binDir, "codex.exe")
     : path.join(binDir, "codex");
   fs.writeFileSync(commandPath, process.platform === "win32" ? "@echo off\r\necho fake-codex\r\n" : "#!/bin/sh\necho fake-codex\n", "utf8");
   if (process.platform !== "win32") fs.chmodSync(commandPath, 0o755);
@@ -3536,7 +3542,7 @@ test("task router assigns roles separately and blocks unsupported execute routes
     adapterIds: ["codex-cli", "local-shell-agent"],
     versionCheck: false,
   }, {
-    env: { PATH: binDir, PATHEXT: ".CMD" },
+    env: { PATH: binDir, PATHEXT: ".EXE" },
   });
   const planned = createTaskRoute(store, {
     goal: "Implement a feature and automate its deterministic check",
@@ -3569,10 +3575,10 @@ test("task router assigns roles separately and blocks unsupported execute routes
   assert.equal(planned.assignments.find((item) => item.role === "coding").selectedAdapterId, "codex-cli");
   assert.equal(planned.assignments.find((item) => item.role === "deterministic_automation").selectedAdapterId, "local-shell-agent");
   assert.equal(planned.selectionPolicy.qualityScore, null);
-  assert.equal(executeRoute.status, "blocked");
-  assert.equal(executeRoute.assignments.find((item) => item.role === "coding").status, "blocked");
+  assert.equal(executeRoute.status, "routed");
+  assert.equal(executeRoute.assignments.find((item) => item.role === "coding").selectedAdapterId, "codex-cli");
   assert.equal(executeRoute.assignments.find((item) => item.role === "deterministic_automation").selectedAdapterId, "local-shell-agent");
-  assert.ok(executeRoute.candidates.find((item) => item.adapterId === "codex-cli").exclusionReasons.includes("launcher_execution_not_enabled"));
+  assert.equal(executeRoute.candidates.find((item) => item.adapterId === "codex-cli").eligible, true);
   assert.equal(ambiguousReview.status, "needs_input");
   assert.equal(ambiguousReview.assignments[0].status, "requires_preference");
   assert.equal(ambiguousReview.assignments[0].selectedAdapterId, null);
@@ -3596,13 +3602,13 @@ test("task router assigns roles separately and blocks unsupported execute routes
   );
 });
 
-test("agent launcher contract exposes gated local execution boundary", () => {
+test("agent launcher contract exposes gated local and Codex execution boundaries", () => {
   const contract = getAgentLauncherContract();
 
   assert.equal(contract.interface, "spruceagent.agent-launcher");
   assert.equal(contract.outputKind, "gated_agent_launch_record");
-  assert.deepEqual(contract.executableAdaptersInV0, ["local-shell-agent"]);
-  assert.ok(contract.safetyBoundary.some((item) => item.includes("External coding CLI adapters are preview-only")));
+  assert.deepEqual(contract.executableAdaptersInV1, ["local-shell-agent", "codex-cli"]);
+  assert.ok(contract.safetyBoundary.some((item) => item.includes("Codex CLI v1")));
   assert.ok(contract.safetyBoundary.some((item) => item.includes("Git commit")));
 });
 
@@ -3952,27 +3958,27 @@ test("agent workspace prepares git worktrees without launching external agents",
   assert.equal(loaded.plan.executionMode, "preview_only");
 });
 
-test("agent workspace records readonly adapter workspace without git worktree", () => {
+test("agent workspace records approval-gated current workspace without claiming read-only", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   const store = ensureStore(createStore(dir));
   const workspace = prepareAgentWorkspace(store, {
     adapterId: "local-shell-agent",
-    goal: "Prepare readonly workspace",
+    goal: "Prepare approval-gated workspace",
   });
 
-  assert.equal(workspace.status, "prepared_readonly");
-  assert.equal(workspace.mode, "current_workspace_readonly");
+  assert.equal(workspace.status, "prepared_approval_gated");
+  assert.equal(workspace.mode, "current_workspace_approved");
   assert.equal(workspace.workspacePath, dir);
   assert.equal(listAgentWorkspaces(store).summary.gitWorktreeCount, 0);
 });
 
-test("agent launcher blocks external CLI execution in v0", async () => {
+test("agent launcher keeps unverified external CLI adapters disabled", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   initGitRepo(dir);
   const store = ensureStore(createStore(dir));
   buildWorkspaceIndex(store);
   const workspace = prepareAgentWorkspace(store, {
-    adapterId: "codex-cli",
+    adapterId: "claude-code",
     goal: "Do not execute external CLI",
     contextQuery: "README",
   });
@@ -3987,6 +3993,175 @@ test("agent launcher blocks external CLI execution in v0", async () => {
   assert.equal(launch.executionMode, "external_cli_disabled");
   assert.equal(listAgentLaunches(store).summary.byStatus.blocked, 1);
   assert.equal(getAgentLaunch(store, launch.id).id, launch.id);
+});
+
+test("external CLI launcher builds a shell-free bounded Codex invocation", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  initGitRepo(dir);
+  const store = ensureStore(createStore(dir));
+  buildWorkspaceIndex(store);
+  const workspace = prepareAgentWorkspace(store, {
+    adapterId: "codex-cli",
+    goal: "Implement the approved workspace task",
+    contextQuery: "SpruceAgent",
+  });
+  const executable = path.join(dir, "bin", process.platform === "win32" ? "codex.exe" : "codex");
+  const invocation = buildExternalCliInvocation(workspace, {}, {
+    resolveExecutable: () => executable,
+    env: {
+      PATH: path.dirname(executable),
+      OPENAI_API_KEY: "test-openai-credential",
+      DEEPSEEK_API_KEY: "must-not-be-inherited",
+    },
+  });
+
+  assert.equal(getExternalCliLauncherContract().interface, "spruceagent.external-cli-launcher");
+  assert.equal(invocation.executable, executable);
+  assert.deepEqual(invocation.args.slice(0, 3), ["exec", "--sandbox", "workspace-write"]);
+  assert.equal(invocation.args.includes("--dangerously-bypass-approvals-and-sandbox"), false);
+  assert.equal(invocation.args.at(-1), "-");
+  assert.match(invocation.stdin, /SpruceAgent approved task:/);
+  assert.ok(invocation.stdin.includes(workspace.goal));
+  assert.match(invocation.stdin, /Do not commit, push, merge/);
+  assert.match(invocation.stdin, /ContextOS navigation hints/);
+  assert.match(invocation.stdin, /README\.md/);
+  assert.match(invocation.stdinSha256, /^[a-f0-9]{64}$/);
+  assert.equal(invocation.safety.shell, false);
+  assert.equal(invocation.executionLimits.timeoutMs, 10 * 60 * 1000);
+  assert.equal(invocation.executionLimits.maxBuffer, 4 * 1024 * 1024);
+  assert.equal(invocation.environmentKeys.includes("OPENAI_API_KEY"), true);
+  assert.equal(invocation.environmentKeys.includes("DEEPSEEK_API_KEY"), false);
+  assert.throws(
+    () => buildExternalCliInvocation(workspace, { args: ["--dangerously-bypass-approvals-and-sandbox"] }, {
+      resolveExecutable: () => executable,
+    }),
+    /generated from the approved workspace plan/,
+  );
+  assert.throws(
+    () => buildExternalCliInvocation(workspace, { timeoutMs: 999 }, {
+      resolveExecutable: () => executable,
+    }),
+    /timeoutMs must be an integer/,
+  );
+  if (process.platform === "win32") {
+    assert.throws(
+      () => buildExternalCliInvocation(workspace, {}, {
+        resolveExecutable: () => path.join(dir, "bin", "codex.cmd"),
+      }),
+      /native executable/,
+    );
+  }
+});
+
+test("Codex workspace preparation rejects dirty sources and stale ContextOS evidence", () => {
+  const dirtyDir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  initGitRepo(dirtyDir);
+  const dirtyStore = ensureStore(createStore(dirtyDir));
+  fs.writeFileSync(path.join(dirtyDir, "dirty.txt"), "not in the approved base", "utf8");
+  assert.throws(
+    () => prepareAgentWorkspace(dirtyStore, {
+      adapterId: "codex-cli",
+      goal: "Do not lose source changes",
+    }),
+    /clean source repository/,
+  );
+
+  const staleDir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  initGitRepo(staleDir);
+  const staleStore = ensureStore(createStore(staleDir));
+  buildWorkspaceIndex(staleStore);
+  fs.writeFileSync(path.join(staleDir, "README.md"), "Committed after indexing.", "utf8");
+  git(staleDir, ["add", "README.md"]);
+  git(staleDir, ["commit", "-m", "Change indexed source"]);
+  assert.throws(
+    () => prepareAgentWorkspace(staleStore, {
+      adapterId: "codex-cli",
+      goal: "Use current evidence only",
+      contextQuery: "SpruceAgent",
+    }),
+    /fresh ContextOS index/,
+  );
+});
+
+test("agent launcher executes Codex only after invocation-bound approval and redacts logs", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  initGitRepo(dir);
+  const store = ensureStore(createStore(dir));
+  const workspace = prepareAgentWorkspace(store, {
+    adapterId: "codex-cli",
+    goal: "Create a reviewed result",
+  });
+  const executable = path.join(dir, "bin", process.platform === "win32" ? "codex.exe" : "codex");
+  let captured = null;
+  const runtime = {
+    externalCli: {
+      resolveExecutable: () => executable,
+      env: {
+        PATH: path.dirname(executable),
+        OPENAI_API_KEY: "test-openai-credential",
+        ANTHROPIC_API_KEY: "must-not-be-inherited",
+      },
+      execute: async (input) => {
+        captured = input;
+        fs.writeFileSync(path.join(input.cwd, "codex-result.txt"), "review me", "utf8");
+        return {
+          exitCode: 0,
+          stdout: [
+            JSON.stringify({ type: "thread.started", thread_id: "thread-test" }),
+            JSON.stringify({ type: "item.completed", text: "sk-test-secret-123456789" }),
+          ].join("\n"),
+          stderr: "Authorization: Bearer test-bearer-secret",
+        };
+      },
+    },
+  };
+
+  const pending = await launchAgentWorkspace(store, { workspaceId: workspace.id, execute: true }, runtime);
+  assert.equal(pending.status, "requires_approval");
+  assert.equal(pending.invocation.protocol, "codex_exec_jsonl_v1");
+  assert.equal("stdin" in pending.invocation, false);
+  assert.equal(JSON.stringify(pending).includes("test-openai-credential"), false);
+  approveTicket(store, pending.approval.id, { reason: "bounded Codex invocation reviewed" });
+
+  await assert.rejects(
+    () => launchAgentWorkspace(store, {
+      workspaceId: workspace.id,
+      execute: true,
+      approvalId: pending.approval.id,
+      timeoutMs: 60_000,
+    }, runtime),
+    /approval input mismatch/,
+  );
+
+  await assert.rejects(
+    () => launchAgentWorkspace(store, { workspaceId: workspace.id, execute: true, approvalId: pending.approval.id }, {
+      externalCli: {
+        ...runtime.externalCli,
+        resolveExecutable: () => path.join(dir, "different", process.platform === "win32" ? "codex.exe" : "codex"),
+      },
+    }),
+    /approval input mismatch/,
+  );
+
+  const completed = await launchAgentWorkspace(store, {
+    workspaceId: workspace.id,
+    execute: true,
+    approvalId: pending.approval.id,
+  }, runtime);
+  const log = fs.readFileSync(path.join(store.root, completed.terminalLog.path), "utf8");
+
+  assert.equal(completed.status, "completed");
+  assert.equal(completed.executionMode, "external_cli");
+  assert.equal(completed.outputSummary.threadId, "thread-test");
+  assert.equal(completed.outputSummary.parsedCount, 2);
+  assert.equal(completed.git.changed, true);
+  assert.equal(captured.shell, false);
+  assert.ok(captured.stdin.includes(workspace.goal));
+  assert.match(captured.stdin, /Do not commit, push, merge/);
+  assert.equal("ANTHROPIC_API_KEY" in captured.env, false);
+  assert.equal(log.includes("sk-test-secret-123456789"), false);
+  assert.equal(log.includes("test-bearer-secret"), false);
+  assert.match(log, /REDACTED/);
 });
 
 test("agent launcher executes local shell agent only after approval", async () => {
@@ -4402,7 +4577,7 @@ test("capability probe carries empirical trial evidence without treating install
   const binDir = path.join(dir, "bin");
   fs.mkdirSync(binDir);
   const commandPath = process.platform === "win32"
-    ? path.join(binDir, "codex.cmd")
+    ? path.join(binDir, "codex.exe")
     : path.join(binDir, "codex");
   fs.writeFileSync(commandPath, process.platform === "win32" ? "@echo off\r\necho fake-codex\r\n" : "#!/bin/sh\necho fake-codex\n", "utf8");
   if (process.platform !== "win32") fs.chmodSync(commandPath, 0o755);
@@ -4419,7 +4594,7 @@ test("capability probe carries empirical trial evidence without treating install
   const probe = probeAgentCapabilities(store, {
     adapterIds: ["codex-cli", "local-shell-agent"],
   }, {
-    env: { PATH: binDir, PATHEXT: ".CMD" },
+    env: { PATH: binDir, PATHEXT: ".EXE" },
   });
 
   const codex = probe.adapters.find((item) => item.adapterId === "codex-cli");

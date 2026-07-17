@@ -79,6 +79,11 @@ Start here:
 - [GatewayMesh Local API v0](docs/gatewaymesh-local-api-v0.md)
 - [Gateway Client and Route Contract v0](docs/gateway-client-and-contract-v0.md)
 - [LLM Adapter v0](docs/llm-adapter-v0.md)
+- [LLM Provider Registry v0](docs/llm-provider-registry-v0.md)
+- [Agent Adapter Registry v0](docs/agent-adapter-registry-v0.md)
+- [Isolated Agent Workspace v0](docs/isolated-agent-workspace-v0.md)
+- [Agent Launcher v0.2](docs/agent-launcher-v0.md)
+- [External CLI Launcher v1](docs/external-cli-launcher-v1.md)
 - [Planner Promotion v0](docs/planner-promotion-v0.md)
 - [Candidate Execution v0](docs/candidate-execution-v0.md)
 - [Candidate Approval Flow v0](docs/candidate-approval-flow-v0.md)
@@ -147,6 +152,13 @@ npm run spruce -- workflow resume <traceId>
 npm run spruce -- eval trace <traceId>
 npm run spruce -- eval list
 npm run spruce -- llm contract
+npm run spruce -- llm providers
+npm run spruce -- llm validate deepseek
+npm run spruce -- agent probe --adapterIds codex-cli --version
+npm run spruce -- agent prepare codex-cli --goal "Implement the approved task" --context "relevant code"
+npm run spruce -- agent launch <workspaceId> --execute
+npm run spruce -- approval approve <approvalId>
+npm run spruce -- agent launch <workspaceId> --execute --approvalId <approvalId>
 npm run spruce -- planner contract
 npm run spruce -- candidate contract
 npm run spruce -- candidate approval-contract
@@ -160,7 +172,7 @@ npm run spruce -- tool run shell.execute --command "echo spruce" --approved
 npm run spruce -- policy check --tool shell.execute --command "git status"
 ```
 
-The first core pass creates a local `.spruceagent/` workspace store with memory, traces, audit logs, skill candidates, skill approval, SkillForge evaluation reports, skill promotion gates, skill version history, skill restore, static skill replay fixtures, portable skill packages, explicit typed skill execution, workflows, workflow builder, workflow versioning/archive, workflow evaluation, workflow inbox/detail, workflow continuation, GatewayMesh Local API, Desktop UI Workbench v0, Workbench Run Launcher v0, Workbench Workflow Editor v0, Workbench SkillForge evaluation and promotion UI, Workbench Skill / Workflow Runner v0, LLM Adapter v0, Planner Promotion v0, Candidate Execution v0, Candidate Approval Flow v0, Run Continuation v0, Run State / Inbox v0, Run Detail / Trace Viewer v0, trace-to-skill extraction, policy decisions, approval tickets, workspace context index, policy-governed tool execution, and a rule-based Agent Run Loop v0.
+The current core creates a local `.spruceagent/` store with ContextOS indexing, memory, traces, audit logs, approval tickets, policy-governed tools, LLM Provider Registry, Agent Run, typed and evaluated skills, versioned workflows, GatewayMesh, Workbench, isolated agent workspaces, capability evidence, task routing, launch review, Agent Trial attestation, and a shell-free, approval-bound Codex CLI execution path.
 
 ## Language
 

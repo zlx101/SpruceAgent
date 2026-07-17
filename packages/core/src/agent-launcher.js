@@ -3,6 +3,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { consumeApprovalTicket, createApprovalTicket, getApprovalTicket } from "./approvals.js";
+import {
+  buildExternalCliInvocation,
+  executeExternalCliInvocation,
+  publicExternalCliInvocation,
+} from "./external-cli-launcher.js";
 import { getAgentWorkspace } from "./agent-workspaces.js";
 import { createId, nowIso } from "./id.js";
 import { auditPolicyDecision, evaluatePolicy } from "./policy.js";
@@ -12,17 +17,19 @@ import { appendTraceEvent, startTrace } from "./trace.js";
 const execAsync = promisify(exec);
 
 export const AGENT_LAUNCHER_CONTRACT = Object.freeze({
-  version: "0.1.0",
+  version: "0.2.0",
   interface: "spruceagent.agent-launcher",
   sourceKind: "isolated_agent_workspace",
   outputKind: "gated_agent_launch_record",
-  executableAdaptersInV0: ["local-shell-agent"],
+  executableAdaptersInV1: ["local-shell-agent", "codex-cli"],
   safetyBoundary: [
     "Agent Launcher v0 records and gates launches from prepared Agent Workspaces.",
-    "External coding CLI adapters are preview-only in v0.",
-    "Only local-shell-agent can execute a user-supplied command in v0.",
+    "Codex CLI v1 executes only through an internally generated, shell-free invocation in a prepared Git worktree.",
+    "Other external coding CLI adapters remain preview-only.",
+    "Only local-shell-agent can execute a user-supplied command.",
     "Commands flow through TrustKernel policy and approval tickets.",
-    "Git commit, push, merge, rebase, reset, and worktree mutation commands are blocked by the launcher.",
+    "Git commit, push, merge, rebase, reset, and worktree mutation are blocked in user-supplied local-shell commands.",
+    "External-agent subprocess choices are controlled by worktree isolation, Codex sandboxing, prompt constraints, Git evidence, and mandatory review rather than per-command interception.",
     "Launcher records terminal logs, git status, and diff summaries, but never commits, pushes, merges, or approves changes.",
   ],
 });
@@ -41,7 +48,7 @@ export function getAgentLauncherContract() {
   return AGENT_LAUNCHER_CONTRACT;
 }
 
-export async function launchAgentWorkspace(store, input = {}) {
+export async function launchAgentWorkspace(store, input = {}, runtime = {}) {
   const workspace = getAgentWorkspace(store, input.workspaceId);
   const launchId = createId("agent_launch");
   const createdAt = nowIso();
@@ -85,7 +92,7 @@ export async function launchAgentWorkspace(store, input = {}) {
     return record;
   }
 
-  if (workspace.adapter.id !== "local-shell-agent") {
+  if (!AGENT_LAUNCHER_CONTRACT.executableAdaptersInV1.includes(workspace.adapter.id)) {
     const record = buildLaunchRecord({
       launchId,
       createdAt,
@@ -95,8 +102,8 @@ export async function launchAgentWorkspace(store, input = {}) {
       traceId: trace.id,
       command: plannedCommand(workspace, input),
       notes: [
-        "External CLI agent execution is disabled in v0.",
-        "Prepare workspaces and inspect launch previews until TrustKernel launcher support is promoted.",
+        `${workspace.adapter.name} execution is not enabled in External CLI Launcher v1.`,
+        "Prepare workspaces and inspect launch previews until its command contract is independently verified.",
       ],
     });
     appendTraceEvent(store, trace.id, "agent.launch.blocked", recordSummary(record));
@@ -104,22 +111,33 @@ export async function launchAgentWorkspace(store, input = {}) {
     return record;
   }
 
-  const command = String(input.command ?? "").trim();
+  const externalInvocation = workspace.adapter.id === "codex-cli"
+    ? buildExternalCliInvocation(workspace, input, runtime.externalCli ?? {})
+    : null;
+  const command = externalInvocation
+    ? externalInvocation.displayCommand
+    : String(input.command ?? "").trim();
   if (!command) throw new Error("command is required when executing local-shell-agent");
-  assertAllowedLauncherCommand(command);
+  if (!externalInvocation) assertAllowedLauncherCommand(command);
+  const approvalInput = externalInvocation
+    ? {
+        command,
+        cwd: workspace.workspacePath,
+        adapterId: workspace.adapter.id,
+        invocation: publicExternalCliInvocation(externalInvocation),
+      }
+    : { command, cwd: workspace.workspacePath };
 
   const decision = evaluatePolicy({
     toolName: "shell.execute",
     trustMode: input.trustMode ?? "approve",
-    input: {
-      command,
-      cwd: workspace.workspacePath,
-    },
+    input: approvalInput,
   });
   auditPolicyDecision(store, decision);
   appendTraceEvent(store, trace.id, "agent.launch.policy", {
     launchId,
     command,
+    invocation: externalInvocation ? publicExternalCliInvocation(externalInvocation) : null,
     decision,
   });
 
@@ -132,6 +150,7 @@ export async function launchAgentWorkspace(store, input = {}) {
       workspace,
       traceId: trace.id,
       command,
+      invocation: externalInvocation ? publicExternalCliInvocation(externalInvocation) : null,
       policyDecision: decision,
       notes: ["TrustKernel denied the launch command."],
     });
@@ -143,14 +162,11 @@ export async function launchAgentWorkspace(store, input = {}) {
   if (decision.decision === "requires_approval" && !input.approvalId) {
     const approval = createApprovalTicket(store, {
       toolName: "shell.execute",
-      input: {
-        command,
-        cwd: workspace.workspacePath,
-      },
+      input: approvalInput,
       decision,
       traceId: trace.id,
       requester: input.actor ?? "local-user",
-      reason: "Agent Launcher command requires approval before execution.",
+      reason: "Agent Launcher invocation requires approval before execution.",
       metadata: {
         launchId,
         workspaceId: workspace.id,
@@ -170,6 +186,7 @@ export async function launchAgentWorkspace(store, input = {}) {
       workspace,
       traceId: trace.id,
       command,
+      invocation: externalInvocation ? publicExternalCliInvocation(externalInvocation) : null,
       policyDecision: decision,
       approval,
       notes: ["Approval ticket created. Re-run with approvalId after approval."],
@@ -181,13 +198,18 @@ export async function launchAgentWorkspace(store, input = {}) {
 
   if (input.approvalId) {
     const ticket = getApprovalTicket(store, input.approvalId);
-    assertApprovalMatchesLaunch(ticket, command, workspace.workspacePath);
+    assertApprovalMatchesLaunch(ticket, approvalInput);
     consumeApprovalTicket(store, input.approvalId);
   }
 
   const startedAt = nowIso();
   const beforeGit = readGitSnapshot(workspace.workspacePath);
-  const execution = await runCommand(command, workspace.workspacePath, input);
+  const execution = externalInvocation
+    ? {
+        ...await executeExternalCliInvocation(externalInvocation, input, runtime.externalCli ?? {}),
+        finishedAt: nowIso(),
+      }
+    : await runCommand(command, workspace.workspacePath, input);
   const afterGit = readGitSnapshot(workspace.workspacePath);
   const terminalLog = writeTerminalLog(store, launchId, {
     command,
@@ -197,12 +219,14 @@ export async function launchAgentWorkspace(store, input = {}) {
     stdout: execution.stdout,
     stderr: execution.stderr,
     exitCode: execution.exitCode,
+    terminationReason: execution.terminationReason,
+    outputSummary: execution.outputSummary,
   });
   const record = buildLaunchRecord({
     launchId,
     createdAt,
     status: execution.exitCode === 0 ? "completed" : "failed",
-    executionMode: "local_shell",
+    executionMode: externalInvocation ? "external_cli" : "local_shell",
     workspace,
     traceId: trace.id,
     command,
@@ -210,6 +234,9 @@ export async function launchAgentWorkspace(store, input = {}) {
     startedAt,
     finishedAt: execution.finishedAt,
     exitCode: execution.exitCode,
+    invocation: externalInvocation ? publicExternalCliInvocation(externalInvocation) : null,
+    outputSummary: execution.outputSummary ?? null,
+    terminationReason: execution.terminationReason ?? "process_exit",
     terminalLog,
     git: {
       before: beforeGit,
@@ -217,7 +244,9 @@ export async function launchAgentWorkspace(store, input = {}) {
       changed: afterGit.status.length > 0,
     },
     notes: [
-      "Executed local-shell-agent command through Agent Launcher v0.",
+      externalInvocation
+        ? "Executed codex-cli through the shell-free External CLI Launcher v1 contract."
+        : "Executed local-shell-agent command through Agent Launcher.",
       "Review required before any merge or promotion.",
     ],
   });
@@ -272,6 +301,9 @@ function buildLaunchRecord(input) {
     goal: input.workspace.goal,
     command: input.command,
     exitCode: input.exitCode ?? null,
+    terminationReason: input.terminationReason ?? null,
+    invocation: input.invocation ?? null,
+    outputSummary: input.outputSummary ?? null,
     policyDecision: input.policyDecision ?? null,
     approval: input.approval ?? null,
     terminalLog: input.terminalLog ?? null,
@@ -300,6 +332,8 @@ function persistLaunch(store, record) {
     command: record.command,
     exitCode: record.exitCode,
     terminalLogPath: record.terminalLog?.path ?? null,
+    invocationProtocol: record.invocation?.protocol ?? null,
+    terminationReason: record.terminationReason,
     changed: record.git?.changed ?? false,
     reviewRequired: true,
   });
@@ -343,6 +377,8 @@ function writeTerminalLog(store, launchId, input) {
     `startedAt: ${input.startedAt}`,
     `finishedAt: ${input.finishedAt}`,
     `exitCode: ${input.exitCode}`,
+    `terminationReason: ${input.terminationReason ?? "process_exit"}`,
+    `outputSummary: ${JSON.stringify(input.outputSummary ?? null)}`,
     "",
     "----- stdout -----",
     input.stdout ?? "",
@@ -392,14 +428,14 @@ function assertAllowedLauncherCommand(command) {
   }
 }
 
-function assertApprovalMatchesLaunch(ticket, command, cwd) {
+function assertApprovalMatchesLaunch(ticket, approvalInput) {
   if (ticket.status !== "approved") {
     throw new Error(`approval is not approved: ${ticket.id}`);
   }
   if (ticket.toolName !== "shell.execute") {
     throw new Error(`approval tool mismatch: ${ticket.toolName} !== shell.execute`);
   }
-  if (ticket.input?.command !== command || ticket.input?.cwd !== cwd) {
+  if (JSON.stringify(ticket.input) !== JSON.stringify(approvalInput)) {
     throw new Error("approval input mismatch");
   }
 }
@@ -414,6 +450,9 @@ function recordSummary(record) {
     adapter: record.adapter,
     command: record.command,
     exitCode: record.exitCode,
+    terminationReason: record.terminationReason,
+    invocation: record.invocation,
+    outputSummary: record.outputSummary,
     terminalLog: record.terminalLog,
     git: record.git,
     reviewGate: record.reviewGate,

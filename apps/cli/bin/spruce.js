@@ -47,6 +47,7 @@ import {
   getAgentAdapterContract,
   getAgentLaunch,
   getAgentLauncherContract,
+  getExternalCliLauncherContract,
   getAgentTrial,
   getAgentTrialContract,
   getAgentTrialAttestationContract,
@@ -1392,6 +1393,11 @@ async function handleAgent(action, args = []) {
     return;
   }
 
+  if (action === "external-launcher-contract") {
+    printJson(getExternalCliLauncherContract());
+    return;
+  }
+
   if (action === "review") {
     const flags = parseFlags(args);
     const launchIds = splitCsv(flags.launchIds).length ? splitCsv(flags.launchIds) : flags._;
@@ -1830,7 +1836,8 @@ Usage:
   ${executable} agent workspaces [--adapterId codex-cli]
   ${executable} agent workspace <workspaceId>
   ${executable} agent launch <workspaceId>
-  ${executable} agent launch <workspaceId> --execute --command "node -v" [--approvalId <approvalId>]
+  ${executable} agent launch <codexWorkspaceId> --execute [--approvalId <approvalId>]
+  ${executable} agent launch <localShellWorkspaceId> --execute --command "node -v" [--approvalId <approvalId>]
   ${executable} agent launches [--workspaceId <workspaceId>]
   ${executable} agent launch-detail <launchId>
   ${executable} agent review <launchId> [moreLaunchIds...]
@@ -1840,6 +1847,7 @@ Usage:
   ${executable} agent contract
   ${executable} agent workspace-contract
   ${executable} agent launcher-contract
+  ${executable} agent external-launcher-contract
   ${executable} agent review-contract
   ${executable} agent trial-attest <launchId> --command "npm test" [--approvalId <id>] [--timeoutMs 120000]
   ${executable} agent trial-record <adapterId> --processExitCode 0 --changedFileCount 1 --baselineWorkspaceClean true --acceptanceStatus passed --acceptanceExitCode 0 --acceptanceWorkspaceStable true --policyStatus allowed

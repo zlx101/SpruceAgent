@@ -17,7 +17,7 @@ The `spruceagent.capability-probe` contract records:
 
 Provider configuration is redacted. The snapshot records property presence without returning or persisting its value.
 
-The probe does not launch an Agent, send a model request, access the network, or modify Git state. Version execution is disabled by default. Windows `.cmd` and `.bat` wrappers are detected but not executed during version checks.
+The probe does not launch an Agent, send a model request, access the network, or modify Git state. Version execution is disabled by default. Windows `.cmd` and `.bat` wrappers are detected but not executed during version checks, and they are not eligible for the shell-free Codex launcher.
 
 ## Task Router
 
@@ -55,7 +55,7 @@ The route order is deterministic:
 
 There is no model-quality score in v0. If multiple adapters satisfy the same role and hard constraints, the assignment becomes `requires_preference` instead of selecting an arbitrary winner. If several real LLM providers are configured, the router likewise requires an explicit preference because SpruceAgent does not yet have benchmark evidence for a quality-based choice.
 
-In `execute` mode, external CLI adapters remain ineligible until Agent Launcher support is promoted. A failed effective Trial outcome also conservatively blocks execute routing; Launcher-attested evidence takes precedence over supplied observations. Trials never create an automatic winner. `local-shell-agent` is the only executable adapter in v0, and subsequent execution still requires Workspace, TrustKernel, Launcher, and Review gates.
+In `execute` mode, an adapter is eligible only when the current capability snapshot reports explicit Agent Launcher support. Codex CLI and `local-shell-agent` currently satisfy that implementation condition; other external adapters remain ineligible. A failed effective Trial outcome still conservatively blocks execute routing, and Launcher-attested evidence takes precedence over supplied observations. Trials never create an automatic winner. Subsequent execution always requires Workspace, TrustKernel, Launcher, and Review gates.
 
 ## Storage
 
@@ -114,4 +114,4 @@ The Workbench exposes `Probe` and `Route Goal` actions. Both create inspectable 
 
 ## Next Boundary
 
-Launcher-attested Agent Trials are now implemented for completed local-shell launches. The next boundary is repeated, comparable benchmark evidence and a benchmark-backed Model Registry/orchestration manifest. Trials must add measured latency, cost, model/version, context limits, structured-output reliability, task evaluations, and policy constraints before SpruceAgent attempts automatic model selection or enables external CLI launchers.
+Launcher-attested Agent Trials apply to completed local-shell and controlled external-CLI launches. The Codex command contract is implemented, but this development pass intentionally used an injected runner rather than a real model task. The next evidence boundary is a user-approved real Codex launch with independent acceptance, followed by repeated comparable benchmarks. Trials must add measured latency, cost, model/version, context limits, structured-output reliability, task evaluations, and policy constraints before SpruceAgent attempts automatic model selection.

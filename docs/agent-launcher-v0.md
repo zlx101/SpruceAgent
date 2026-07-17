@@ -1,8 +1,8 @@
-# Agent Launcher v0
+# Agent Launcher v0.2
 
 SpruceAgent now has a gated launcher layer for prepared Agent Workspaces.
 
-This is the execution boundary after Agent Adapter Registry and Isolated Agent Workspace. It is intentionally conservative: v0 records launch intent and can execute only the `local-shell-agent` path after TrustKernel policy and approval checks.
+This is the execution boundary after Agent Adapter Registry and Isolated Agent Workspace. It executes `local-shell-agent` commands and the fixed Codex CLI v1 invocation after TrustKernel policy and exact approval checks. Other external adapters remain preview-only.
 
 ## What It Provides
 
@@ -36,6 +36,14 @@ npm run spruce -- approval approve <approvalId>
 npm run spruce -- agent launch <workspaceId> --execute --command "node -v" --approvalId <approvalId>
 ```
 
+Execute a prepared Codex workspace after approval. Codex commands and arguments cannot be supplied by the caller:
+
+```bash
+npm run spruce -- agent launch <workspaceId> --execute
+npm run spruce -- approval approve <approvalId>
+npm run spruce -- agent launch <workspaceId> --execute --approvalId <approvalId>
+```
+
 List launches:
 
 ```bash
@@ -57,6 +65,7 @@ GET  /v1/agent-launches
 GET  /v1/agent-launches/:launchId
 POST /v1/agent-launches
 GET  /v1/agent-launches/contract
+GET  /v1/external-cli-launcher/contract
 ```
 
 Completed launches can be assembled into single- or multi-candidate evidence packages through Launch Review Gate v0. See `docs/launch-review-gate-v0.md`.
@@ -69,10 +78,11 @@ It does not expose arbitrary command execution in the browser UI. Execution rema
 
 ## Safety Boundary
 
-Agent Launcher v0:
+Agent Launcher v0.2:
 
-- does not execute Codex CLI, Claude Code, OpenCode, Hermes, Gemini, or other external coding agents
-- only executes `local-shell-agent` commands
+- executes Codex CLI only through the fixed, shell-free External CLI Launcher v1 contract
+- keeps Claude Code, OpenCode, Hermes, Gemini, and other external coding agents disabled
+- only accepts user-supplied commands for `local-shell-agent`
 - routes commands through TrustKernel policy
 - creates approval tickets for shell execution
 - blocks git commit, push, merge, rebase, reset, and worktree mutation commands
@@ -87,4 +97,4 @@ SpruceAgent needs execution, but execution must be observable and reviewable bef
 Adapter Plan -> Isolated Workspace -> Gated Launch -> Terminal Log -> Diff Summary -> Artifact -> Trace Report -> Review
 ```
 
-This creates the minimum safe substrate for future real CLI agent execution.
+See `docs/external-cli-launcher-v1.md` for the Codex runtime evidence, fixed invocation, environment boundary, output limits, and current test evidence.

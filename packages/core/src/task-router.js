@@ -6,7 +6,7 @@ import { createId, nowIso } from "./id.js";
 import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
 
 export const TASK_ROUTER_CONTRACT = Object.freeze({
-  version: "0.3.0",
+  version: "0.4.0",
   interface: "spruceagent.task-router",
   sourceKind: "goal_constraints_and_capability_snapshot",
   outputKind: "explainable_agent_route_draft",
@@ -18,7 +18,7 @@ export const TASK_ROUTER_CONTRACT = Object.freeze({
     "The router does not infer model quality from provider or product names and publishes no opaque quality score.",
     "Recorded Agent Trials are exposed with provenance; a failed effective outcome blocks execute routing, and Launcher-attested evidence takes precedence over supplied observations.",
     "Execute mode only routes adapters already enabled by the gated Agent Launcher.",
-    "Every external CLI assignment remains preview-only until launcher support is explicitly promoted.",
+    "External CLI execute assignments are eligible only when the capability snapshot reports explicit launcher support.",
   ],
 });
 

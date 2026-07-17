@@ -154,13 +154,17 @@ function probeAdapter(item, input, runtime, trialStats = null) {
     executablePath,
     version: version.version,
     versionStatus: version.status,
-    launcherExecutionSupported: false,
+    launcherExecutionSupported: adapter.id === "codex-cli" && !isShellWrapper(executablePath),
     empiricalValidation: empiricalValidation(trialStats),
     capabilities: adapter.capabilities,
     evidence: [
       `${adapter.command} resolved to a local executable.`,
       version.evidence,
-      "External CLI task execution remains disabled by Agent Launcher v0.",
+      adapter.id === "codex-cli" && !isShellWrapper(executablePath)
+        ? "Codex CLI task execution is supported through External CLI Launcher v1 after isolated workspace preparation and exact approval."
+        : adapter.id === "codex-cli"
+          ? "Codex was found only as a command wrapper; External CLI Launcher requires a native executable for shell-free execution."
+        : "External CLI task execution remains disabled for this adapter.",
     ],
   };
 }
@@ -262,6 +266,10 @@ function isExecutable(filePath) {
   } catch {
     return false;
   }
+}
+
+function isShellWrapper(filePath) {
+  return process.platform === "win32" && /\.(?:cmd|bat)$/i.test(filePath ?? "");
 }
 
 function summarizeSnapshot(snapshot) {
