@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { getAgentAdapter, listAgentAdapters } from "./agent-adapters.js";
 import { listAgentTrials } from "./agent-trials.js";
+import { listLlmProviderConfigs } from "./llm-provider-registry.js";
 import { createId, nowIso } from "./id.js";
 import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
 
@@ -49,7 +50,7 @@ export function probeAgentCapabilities(store, input = {}, runtime = {}) {
       node: process.version,
     },
     adapters: adapterItems.map((item) => probeAdapter(item, input, runtime, trialSummary.byAdapter[item.id])),
-    llmProviders: probeLlmProviders(),
+    llmProviders: probeLlmProviders(store),
     agentTrials: trialSummary,
     limits: CAPABILITY_PROBE_CONTRACT.safetyBoundary,
   };
@@ -196,8 +197,17 @@ function probeVersion(executablePath, timeoutMs) {
   };
 }
 
-function probeLlmProviders() {
-  return [
+function probeLlmProviders(store) {
+  const configuredProfiles = listLlmProviderConfigs(store).items.map((item) => ({
+    id: item.id,
+    configurationKind: "provider_registry",
+    status: item.validation.ready ? "configuration_ready_unverified" : "configuration_incomplete",
+    configured: item.validation.ready,
+    evidence: [item.validation.evidence, "No provider health or generation request was sent."],
+    notes: [`${item.kind} via ${item.protocol}; model ${item.model}.`],
+  }));
+  const configuredIds = new Set(configuredProfiles.map((item) => item.id));
+  const discovered = [
     providerProfile("mock", "test_only", true, null, "Deterministic local test provider; not a real model."),
     providerProfile("deepseek", "api_key", hasEnv("DEEPSEEK_API_KEY"), "DEEPSEEK_API_KEY"),
     providerProfile("openai", "api_key", hasEnv("OPENAI_API_KEY"), "OPENAI_API_KEY"),
@@ -205,7 +215,8 @@ function probeLlmProviders() {
     providerProfile("local", "endpoint", hasEnv("SPRUCE_LOCAL_LLM_BASE_URL"), "SPRUCE_LOCAL_LLM_BASE_URL", "Endpoint presence is configuration evidence only; no health request was sent."),
     providerProfile("openai-compatible", "runtime_options", false, null, "Configured per request; no global configuration was inferred."),
     providerProfile("custom", "runtime_object", false, null, "Injected provider objects cannot be discovered from process configuration."),
-  ];
+  ].filter((item) => !configuredIds.has(item.id));
+  return [...configuredProfiles, ...discovered];
 }
 
 function hasEnv(name) {

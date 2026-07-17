@@ -1,27 +1,12 @@
 # LLM Adapter v0
 
-SpruceAgent now has the first multi-provider LLM adapter boundary.
+SpruceAgent has a multi-provider LLM planning boundary and an offline Provider Registry.
 
-This layer defines how an LLM can produce a planning draft without gaining authority to execute tools.
+The LLM Adapter converts provider responses into non-executable plan drafts. The Provider Registry supplies validated endpoint metadata and credential environment-variable references. Neither layer grants tool authority.
 
-## Known Facts
+## Core APIs
 
-Before LLM Adapter v0, SpruceAgent had:
-
-- rule-based Agent Run Loop v0
-- ContextOS retrieval
-- approved typed skills
-- policy-governed tools
-- approval tickets
-- workflow runs
-- GatewayMesh Local API
-- Gateway client and route contract
-
-It did not have a stable interface for an LLM planner.
-
-## What LLM Adapter v0 Adds
-
-Core now exports:
+Adapter APIs:
 
 - `getLlmAdapterContract()`
 - `createMockLlmProvider()`
@@ -33,140 +18,67 @@ Core now exports:
 - `createLlmProvider()`
 - `draftLlmPlan()`
 
-The adapter contract defines:
+Registry APIs:
 
-- request shape
-- response shape
-- provider boundary
-- draft-only output
-- safety boundary
+- `getLlmProviderRegistryContract()`
+- `configureLlmProvider()`
+- `listLlmProviderConfigs()`
+- `getLlmProviderConfig()`
+- `validateLlmProviderConfig()`
+- `resolveConfiguredLlmProvider()`
+- `removeLlmProviderConfig()`
 
-Supported provider ids:
+See [LLM Provider Registry v0](llm-provider-registry-v0.md) for configuration, current official endpoint facts, CLI, Gateway, and credential handling.
 
-| Provider | Notes |
-| --- | --- |
-| `mock` | deterministic local draft provider |
-| `deepseek` | OpenAI-compatible DeepSeek API |
-| `openai` | OpenAI-compatible Chat Completions path |
-| `anthropic` | Anthropic Messages API shape |
-| `local` | OpenAI-compatible local server, default `http://127.0.0.1:11434/v1` |
-| `openai-compatible` | custom OpenAI-compatible base URL |
-| `custom` | pass a provider object with `draftPlan(request)` |
+## Planning Flow
 
-## CLI
-
-Read the adapter contract:
-
-```bash
-npm run spruce -- llm contract
+```text
+ContextOS
+  -> explicit Provider profile selection
+  -> credential lookup from environment
+  -> Provider API request
+  -> non-executable LLM draft
+  -> trace
+  -> Planner Promotion
+  -> Candidate Execution
+  -> TrustKernel
+  -> approval and tool result
 ```
 
-Run the agent with mock LLM drafting:
+Provider configuration does not automatically trigger the API request. Agent Run or Workflow Builder must explicitly select a profile.
 
-```bash
-npm run spruce -- run "Draft a safe plan" --context "TrustKernel" --llm mock --dryRun
-```
+## Response Normalization
 
-Run with DeepSeek:
-
-```bash
-DEEPSEEK_API_KEY=<token> npm run spruce -- run "Draft a safe plan" --context "TrustKernel" --llm deepseek --llmModel deepseek-v4-flash --dryRun
-```
-
-Run with OpenAI:
-
-```bash
-OPENAI_API_KEY=<token> npm run spruce -- run "Draft a safe plan" --context "TrustKernel" --llm openai --llmModel gpt-4.1-mini --dryRun
-```
-
-Run with a local OpenAI-compatible server:
-
-```bash
-npm run spruce -- run "Draft a safe plan" --context "TrustKernel" --llm local --llmBaseUrl http://127.0.0.1:11434/v1 --llmModel <model> --dryRun
-```
-
-## Gateway
-
-The Gateway exposes the contract for future UI and adapter layers:
-
-```bash
-curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/llm/contract
-```
-
-Gateway agent runs can request mock drafting:
+Every proposed step is normalized to:
 
 ```json
 {
-  "goal": "Draft a safe plan",
-  "context": "TrustKernel",
-  "dryRun": true,
-  "llmProvider": "mock"
+  "executable": false
 }
 ```
 
-Gateway agent runs can request DeepSeek drafting:
+A Provider may suggest `toolName` and `input`, but these remain candidates. Even when a model returns `executable: true`, SpruceAgent resets it to `false`.
 
-```json
-{
-  "goal": "Draft a safe plan",
-  "context": "TrustKernel",
-  "dryRun": true,
-  "llmProvider": "deepseek",
-  "llmModel": "deepseek-v4-flash"
-}
-```
+Trace records contain provider/model identifiers, context paths, normalized drafts, usage summaries, and sanitized errors. They do not contain API keys or authorization headers.
+
+## Current Verification
+
+The automated suite intercepts HTTP locally and verifies:
+
+- OpenAI-compatible and DeepSeek bearer authorization plus Chat Completions request shape;
+- DeepSeek thinking configuration fields;
+- Anthropic `x-api-key`, `anthropic-version`, Messages request and response shape;
+- configured profiles resolving through Agent Run;
+- no credential persistence in Registry files;
+- Gateway configuration and validation without network requests.
+
+No real Provider request is made by these tests. Live API verification is a separate, explicit operation to run only after the project configuration is complete.
 
 ## Safety Boundary
 
-LLM Adapter v0 is deliberately constrained.
-
-- it never executes tools
-- it never grants approval
-- it never creates skills automatically
-- it never changes workflow state
-- proposed steps are normalized as non-executable drafts
-- proposed `toolName` and `input` fields are only candidates for Planner Promotion
-- actual execution remains owned by `executeTool` and TrustKernel
-
-Even if a provider returns `executable: true`, SpruceAgent normalizes the proposed step back to `executable: false`. Tool candidates may be preserved, but they do not execute unless Planner Promotion marks them `ready` and Candidate Execution is explicitly requested.
-
-## DeepSeek Smoke Test
-
-DeepSeek was tested through its OpenAI-compatible API with:
-
-- base URL: `https://api.deepseek.com`
-- model: `deepseek-v4-flash`
-- endpoint: `/chat/completions`
-
-The smoke run produced:
-
-- `trace_mqwt4vzw_0d0808a8750b`
-- `llm.provider`: `deepseek`
-- `llm.model`: `deepseek-v4-flash`
-- `llm.status`: `drafted`
-- all proposed steps normalized to `executable: false`
-
-API keys are not stored by SpruceAgent. Use environment variables.
-
-## Current Limits
-
-LLM Adapter v0 does not yet provide:
-
-- streaming
-- tool-call parsing
-- JSON schema validation against provider output
-- prompt templates
-- prompt versioning
-- evaluation-driven prompt improvement
-
-Those should come after this boundary is stable.
-
-## Why It Matters
-
-This is the safe path toward a real LLM planner:
-
-```text
-Context -> LLM Draft -> Trace -> Planner Promotion -> Candidate Execution -> TrustKernel -> Tool Result
-```
-
-The important design decision is that the model can suggest, but SpruceAgent decides through typed plans, policy, approvals, and audit.
+- LLM output never executes tools directly.
+- Provider profiles never store credentials.
+- Inline credentials are rejected from CLI/Gateway workflow configuration paths.
+- Configuration readiness is not presented as live API verification.
+- Live Provider errors become failed draft results and do not authorize fallback actions.
+- Planner Promotion, Candidate Execution, TrustKernel, approvals, and audit remain mandatory.

@@ -157,7 +157,7 @@ export function createLocalLlmProvider(options = {}) {
 export function createAnthropicLlmProvider(options = {}) {
   const providerId = options.id ?? "anthropic";
   const baseUrl = normalizeBaseUrl(options.baseUrl ?? "https://api.anthropic.com");
-  const model = options.model ?? "claude-sonnet-4-5";
+  const model = options.model ?? "claude-sonnet-4-20250514";
   const apiKey = options.apiKey ?? process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error(`${providerId} apiKey is required`);
 

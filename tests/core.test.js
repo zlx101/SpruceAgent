@@ -33,6 +33,7 @@ import {
   executeTool,
   extractSkillFromTrace,
   compileExecutableSteps,
+  configureLlmProvider,
   createDeepSeekLlmProvider,
   createGatewayClient,
   createOpenAiCompatibleLlmProvider,
@@ -65,6 +66,8 @@ import {
   getApprovalTicket,
   getGatewayRouteContract,
   getLlmAdapterContract,
+  getLlmProviderConfig,
+  getLlmProviderRegistryContract,
   getCandidateApprovalContract,
   getCandidateExecutionContract,
   getPlannerPromotionContract,
@@ -102,6 +105,7 @@ import {
   listTaskRoutes,
   listTools,
   listEvaluations,
+  listLlmProviderConfigs,
   listSkillEvaluations,
   listSkillPackageImports,
   listSkillPackages,
@@ -123,6 +127,8 @@ import {
   requestCandidateApprovals,
   readTraceEvents,
   rejectTicket,
+  removeLlmProviderConfig,
+  resolveConfiguredLlmProvider,
   resumeAgentRun,
   resumeWorkflowRun,
   replaySkillFixture,
@@ -138,6 +144,7 @@ import {
   verifyGatewayToken,
   startTrace,
   updateWorkflow,
+  validateLlmProviderConfig,
 } from "../packages/core/src/index.js";
 
 test("workspace store initializes core files", () => {
@@ -2967,6 +2974,193 @@ test("deepseek provider uses official openai-compatible base url by default", ()
   assert.equal(provider.baseUrl, "https://api.deepseek.com");
 });
 
+test("llm provider registry stores metadata without secrets and validates offline", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const configured = configureLlmProvider(store, {
+    id: "deepseek-prod",
+    kind: "deepseek",
+    model: "deepseek-v4-flash",
+    apiKeyEnv: "SPRUCE_TEST_DEEPSEEK_KEY",
+    default: true,
+  });
+  const missing = validateLlmProviderConfig(store, "deepseek-prod", { env: {} });
+  const ready = getLlmProviderConfig(store, "deepseek-prod", {
+    env: { SPRUCE_TEST_DEEPSEEK_KEY: "unit-test-secret-value" },
+  });
+  const stored = fs.readFileSync(path.join(store.root, "llm-providers.json"), "utf8");
+  const probe = probeAgentCapabilities(store, { adapterIds: ["local-shell-agent"] });
+
+  assert.equal(getLlmProviderRegistryContract().interface, "spruceagent.llm-provider-registry");
+  assert.equal(configured.baseUrl, "https://api.deepseek.com");
+  assert.equal(configured.path, "/chat/completions");
+  assert.equal(configured.isDefault, true);
+  assert.equal(missing.ready, false);
+  assert.ok(missing.failureCodes.includes("credential_present"));
+  assert.equal(missing.networkRequestSent, false);
+  assert.equal(ready.validation.ready, true);
+  assert.equal(JSON.stringify(ready).includes("unit-test-secret-value"), false);
+  assert.equal(stored.includes("unit-test-secret-value"), false);
+  assert.equal(stored.includes("apiKeyEnv"), true);
+  assert.equal(probe.llmProviders.find((item) => item.id === "deepseek-prod").configured, false);
+  assert.throws(
+    () => configureLlmProvider(store, {
+      id: "unsafe",
+      kind: "deepseek",
+      model: "deepseek-v4-flash",
+      apiKey: "must-not-be-stored",
+    }),
+    /must not be provided/,
+  );
+  assert.throws(
+    () => configureLlmProvider(store, {
+      id: "remote-http",
+      kind: "openai-compatible",
+      baseUrl: "http://example.com/v1",
+      model: "model",
+      apiKeyEnv: "REMOTE_KEY",
+    }),
+    /must use HTTPS/,
+  );
+  const local = configureLlmProvider(store, {
+    id: "ollama-local",
+    kind: "local",
+    model: "gpt-oss:20b",
+  });
+  assert.equal(local.validation.ready, true);
+  assert.equal(listLlmProviderConfigs(store, { env: {} }).summary.total, 2);
+  assert.equal(removeLlmProviderConfig(store, "ollama-local").status, "removed");
+});
+
+test("configured DeepSeek and Anthropic providers emit official request shapes without real network", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  configureLlmProvider(store, {
+    id: "deepseek-contract",
+    kind: "deepseek",
+    model: "deepseek-v4-flash",
+    apiKeyEnv: "TEST_DEEPSEEK_KEY",
+    thinking: "disabled",
+  });
+  configureLlmProvider(store, {
+    id: "anthropic-contract",
+    kind: "anthropic",
+    model: "claude-sonnet-4-20250514",
+    apiKeyEnv: "TEST_ANTHROPIC_KEY",
+  });
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    if (String(url).includes("anthropic.com")) {
+      return jsonResponse({
+        id: "msg_test",
+        model: "claude-sonnet-4-20250514",
+        content: [{ type: "text", text: JSON.stringify({ summary: "Anthropic draft", proposedSteps: [], constraints: [] }) }],
+        usage: { input_tokens: 1, output_tokens: 1 },
+        stop_reason: "end_turn",
+      });
+    }
+    return jsonResponse({
+      id: "chatcmpl_test",
+      model: "deepseek-v4-flash",
+      choices: [{ message: { content: JSON.stringify({ summary: "DeepSeek draft", proposedSteps: [], constraints: [] }) } }],
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+    });
+  };
+
+  try {
+    const deepseek = resolveConfiguredLlmProvider(store, "deepseek-contract", {
+      env: { TEST_DEEPSEEK_KEY: "deepseek-unit-secret" },
+    });
+    const anthropic = resolveConfiguredLlmProvider(store, "anthropic-contract", {
+      env: { TEST_ANTHROPIC_KEY: "anthropic-unit-secret" },
+    });
+    await deepseek.draftPlan({ goal: "Plan", context: { results: [] }, knownFacts: {} });
+    await anthropic.draftPlan({ goal: "Plan", context: { results: [] }, knownFacts: {} });
+
+    assert.equal(calls[0].url, "https://api.deepseek.com/chat/completions");
+    assert.equal(calls[0].options.headers.authorization, "Bearer deepseek-unit-secret");
+    assert.equal(JSON.parse(calls[0].options.body).thinking.type, "disabled");
+    assert.equal(calls[1].url, "https://api.anthropic.com/v1/messages");
+    assert.equal(calls[1].options.headers["x-api-key"], "anthropic-unit-secret");
+    assert.equal(calls[1].options.headers["anthropic-version"], "2023-06-01");
+    assert.equal(fs.readFileSync(path.join(store.root, "llm-providers.json"), "utf8").includes("unit-secret"), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("agent run resolves a configured provider profile without inline credentials", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, "context.md"), "Configured provider context.", "utf8");
+  buildWorkspaceIndex(store);
+  configureLlmProvider(store, {
+    id: "local-planner",
+    kind: "local",
+    model: "test-local-model",
+  });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => jsonResponse({
+    id: "local_test",
+    model: "test-local-model",
+    choices: [{ message: { content: JSON.stringify({ summary: "Configured local draft", proposedSteps: [], constraints: [] }) } }],
+  });
+  try {
+    const run = await runAgent(store, {
+      goal: "Use configured planner",
+      contextQuery: "Configured provider",
+      llmProvider: "local-planner",
+      dryRun: true,
+    });
+    assert.equal(run.llm.status, "drafted");
+    assert.equal(run.llm.provider, "local-planner");
+    assert.equal(run.knownFacts.llmConnected, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("gateway manages LLM provider profiles offline and rejects inline secrets", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const client = createGatewayClient({
+    baseUrl: `http://${gateway.host}:${gateway.port}`,
+    token: gateway.token,
+  });
+  try {
+    const contract = await client.llmProviderContract();
+    const configured = await client.configureLlmProvider({
+      id: "gateway-local",
+      kind: "local",
+      model: "gateway-model",
+    });
+    const listed = await client.listLlmProviders();
+    const detail = await client.getLlmProvider("gateway-local");
+    const validation = await client.validateLlmProvider("gateway-local");
+    await assert.rejects(
+      () => client.configureLlmProvider({
+        id: "gateway-unsafe",
+        kind: "deepseek",
+        model: "deepseek-v4-flash",
+        apiKey: "inline-secret",
+      }),
+      /must not be provided/,
+    );
+    const removed = await client.removeLlmProvider("gateway-local");
+
+    assert.equal(contract.interface, "spruceagent.llm-provider-registry");
+    assert.equal(configured.validation.networkRequestSent, false);
+    assert.equal(listed.summary.total, 1);
+    assert.equal(detail.model, "gateway-model");
+    assert.equal(validation.ready, true);
+    assert.equal(removed.status, "removed");
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
 test("planner promotion contract exposes allowlisted candidate boundary", () => {
   const contract = getPlannerPromotionContract();
 

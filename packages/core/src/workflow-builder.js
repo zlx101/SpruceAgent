@@ -1,5 +1,6 @@
 import { createContextPack, createSourceMap } from "./context.js";
-import { createLlmProvider, draftLlmPlan } from "./llm.js";
+import { draftLlmPlan } from "./llm.js";
+import { resolveConfiguredLlmProvider } from "./llm-provider-registry.js";
 import { createWorkflow } from "./workflows.js";
 import { listSkills } from "./skills.js";
 
@@ -36,10 +37,10 @@ export async function draftWorkflow(store, input = {}) {
   });
   const skills = listSkills(store, "approved");
   const selectedSkill = selectSkill(skills, input.skillId);
-  const provider = createLlmProvider(input.llmProvider ?? "mock", {
+  if (input.llmApiKey !== undefined) throw new Error("llmApiKey is not accepted; configure apiKeyEnv in an LLM provider profile");
+  const provider = resolveConfiguredLlmProvider(store, input.llmProvider ?? "mock", {
     model: input.llmModel,
     baseUrl: input.llmBaseUrl,
-    apiKey: input.llmApiKey,
     timeoutMs: input.llmTimeoutMs,
     temperature: input.llmTemperature,
     maxTokens: input.llmMaxTokens,

@@ -28,6 +28,16 @@ export {
   getLlmAdapterContract,
 } from "./llm.js";
 export {
+  configureLlmProvider,
+  getLlmProviderConfig,
+  getLlmProviderRegistryContract,
+  hasLlmProviderConfig,
+  listLlmProviderConfigs,
+  removeLlmProviderConfig,
+  resolveConfiguredLlmProvider,
+  validateLlmProviderConfig,
+} from "./llm-provider-registry.js";
+export {
   approveSkill,
   compileExecutableSteps,
   extractSkillFromTrace,

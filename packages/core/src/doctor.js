@@ -22,6 +22,7 @@ const REQUIRED_PATHS = [
   "apps/desktop/styles.css",
   "packages/core/src/index.js",
   "packages/core/src/agent-trial-attestation.js",
+  "packages/core/src/llm-provider-registry.js",
   "tests/core.test.js",
   "docs/open-source-alpha-quickstart.md",
   "docs/contextos-index-safety-v0.md",
@@ -38,6 +39,7 @@ const REQUIRED_PATHS = [
   "docs/launch-review-gate-v0.md",
   "docs/capability-probe-task-router-v0.md",
   "docs/agent-trial-evidence-v0.md",
+  "docs/llm-provider-registry-v0.md",
   "docs/public-showcase-v0.md",
   "docs/release-checklist.md",
 ];

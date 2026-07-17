@@ -4,7 +4,8 @@ import { executeTool } from "./executor.js";
 import { requestCandidateApprovals } from "./candidate-approvals.js";
 import { executeCandidatePlan } from "./candidate-executor.js";
 import { getApprovedSkill } from "./skills.js";
-import { createLlmProvider, draftLlmPlan } from "./llm.js";
+import { draftLlmPlan } from "./llm.js";
+import { resolveConfiguredLlmProvider } from "./llm-provider-registry.js";
 import { promoteLlmDraftToCandidatePlan } from "./planner.js";
 import { assessRunRisk, runPreflight } from "./preflight.js";
 import { appendTraceEvent, startTrace } from "./trace.js";
@@ -40,7 +41,7 @@ export async function runAgent(store, input) {
   });
   appendTraceEvent(store, trace.id, "run.preflight", preflight);
 
-  const llmProvider = resolveLlmProvider(input.llmProvider, input);
+  const llmProvider = resolveLlmProvider(store, input.llmProvider, input);
   const knownFacts = collectKnownFacts(store, selectedSkill, executeSkill, llmProvider);
   appendTraceEvent(store, trace.id, "agent.known_facts", knownFacts);
   if (selectedSkill) {
@@ -323,11 +324,10 @@ function collectKnownFacts(store, selectedSkill, executeSkill, llmProvider) {
   };
 }
 
-function resolveLlmProvider(provider, input) {
-  return createLlmProvider(provider, {
+function resolveLlmProvider(store, provider, input) {
+  return resolveConfiguredLlmProvider(store, provider, {
     model: input.llmModel,
     baseUrl: input.llmBaseUrl,
-    apiKey: input.llmApiKey,
     timeoutMs: input.llmTimeoutMs,
     temperature: input.llmTemperature,
     maxTokens: input.llmMaxTokens,

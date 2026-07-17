@@ -15,6 +15,7 @@ import {
   createLaunchReview,
   createTaskRoute,
   createContextPack,
+  configureLlmProvider,
   createSkillReplayFixture,
   createGatewayClient,
   createStore,
@@ -58,6 +59,8 @@ import {
   getTaskRoute,
   getTaskRouterContract,
   getLlmAdapterContract,
+  getLlmProviderConfig,
+  getLlmProviderRegistryContract,
   getPlannerPromotionContract,
   getRunInbox,
   getRunInboxContract,
@@ -101,6 +104,7 @@ import {
   listSkillReplayResults,
   listSkillVersions,
   listMemory,
+  listLlmProviderConfigs,
   listSkills,
   listTools,
   listTraces,
@@ -116,6 +120,7 @@ import {
   readSkillPackageFile,
   requestCandidateApprovals,
   rejectTicket,
+  removeLlmProviderConfig,
   readWorkspaceIndex,
   resumeAgentRun,
   resumeWorkflowRun,
@@ -131,6 +136,7 @@ import {
   startTrace,
   startGatewayServer,
   updateWorkflow,
+  validateLlmProviderConfig,
 } from "../../../packages/core/src/index.js";
 
 const store = createStore(process.cwd());
@@ -282,7 +288,7 @@ async function main() {
   }
 
   if (command === "llm") {
-    handleLlm(subcommand);
+    handleLlm(subcommand, rest);
     return;
   }
 
@@ -960,7 +966,6 @@ async function handleWorkflow(action, args) {
       llmProvider: flags.llm ?? "mock",
       llmModel: flags.model,
       llmBaseUrl: flags.baseUrl,
-      llmApiKey: flags.apiKey,
       llmTimeoutMs: flags.timeoutMs,
       llmTemperature: flags.temperature,
       llmMaxTokens: flags.maxTokens,
@@ -982,7 +987,6 @@ async function handleWorkflow(action, args) {
       llmProvider: flags.llm ?? "mock",
       llmModel: flags.model,
       llmBaseUrl: flags.baseUrl,
-      llmApiKey: flags.apiKey,
       llmTimeoutMs: flags.timeoutMs,
       llmTemperature: flags.temperature,
       llmMaxTokens: flags.maxTokens,
@@ -1165,13 +1169,63 @@ async function handleGateway(action, args) {
   throw new Error("usage: spruce gateway <token|info|contract|call|serve>");
 }
 
-function handleLlm(action) {
+function handleLlm(action, args = []) {
   if (action === "contract") {
     printJson(getLlmAdapterContract());
     return;
   }
+  if (action === "provider-contract") {
+    printJson(getLlmProviderRegistryContract());
+    return;
+  }
+  if (action === "providers" || action === "list") {
+    printJson(listLlmProviderConfigs(store));
+    return;
+  }
+  if (action === "configure") {
+    const [providerId, ...flagArgs] = args;
+    if (!providerId) throw new Error("usage: spruce llm configure <providerId> --kind <kind> --model <model> [--baseUrl <url>] [--apiKeyEnv <name>] [--default]");
+    const flags = parseFlags(flagArgs);
+    printJson(configureLlmProvider(store, {
+      id: providerId,
+      kind: flags.kind,
+      model: flags.model,
+      baseUrl: flags.baseUrl,
+      path: flags.path,
+      apiKeyEnv: flags.apiKeyEnv,
+      timeoutMs: flags.timeoutMs,
+      maxTokens: flags.maxTokens,
+      temperature: flags.temperature,
+      jsonMode: flags.noJsonMode ? false : undefined,
+      enabled: flags.disabled ? false : undefined,
+      thinking: flags.thinking,
+      reasoningEffort: flags.reasoningEffort,
+      default: Boolean(flags.default),
+      actor: flags.actor ?? "local-user",
+    }));
+    return;
+  }
+  if (action === "detail") {
+    const [providerId] = args;
+    if (!providerId) throw new Error("usage: spruce llm detail <providerId>");
+    printJson(getLlmProviderConfig(store, providerId));
+    return;
+  }
+  if (action === "validate") {
+    const [providerId] = args;
+    if (!providerId) throw new Error("usage: spruce llm validate <providerId>");
+    printJson(validateLlmProviderConfig(store, providerId));
+    return;
+  }
+  if (action === "remove") {
+    const [providerId, ...flagArgs] = args;
+    if (!providerId) throw new Error("usage: spruce llm remove <providerId>");
+    const flags = parseFlags(flagArgs);
+    printJson(removeLlmProviderConfig(store, providerId, { actor: flags.actor ?? "local-user" }));
+    return;
+  }
 
-  throw new Error("usage: spruce llm contract");
+  throw new Error("usage: spruce llm <contract|provider-contract|providers|configure|detail|validate|remove>");
 }
 
 function handlePlanner(action) {
@@ -1757,6 +1811,12 @@ Usage:
   ${executable} eval trace <traceId>
   ${executable} eval list
   ${executable} llm contract
+  ${executable} llm provider-contract
+  ${executable} llm providers
+  ${executable} llm configure deepseek --kind deepseek --model deepseek-v4-flash --apiKeyEnv DEEPSEEK_API_KEY --default
+  ${executable} llm detail <providerId>
+  ${executable} llm validate <providerId>
+  ${executable} llm remove <providerId>
   ${executable} planner contract
   ${executable} candidate contract
   ${executable} candidate approval-contract

@@ -90,6 +90,14 @@ import { getRunDetail, getRunDetailContract } from "./run-detail.js";
 import { getRunInbox, getRunInboxContract } from "./run-inbox.js";
 import { getTraceReport, getTraceReportContract } from "./trace-report.js";
 import { getLlmAdapterContract } from "./llm.js";
+import {
+  configureLlmProvider,
+  getLlmProviderConfig,
+  getLlmProviderRegistryContract,
+  listLlmProviderConfigs,
+  removeLlmProviderConfig,
+  validateLlmProviderConfig,
+} from "./llm-provider-registry.js";
 import { runAgent } from "./agent-runner.js";
 import { assessRunRisk, runPreflight } from "./preflight.js";
 import { readJson, writeJson } from "./storage.js";
@@ -850,6 +858,47 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       description: "Read the LLM adapter contract.",
     },
     {
+      id: "llm.providers.contract",
+      method: "GET",
+      path: "/v1/llm/providers/contract",
+      authRequired: true,
+      description: "Read the offline LLM Provider Registry contract.",
+    },
+    {
+      id: "llm.providers.list",
+      method: "GET",
+      path: "/v1/llm/providers",
+      authRequired: true,
+      description: "List redacted LLM provider profiles and offline readiness.",
+    },
+    {
+      id: "llm.providers.configure",
+      method: "POST",
+      path: "/v1/llm/providers",
+      authRequired: true,
+      description: "Configure provider metadata and an API-key environment variable name without sending a provider request.",
+    },
+    {
+      id: "llm.providers.get",
+      method: "GET",
+      path: "/v1/llm/providers/:providerId",
+      authRequired: true,
+      description: "Read one redacted LLM provider profile.",
+    },
+    {
+      id: "llm.providers.validate",
+      method: "GET",
+      path: "/v1/llm/providers/:providerId/validate",
+      authRequired: true,
+      description: "Validate one provider profile offline without network access.",
+    },
+    {
+      id: "llm.providers.remove",
+      method: "DELETE",
+      path: "/v1/llm/providers/:providerId",
+      authRequired: true,
+      description: "Remove one local LLM provider profile without contacting the provider.",
+    },    {
       id: "workflow_builder.contract",
       method: "GET",
       path: "/v1/workflow-builder/contract",
@@ -1265,6 +1314,32 @@ async function routeRequest(store, request, url, body) {
     return ok(getLlmAdapterContract());
   }
 
+  if (request.method === "GET" && url.pathname === "/v1/llm/providers/contract") {
+    return ok(getLlmProviderRegistryContract());
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/llm/providers") {
+    return ok(listLlmProviderConfigs(store));
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/llm/providers") {
+    return ok(configureLlmProvider(store, {
+      ...body,
+      actor: body.actor ?? "gateway-user",
+    }));
+  }
+
+  if (request.method === "GET" && pathParts[1] === "llm" && pathParts[2] === "providers" && pathParts[3] && pathParts[4] === "validate") {
+    return ok(validateLlmProviderConfig(store, pathParts[3]));
+  }
+
+  if (request.method === "GET" && pathParts[1] === "llm" && pathParts[2] === "providers" && pathParts[3]) {
+    return ok(getLlmProviderConfig(store, pathParts[3]));
+  }
+
+  if (request.method === "DELETE" && pathParts[1] === "llm" && pathParts[2] === "providers" && pathParts[3]) {
+    return ok(removeLlmProviderConfig(store, pathParts[3], { actor: body.actor ?? "gateway-user" }));
+  }
   if (request.method === "GET" && url.pathname === "/v1/workflow-builder/contract") {
     return ok(getWorkflowBuilderContract());
   }
@@ -1519,7 +1594,6 @@ async function routeRequest(store, request, url, body) {
       llmProvider: body.llmProvider ?? "mock",
       llmModel: body.llmModel,
       llmBaseUrl: body.llmBaseUrl,
-      llmApiKey: body.llmApiKey,
       llmTimeoutMs: body.llmTimeoutMs,
       llmTemperature: body.llmTemperature,
       llmMaxTokens: body.llmMaxTokens,
@@ -1539,7 +1613,6 @@ async function routeRequest(store, request, url, body) {
       llmProvider: body.llmProvider ?? "mock",
       llmModel: body.llmModel,
       llmBaseUrl: body.llmBaseUrl,
-      llmApiKey: body.llmApiKey,
       llmTimeoutMs: body.llmTimeoutMs,
       llmTemperature: body.llmTemperature,
       llmMaxTokens: body.llmMaxTokens,
