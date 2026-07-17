@@ -23,6 +23,16 @@ import {
 } from "./agent-launcher.js";
 import { getExternalCliLauncherContract } from "./external-cli-launcher.js";
 import {
+  approveFleetRun,
+  cancelFleetRun,
+  createFleetRun,
+  executeFleetRun,
+  getFleetRun,
+  getFleetRunContract,
+  listFleetRuns,
+  requestFleetRunApprovals,
+} from "./fleet-runs.js";
+import {
   createLaunchReview,
   decideLaunchReview,
   getLaunchReview,
@@ -465,6 +475,62 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/agent-routes/contract",
       authRequired: true,
       description: "Read the Task Router contract.",
+    },
+    {
+      id: "fleet_runs.list",
+      method: "GET",
+      path: "/v1/fleet-runs",
+      authRequired: true,
+      description: "List Fleet Run orchestration records.",
+    },
+    {
+      id: "fleet_runs.get",
+      method: "GET",
+      path: "/v1/fleet-runs/:fleetRunId",
+      authRequired: true,
+      description: "Read one Fleet Run orchestration record.",
+    },
+    {
+      id: "fleet_runs.create",
+      method: "POST",
+      path: "/v1/fleet-runs",
+      authRequired: true,
+      description: "Prepare comparable isolated candidates from an executable Task Route.",
+    },
+    {
+      id: "fleet_runs.request_approvals",
+      method: "POST",
+      path: "/v1/fleet-runs/:fleetRunId/approvals",
+      authRequired: true,
+      description: "Create exact Agent Launcher approval tickets for every Fleet candidate.",
+    },
+    {
+      id: "fleet_runs.approve",
+      method: "POST",
+      path: "/v1/fleet-runs/:fleetRunId/approve",
+      authRequired: true,
+      description: "Explicitly batch-approve reviewed Fleet candidate invocations.",
+    },
+    {
+      id: "fleet_runs.execute",
+      method: "POST",
+      path: "/v1/fleet-runs/:fleetRunId/execute",
+      authRequired: true,
+      description: "Execute an approved Fleet within its bounded parallelism.",
+    },
+    {
+      id: "fleet_runs.cancel",
+      method: "POST",
+      path: "/v1/fleet-runs/:fleetRunId/cancel",
+      authRequired: true,
+      description: "Cancel pending Fleet candidates and abort active candidates in this Gateway process.",
+    },
+    {
+      id: "fleet_runs.contract",
+      method: "GET",
+      path: "/v1/fleet-runs/contract",
+      authRequired: true,
+      description: "Read the Fleet Run Orchestrator contract.",
     },
     {
       id: "tools.list",
@@ -1318,6 +1384,56 @@ async function routeRequest(store, request, url, body) {
     }));
   }
 
+  if (request.method === "GET" && url.pathname === "/v1/fleet-runs") {
+    return ok(listFleetRuns(store, {
+      status: url.searchParams.get("status") ?? undefined,
+      routeId: url.searchParams.get("routeId") ?? undefined,
+    }));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/fleet-runs/contract") {
+    return ok(getFleetRunContract());
+  }
+
+  if (request.method === "GET" && pathParts[1] === "fleet-runs" && pathParts[2] && !pathParts[3]) {
+    return ok(getFleetRun(store, pathParts[2]));
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/fleet-runs") {
+    return ok(createFleetRun(store, {
+      ...body,
+      actor: body.actor ?? "gateway-user",
+    }));
+  }
+
+  if (request.method === "POST" && pathParts[1] === "fleet-runs" && pathParts[2] && pathParts[3] === "approvals") {
+    return ok(await requestFleetRunApprovals(store, pathParts[2], {
+      ...body,
+      actor: body.actor ?? "gateway-user",
+    }));
+  }
+
+  if (request.method === "POST" && pathParts[1] === "fleet-runs" && pathParts[2] && pathParts[3] === "approve") {
+    return ok(approveFleetRun(store, pathParts[2], {
+      ...body,
+      actor: body.actor ?? "gateway-user",
+    }));
+  }
+
+  if (request.method === "POST" && pathParts[1] === "fleet-runs" && pathParts[2] && pathParts[3] === "execute") {
+    return ok(await executeFleetRun(store, pathParts[2], {
+      ...body,
+      actor: body.actor ?? "gateway-user",
+    }));
+  }
+
+  if (request.method === "POST" && pathParts[1] === "fleet-runs" && pathParts[2] && pathParts[3] === "cancel") {
+    return ok(cancelFleetRun(store, pathParts[2], {
+      ...body,
+      actor: body.actor ?? "gateway-user",
+    }));
+  }
+
   if (request.method === "GET" && url.pathname === "/v1/contract") {
     return ok(getGatewayRouteContract());
   }
@@ -1827,6 +1943,7 @@ function gatewayStatus(store) {
     capabilityProbeCount: listCapabilityProbes(store).summary.total,
     agentTrialCount: listAgentTrials(store).summary.total,
     taskRouteCount: listTaskRoutes(store).summary.total,
+    fleetRunCount: listFleetRuns(store).summary.total,
     artifactCount: listArtifacts(store).summary.total,
     evaluationCount: listEvaluations(store).length,
     skillEvaluationCount: listSkillEvaluations(store).length,

@@ -71,6 +71,14 @@ export function createGatewayClient(options = {}) {
     getTaskRoute: (routeId) => request("GET", `/v1/agent-routes/${encodePathPart(routeId)}`),
     taskRouterContract: () => request("GET", "/v1/agent-routes/contract"),
     createTaskRoute: (input = {}) => request("POST", "/v1/agent-routes", input),
+    listFleetRuns: (input = {}) => request("GET", `/v1/fleet-runs${fleetRunParams(input)}`),
+    getFleetRun: (fleetRunId) => request("GET", `/v1/fleet-runs/${encodePathPart(fleetRunId)}`),
+    fleetRunContract: () => request("GET", "/v1/fleet-runs/contract"),
+    createFleetRun: (input = {}) => request("POST", "/v1/fleet-runs", input),
+    requestFleetRunApprovals: (fleetRunId, input = {}) => request("POST", `/v1/fleet-runs/${encodePathPart(fleetRunId)}/approvals`, input),
+    approveFleetRun: (fleetRunId, input = {}) => request("POST", `/v1/fleet-runs/${encodePathPart(fleetRunId)}/approve`, input),
+    executeFleetRun: (fleetRunId, input = {}) => request("POST", `/v1/fleet-runs/${encodePathPart(fleetRunId)}/execute`, input),
+    cancelFleetRun: (fleetRunId, input = {}) => request("POST", `/v1/fleet-runs/${encodePathPart(fleetRunId)}/cancel`, input),
     contract: () => request("GET", "/v1/contract"),
     llmContract: () => request("GET", "/v1/llm/contract"),
     llmProviderContract: () => request("GET", "/v1/llm/providers/contract"),
@@ -215,6 +223,14 @@ function launchReviewParams(input = {}) {
 function taskRouteParams(input = {}) {
   const params = new URLSearchParams();
   if (input.status) params.set("status", input.status);
+  const value = params.toString();
+  return value ? `?${value}` : "";
+}
+
+function fleetRunParams(input = {}) {
+  const params = new URLSearchParams();
+  if (input.status) params.set("status", input.status);
+  if (input.routeId) params.set("routeId", input.routeId);
   const value = params.toString();
   return value ? `?${value}` : "";
 }

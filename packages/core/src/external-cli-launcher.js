@@ -148,6 +148,15 @@ export async function executeExternalCliInvocation(invocation, _options = {}, ru
   }
   const { timeoutMs, maxBuffer } = invocation.executionLimits;
   const execute = runtime.execute ?? spawnBounded;
+  if (_options.signal?.aborted) {
+    return {
+      stdout: "",
+      stderr: "",
+      exitCode: 1,
+      terminationReason: "cancelled",
+      outputSummary: summarizeCodexJsonl(""),
+    };
+  }
   const result = await execute({
     executable: invocation.executable,
     args: [...invocation.args],
@@ -157,6 +166,7 @@ export async function executeExternalCliInvocation(invocation, _options = {}, ru
     timeoutMs,
     maxBuffer,
     shell: false,
+    signal: _options.signal,
   });
   const stdout = redactExternalCliOutput(String(result.stdout ?? ""));
   const stderr = redactExternalCliOutput(String(result.stderr ?? ""));
@@ -261,12 +271,19 @@ function spawnBounded(input) {
     let terminationReason = "process_exit";
     let settled = false;
     let forceKillTimer = null;
+    const cancel = () => {
+      if (terminationReason !== "process_exit") return;
+      terminationReason = "cancelled";
+      terminateProcessTree(child, false);
+      forceKillTimer ??= scheduleForceKill(child);
+    };
 
     const finish = (exitCode) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       if (forceKillTimer) clearTimeout(forceKillTimer);
+      input.signal?.removeEventListener?.("abort", cancel);
       resolve({
         stdout: Buffer.concat(stdout).toString("utf8"),
         stderr: Buffer.concat(stderr).toString("utf8"),
@@ -293,6 +310,8 @@ function spawnBounded(input) {
       terminateProcessTree(child, false);
       forceKillTimer ??= scheduleForceKill(child);
     }, input.timeoutMs);
+    input.signal?.addEventListener?.("abort", cancel, { once: true });
+    if (input.signal?.aborted) cancel();
 
     child.stdout.on("data", (chunk) => collect(stdout, chunk, "stdout"));
     child.stderr.on("data", (chunk) => collect(stderr, chunk, "stderr"));

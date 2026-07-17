@@ -84,6 +84,7 @@ Start here:
 - [Isolated Agent Workspace v0](docs/isolated-agent-workspace-v0.md)
 - [Agent Launcher v0.2](docs/agent-launcher-v0.md)
 - [External CLI Launcher v1](docs/external-cli-launcher-v1.md)
+- [Fleet Run Orchestrator v0](docs/fleet-run-orchestrator-v0.md)
 - [Planner Promotion v0](docs/planner-promotion-v0.md)
 - [Candidate Execution v0](docs/candidate-execution-v0.md)
 - [Candidate Approval Flow v0](docs/candidate-approval-flow-v0.md)
@@ -159,6 +160,10 @@ npm run spruce -- agent prepare codex-cli --goal "Implement the approved task" -
 npm run spruce -- agent launch <workspaceId> --execute
 npm run spruce -- approval approve <approvalId>
 npm run spruce -- agent launch <workspaceId> --execute --approvalId <approvalId>
+npm run spruce -- fleet create <routeId> --role coding --candidates 2 --parallel 2 --context "relevant code"
+npm run spruce -- fleet approvals <fleetRunId>
+npm run spruce -- fleet approve <fleetRunId> --confirm approve_all_invocations --reason "reviewed exact invocations"
+npm run spruce -- fleet execute <fleetRunId>
 npm run spruce -- planner contract
 npm run spruce -- candidate contract
 npm run spruce -- candidate approval-contract
@@ -172,7 +177,7 @@ npm run spruce -- tool run shell.execute --command "echo spruce" --approved
 npm run spruce -- policy check --tool shell.execute --command "git status"
 ```
 
-The current core creates a local `.spruceagent/` store with ContextOS indexing, memory, traces, audit logs, approval tickets, policy-governed tools, LLM Provider Registry, Agent Run, typed and evaluated skills, versioned workflows, GatewayMesh, Workbench, isolated agent workspaces, capability evidence, task routing, launch review, Agent Trial attestation, and a shell-free, approval-bound Codex CLI execution path.
+The current core creates a local `.spruceagent/` store with ContextOS indexing, memory, traces, audit logs, approval tickets, policy-governed tools, LLM Provider Registry, Agent Run, typed and evaluated skills, versioned workflows, GatewayMesh, Workbench, isolated agent workspaces, capability evidence, task routing, bounded Fleet Runs, launch review, Agent Trial attestation, and a shell-free, approval-bound Codex CLI execution path.
 
 ## Language
 

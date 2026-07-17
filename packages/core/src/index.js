@@ -127,6 +127,17 @@ export {
   getExternalCliLauncherContract,
 } from "./external-cli-launcher.js";
 export {
+  approveFleetRun,
+  cancelFleetRun,
+  createFleetRun,
+  executeFleetRun,
+  FLEET_RUN_CONTRACT,
+  getFleetRun,
+  getFleetRunContract,
+  listFleetRuns,
+  requestFleetRunApprovals,
+} from "./fleet-runs.js";
+export {
   createLaunchReview,
   decideLaunchReview,
   getLaunchReview,

@@ -11,12 +11,14 @@ import {
   assessRunRisk,
   assessWorkspaceIndexFreshness,
   approveSkill,
+  approveFleetRun,
   approveTicket,
   buildWorkspaceIndex,
   createContextPack,
   createSourceMap,
   createApprovalTicket,
   createAgentAdapterRunPlan,
+  createFleetRun,
   createLaunchReview,
   createTaskRoute,
   createSkillReplayFixture,
@@ -51,6 +53,8 @@ import {
   getAgentAdapterContract,
   getAgentLaunch,
   getAgentLauncherContract,
+  getFleetRun,
+  getFleetRunContract,
   getExternalCliLauncherContract,
   getAgentTrial,
   getAgentTrialContract,
@@ -99,6 +103,7 @@ import {
   listArtifacts,
   listAgentAdapters,
   listAgentLaunches,
+  listFleetRuns,
   listAgentTrials,
   listAgentWorkspaces,
   listLaunchReviews,
@@ -123,9 +128,11 @@ import {
   probeAgentCapabilities,
   recordAgentTrial,
   launchAgentWorkspace,
+  executeFleetRun,
   importSkillPackage,
   promoteLlmDraftToCandidatePlan,
   requestCandidateApprovals,
+  requestFleetRunApprovals,
   readTraceEvents,
   rejectTicket,
   removeLlmProviderConfig,
@@ -146,6 +153,7 @@ import {
   startTrace,
   updateWorkflow,
   validateLlmProviderConfig,
+  cancelFleetRun,
 } from "../packages/core/src/index.js";
 import { buildExternalCliInvocation } from "../packages/core/src/external-cli-launcher.js";
 
@@ -1676,6 +1684,13 @@ test("gateway route contract exposes stable route ids", () => {
   assert.ok(routeIds.includes("task_routes.get"));
   assert.ok(routeIds.includes("task_routes.create"));
   assert.ok(routeIds.includes("task_routes.contract"));
+  assert.ok(routeIds.includes("fleet_runs.list"));
+  assert.ok(routeIds.includes("fleet_runs.create"));
+  assert.ok(routeIds.includes("fleet_runs.request_approvals"));
+  assert.ok(routeIds.includes("fleet_runs.approve"));
+  assert.ok(routeIds.includes("fleet_runs.execute"));
+  assert.ok(routeIds.includes("fleet_runs.cancel"));
+  assert.ok(routeIds.includes("fleet_runs.contract"));
   assert.ok(routeIds.includes("runs.get"));
   assert.ok(routeIds.includes("run_detail.contract"));
   assert.ok(routeIds.includes("skills.list"));
@@ -2261,6 +2276,42 @@ test("gateway client probes capabilities and creates explainable task routes", a
     assert.equal(routeDetail.id, route.id);
     assert.equal(status.capabilityProbeCount, 1);
     assert.equal(status.taskRouteCount, 1);
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
+
+test("gateway client creates and reads prepared Fleet Runs", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  initGitRepo(dir);
+  const store = ensureStore(createStore(dir));
+  buildWorkspaceIndex(store);
+  const { route } = createCodexExecuteRoute(store, dir, "Prepare Gateway fleet candidates");
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const client = createGatewayClient({
+    baseUrl: `http://${gateway.host}:${gateway.port}`,
+    token: gateway.token,
+  });
+
+  try {
+    const contract = await client.fleetRunContract();
+    const fleet = await client.createFleetRun({
+      routeId: route.id,
+      candidateCount: 2,
+      maxParallel: 1,
+      contextQuery: "SpruceAgent",
+    });
+    const list = await client.listFleetRuns({ routeId: route.id });
+    const detail = await client.getFleetRun(fleet.id);
+    const status = await client.status();
+
+    assert.equal(contract.interface, "spruceagent.fleet-runs");
+    assert.equal(fleet.status, "prepared");
+    assert.equal(fleet.candidateCount, 2);
+    assert.equal(fleet.maxParallel, 1);
+    assert.equal(list.summary.total, 1);
+    assert.equal(detail.id, fleet.id);
+    assert.equal(status.fleetRunCount, 1);
   } finally {
     await closeServer(gateway.server);
   }
@@ -4164,6 +4215,127 @@ test("agent launcher executes Codex only after invocation-bound approval and red
   assert.match(log, /REDACTED/);
 });
 
+test("fleet run prepares comparable Codex candidates and builds a review matrix", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  initGitRepo(dir);
+  const store = ensureStore(createStore(dir));
+  buildWorkspaceIndex(store);
+  const { route, executable } = createCodexExecuteRoute(store, dir, "Implement the same fleet task");
+  const fleet = createFleetRun(store, {
+    routeId: route.id,
+    role: "coding",
+    candidateCount: 2,
+    maxParallel: 2,
+    contextQuery: "SpruceAgent",
+  });
+  let active = 0;
+  let observedMaxParallel = 0;
+  const runtime = {
+    externalCli: {
+      resolveExecutable: () => executable,
+      env: { PATH: path.dirname(executable), OPENAI_API_KEY: "test-only" },
+      execute: async (input) => {
+        active += 1;
+        observedMaxParallel = Math.max(observedMaxParallel, active);
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        fs.writeFileSync(path.join(input.cwd, "fleet-result.txt"), path.basename(input.cwd), "utf8");
+        active -= 1;
+        return {
+          exitCode: 0,
+          stdout: JSON.stringify({ type: "thread.started", thread_id: path.basename(input.cwd) }),
+          stderr: "",
+        };
+      },
+    },
+  };
+
+  const awaiting = await requestFleetRunApprovals(store, fleet.id, {
+    timeoutMs: 60_000,
+    maxBuffer: 128 * 1024,
+  }, runtime);
+  assert.throws(
+    () => approveFleetRun(store, fleet.id, { confirmation: "yes", reason: "reviewed all candidates" }),
+    /approve_all_invocations/,
+  );
+  const approved = approveFleetRun(store, fleet.id, {
+    confirmation: "approve_all_invocations",
+    reason: "Reviewed both exact candidate invocations.",
+    actor: "fleet-test",
+  });
+  const completed = await executeFleetRun(store, fleet.id, {}, runtime);
+
+  assert.equal(getFleetRunContract().interface, "spruceagent.fleet-runs");
+  assert.equal(fleet.status, "prepared");
+  assert.equal(fleet.units.length, 2);
+  assert.notEqual(fleet.units[0].workspacePath, fleet.units[1].workspacePath);
+  assert.equal(awaiting.status, "awaiting_approval");
+  assert.equal(awaiting.units.every((unit) => unit.approvalId), true);
+  assert.equal(approved.status, "approved");
+  assert.equal(completed.status, "completed");
+  assert.equal(completed.summary.completedCount, 2);
+  assert.equal(observedMaxParallel, 2);
+  assert.equal(completed.review.candidateCount, 2);
+  assert.equal(completed.review.comparison.rows.length, 2);
+  assert.equal(completed.review.comparison.automaticRecommendation, null);
+  assert.equal(getFleetRun(store, fleet.id).status, "completed");
+  assert.equal(listFleetRuns(store).summary.completedCount, 1);
+});
+
+test("fleet cancellation aborts active candidates and consumes unused approvals", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  initGitRepo(dir);
+  const store = ensureStore(createStore(dir));
+  const { route, executable } = createCodexExecuteRoute(store, dir, "Cancel the fleet safely");
+  const fleet = createFleetRun(store, {
+    routeId: route.id,
+    candidateCount: 3,
+    maxParallel: 2,
+  });
+  const runtime = {
+    externalCli: {
+      resolveExecutable: () => executable,
+      env: { PATH: path.dirname(executable) },
+      execute: (input) => new Promise((resolve) => {
+        const finish = () => resolve({
+          exitCode: 1,
+          terminationReason: "cancelled",
+          stdout: "",
+          stderr: "cancelled",
+        });
+        if (input.signal?.aborted) return finish();
+        const timer = setTimeout(() => resolve({ exitCode: 0, stdout: "", stderr: "" }), 10_000);
+        input.signal?.addEventListener("abort", () => {
+          clearTimeout(timer);
+          finish();
+        }, { once: true });
+      }),
+    },
+  };
+  await requestFleetRunApprovals(store, fleet.id, {}, runtime);
+  const approved = approveFleetRun(store, fleet.id, {
+    confirmation: "approve_all_invocations",
+    reason: "Cancellation behavior test approval.",
+  });
+  const execution = executeFleetRun(store, fleet.id, {}, runtime);
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  const cancelling = cancelFleetRun(store, fleet.id, {
+    reason: "Operator cancelled the active fleet.",
+    actor: "fleet-test",
+  });
+  const cancelled = await execution;
+
+  assert.equal(approved.status, "approved");
+  assert.equal(cancelling.status, "cancelling");
+  assert.equal(cancelling.cancellation.activeAbortCount, 2);
+  assert.equal(cancelled.status, "cancelled");
+  assert.equal(cancelled.summary.cancelledCount, 3);
+  assert.equal(cancelled.units.every((unit) => unit.status === "cancelled"), true);
+  assert.equal(cancelled.review.candidateCount, 2);
+  for (const unit of cancelled.units) {
+    assert.equal(["consumed", "rejected"].includes(getApprovalTicket(store, unit.approvalId).status), true);
+  }
+});
+
 test("agent launcher executes local shell agent only after approval", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   const store = ensureStore(createStore(dir));
@@ -4450,6 +4622,30 @@ function createWriteCandidatePlan() {
       ],
     },
   });
+}
+
+function createCodexExecuteRoute(store, dir, goal) {
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-bin-"));
+  const executable = path.join(binDir, process.platform === "win32" ? "codex.exe" : "codex");
+  fs.writeFileSync(executable, "test-only", "utf8");
+  if (process.platform !== "win32") fs.chmodSync(executable, 0o755);
+  const probe = probeAgentCapabilities(store, {
+    adapterIds: ["codex-cli"],
+    versionCheck: false,
+  }, {
+    env: {
+      PATH: binDir,
+      PATHEXT: process.platform === "win32" ? ".EXE" : "",
+    },
+  });
+  const route = createTaskRoute(store, {
+    goal,
+    roles: ["coding"],
+    preferredAdapterIds: ["codex-cli"],
+    probeId: probe.id,
+    mode: "execute",
+  });
+  return { probe, route, executable };
 }
 
 function initGitRepo(dir) {

@@ -7,6 +7,7 @@ import {
   archiveWorkflow,
   assessWorkspaceIndexFreshness,
   approveSkill,
+  approveFleetRun,
   appendTraceEvent,
   approveTicket,
   buildWorkspaceIndex,
@@ -18,6 +19,7 @@ import {
   configureLlmProvider,
   createSkillReplayFixture,
   createGatewayClient,
+  createFleetRun,
   createStore,
   createWorkflow,
   createWorkflowFromDraft,
@@ -33,6 +35,8 @@ import {
   executeTool,
   extractSkillFromTrace,
   getEvaluation,
+  getFleetRun,
+  getFleetRunContract,
   getCandidateApprovalContract,
   getCandidateExecutionContract,
   getGatewayAuthStatus,
@@ -98,6 +102,7 @@ import {
   listTaskRoutes,
   listArtifacts,
   listEvaluations,
+  listFleetRuns,
   listSkillEvaluations,
   listSkillPackageImports,
   listSkillPackages,
@@ -132,12 +137,15 @@ import {
   runAgent,
   runPreflight,
   runWorkflow,
+  executeFleetRun,
   searchWorkspaceContext,
   searchMemory,
   startTrace,
   startGatewayServer,
   updateWorkflow,
   validateLlmProviderConfig,
+  requestFleetRunApprovals,
+  cancelFleetRun,
 } from "../../../packages/core/src/index.js";
 
 const store = createStore(process.cwd());
@@ -305,6 +313,11 @@ async function main() {
 
   if (command === "agent" || command === "agents") {
     await handleAgent(subcommand, rest);
+    return;
+  }
+
+  if (command === "fleet" || command === "fleets") {
+    await handleFleet(subcommand, rest);
     return;
   }
 
@@ -1283,6 +1296,82 @@ async function handleCandidate(action, args = []) {
   throw new Error("usage: spruce candidate <contract|approval-contract|continuation-contract|request-approvals|execute-approved>");
 }
 
+async function handleFleet(action, args = []) {
+  if (!action || action === "list") {
+    const flags = parseFlags(args);
+    printJson(listFleetRuns(store, {
+      status: flags.status,
+      routeId: flags.routeId,
+    }));
+    return;
+  }
+
+  if (action === "create") {
+    const [routeId, ...flagArgs] = args;
+    if (!routeId) throw new Error("usage: spruce fleet create <routeId> [--role coding] [--candidates 2] [--parallel 2] [--context <query>]");
+    const flags = parseFlags(flagArgs);
+    printJson(createFleetRun(store, {
+      routeId,
+      role: flags.role,
+      candidateCount: flags.candidates ?? flags.candidateCount,
+      maxParallel: flags.parallel ?? flags.maxParallel,
+      contextQuery: flags.context,
+    }));
+    return;
+  }
+
+  if (action === "approvals" || action === "request-approvals") {
+    const [fleetRunId, ...flagArgs] = args;
+    if (!fleetRunId) throw new Error("usage: spruce fleet approvals <fleetRunId> [--timeoutMs <ms>] [--maxBuffer <bytes>]");
+    const flags = parseFlags(flagArgs);
+    printJson(await requestFleetRunApprovals(store, fleetRunId, {
+      timeoutMs: flags.timeoutMs,
+      maxBuffer: flags.maxBuffer,
+    }));
+    return;
+  }
+
+  if (action === "approve") {
+    const [fleetRunId, ...flagArgs] = args;
+    if (!fleetRunId) throw new Error("usage: spruce fleet approve <fleetRunId> --confirm approve_all_invocations --reason <reason>");
+    const flags = parseFlags(flagArgs);
+    printJson(approveFleetRun(store, fleetRunId, {
+      confirmation: flags.confirm,
+      reason: flags.reason,
+    }));
+    return;
+  }
+
+  if (action === "execute") {
+    const [fleetRunId] = args;
+    if (!fleetRunId) throw new Error("usage: spruce fleet execute <fleetRunId>");
+    printJson(await executeFleetRun(store, fleetRunId));
+    return;
+  }
+
+  if (action === "cancel") {
+    const [fleetRunId, ...flagArgs] = args;
+    if (!fleetRunId) throw new Error("usage: spruce fleet cancel <fleetRunId> --reason <reason>");
+    const flags = parseFlags(flagArgs);
+    printJson(cancelFleetRun(store, fleetRunId, { reason: flags.reason }));
+    return;
+  }
+
+  if (action === "detail" || action === "get") {
+    const [fleetRunId] = args;
+    if (!fleetRunId) throw new Error("usage: spruce fleet detail <fleetRunId>");
+    printJson(getFleetRun(store, fleetRunId));
+    return;
+  }
+
+  if (action === "contract") {
+    printJson(getFleetRunContract());
+    return;
+  }
+
+  throw new Error(`unknown fleet action: ${action}`);
+}
+
 async function handleAgent(action, args = []) {
   if (!action || action === "adapters" || action === "adapter-list" || action === "list") {
     const flags = parseFlags(args);
@@ -1864,6 +1953,14 @@ Usage:
   ${executable} agent route-detail <routeId>
   ${executable} agent probe-contract
   ${executable} agent router-contract
+  ${executable} fleet create <routeId> --role coding --candidates 2 --parallel 2 [--context "query"]
+  ${executable} fleet approvals <fleetRunId> [--timeoutMs 600000]
+  ${executable} fleet approve <fleetRunId> --confirm approve_all_invocations --reason "reviewed exact invocations"
+  ${executable} fleet execute <fleetRunId>
+  ${executable} fleet cancel <fleetRunId> --reason "operator requested cancellation"
+  ${executable} fleet list [--status completed]
+  ${executable} fleet detail <fleetRunId>
+  ${executable} fleet contract
   ${executable} gateway token
   ${executable} gateway token --rotate
   ${executable} gateway contract
