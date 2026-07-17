@@ -6,6 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   addMemory,
+  attestAgentLaunchTrial,
   archiveWorkflow,
   assessRunRisk,
   assessWorkspaceIndexFreshness,
@@ -51,6 +52,7 @@ import {
   getAgentLauncherContract,
   getAgentTrial,
   getAgentTrialContract,
+  getAgentTrialAttestationContract,
   getAgentWorkspace,
   getAgentWorkspaceContract,
   getLaunchReview,
@@ -4165,14 +4167,18 @@ test("agent trials require process, workspace, acceptance, and policy evidence",
     processExitCode: 0,
     durationMs: 12_000,
     changedFileCount: 1,
+    baselineWorkspaceClean: true,
     acceptanceStatus: "passed",
     acceptanceExitCode: 0,
+    acceptanceWorkspaceStable: true,
     policyStatus: "allowed",
   });
 
   assert.equal(getAgentTrialContract().interface, "spruceagent.agent-trials");
   assert.equal(misleadingZeroExit.status, "failed");
   assert.ok(misleadingZeroExit.failureCodes.includes("workspace_effect_missing"));
+  assert.ok(misleadingZeroExit.failureCodes.includes("baseline_clean_not_verified"));
+  assert.ok(misleadingZeroExit.failureCodes.includes("acceptance_workspace_stability_not_verified"));
   assert.ok(misleadingZeroExit.failureCodes.includes("acceptance_not_passed"));
   assert.ok(misleadingZeroExit.failureCodes.includes("policy_blocked"));
   assert.equal(passed.status, "passed");
@@ -4226,12 +4232,14 @@ test("capability probe carries empirical trial evidence without treating install
   const local = probe.adapters.find((item) => item.adapterId === "local-shell-agent");
   assert.equal(codex.status, "available");
   assert.equal(codex.empiricalValidation.status, "reported");
+  assert.equal(codex.empiricalValidation.effectiveOutcome, "failed");
   assert.equal(codex.empiricalValidation.reportedOutcome, "failed");
   assert.equal(codex.empiricalValidation.attestation, "supplied_observation");
   assert.equal(codex.empiricalValidation.latestTrialId, trial.id);
   assert.equal(local.empiricalValidation.status, "unverified");
-  assert.equal(probe.summary.adaptersWithReportedFailureCount, 1);
-  assert.equal(probe.summary.adaptersWithReportedPassCount, 0);
+  assert.equal(probe.summary.adaptersWithEffectiveFailureCount, 1);
+  assert.equal(probe.summary.adaptersWithEffectivePassCount, 0);
+  assert.equal(probe.summary.launcherAttestedAdapterCount, 0);
   const route = createTaskRoute(store, {
     goal: "Execute coding after a failed reported trial",
     roles: ["coding"],
@@ -4240,11 +4248,104 @@ test("capability probe carries empirical trial evidence without treating install
   });
   assert.ok(route.candidates
     .find((item) => item.adapterId === "codex-cli")
-    .exclusionReasons.includes("latest_reported_trial_failed"));
+    .exclusionReasons.includes("latest_effective_trial_failed"));
 });
 
-test("gateway client records and lists agent trial evidence", async () => {
+test("agent trial attestation independently verifies a completed launch", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  initGitRepo(dir);
+  const store = ensureStore(createStore(dir));
+  const workspace = prepareAgentWorkspace(store, {
+    adapterId: "local-shell-agent",
+    goal: "Produce independently accepted output",
+  });
+  const command = "node -e \"require('fs').writeFileSync('attested-output.txt','ok')\"";
+  const pendingLaunch = await launchAgentWorkspace(store, {
+    workspaceId: workspace.id,
+    execute: true,
+    command,
+  });
+  approveTicket(store, pendingLaunch.approval.id, { reason: "attestation launch test" });
+  const launch = await launchAgentWorkspace(store, {
+    workspaceId: workspace.id,
+    execute: true,
+    command,
+    approvalId: pendingLaunch.approval.id,
+  });
+  const acceptanceCommand = "node -e \"const fs=require('fs');process.exit(fs.readFileSync('attested-output.txt','utf8')==='ok'?0:1)\"";
+  const pendingAttestation = await attestAgentLaunchTrial(store, {
+    launchId: launch.id,
+    acceptanceCommand,
+  });
+  approveTicket(store, pendingAttestation.approval.id, { reason: "independent acceptance test" });
+  const completed = await attestAgentLaunchTrial(store, {
+    launchId: launch.id,
+    acceptanceCommand,
+    approvalId: pendingAttestation.approval.id,
+  });
+  const evidence = completed.trial.provenance.acceptanceEvidence;
+  const listed = listAgentTrials(store, { attested: true });
+  const probe = probeAgentCapabilities(store, { adapterIds: ["local-shell-agent"] });
+
+  assert.equal(getAgentTrialAttestationContract().interface, "spruceagent.agent-trial-attestation");
+  assert.equal(pendingAttestation.status, "requires_approval");
+  assert.equal(completed.status, "completed");
+  assert.equal(completed.trial.status, "passed");
+  assert.equal(completed.trial.provenance.attestedByLauncher, true);
+  assert.equal(completed.trial.provenance.launchId, launch.id);
+  assert.equal(evidence.workspaceStable, true);
+  assert.match(evidence.commandSha256, /^[a-f0-9]{64}$/);
+  assert.equal("stdout" in evidence, false);
+  assert.equal("command" in evidence, false);
+  assert.equal(listed.summary.attestedCount, 1);
+  assert.equal(listed.summary.suppliedCount, 0);
+  assert.equal(probe.adapters[0].empiricalValidation.status, "attested");
+  assert.equal(probe.adapters[0].empiricalValidation.effectiveOutcome, "passed");
+  assert.equal(probe.summary.launcherAttestedAdapterCount, 1);
+
+  await assert.rejects(
+    () => attestAgentLaunchTrial(store, {
+      launchId: launch.id,
+      acceptanceCommand: "git commit -m blocked",
+    }),
+    /blocks git mutation/,
+  );
+});
+
+test("agent trial attestation fails when acceptance mutates the workspace", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  initGitRepo(dir);
+  const store = ensureStore(createStore(dir));
+  const workspace = prepareAgentWorkspace(store, {
+    adapterId: "local-shell-agent",
+    goal: "Detect acceptance mutation",
+  });
+  const command = "node -e \"require('fs').writeFileSync('agent-output.txt','ok')\"";
+  const pendingLaunch = await launchAgentWorkspace(store, { workspaceId: workspace.id, execute: true, command });
+  approveTicket(store, pendingLaunch.approval.id);
+  const launch = await launchAgentWorkspace(store, {
+    workspaceId: workspace.id,
+    execute: true,
+    command,
+    approvalId: pendingLaunch.approval.id,
+  });
+  const acceptanceCommand = "node -e \"require('fs').writeFileSync('acceptance-side-effect.txt','blocked')\"";
+  const pending = await attestAgentLaunchTrial(store, { launchId: launch.id, acceptanceCommand });
+  approveTicket(store, pending.approval.id);
+  const completed = await attestAgentLaunchTrial(store, {
+    launchId: launch.id,
+    acceptanceCommand,
+    approvalId: pending.approval.id,
+  });
+
+  assert.equal(completed.acceptance.exitCode, 0);
+  assert.equal(completed.acceptance.workspaceStable, false);
+  assert.equal(completed.trial.status, "failed");
+  assert.ok(completed.trial.failureCodes.includes("acceptance_workspace_changed"));
+});
+test("gateway client records, attests, and lists agent trial evidence", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  initGitRepo(dir);
   const store = ensureStore(createStore(dir));
   const gateway = await startGatewayServer(store, { port: 0 });
   const client = createGatewayClient({
@@ -4253,6 +4354,7 @@ test("gateway client records and lists agent trial evidence", async () => {
   });
   try {
     const contract = await client.agentTrialContract();
+    const attestationContract = await client.agentTrialAttestationContract();
     const trial = await client.recordAgentTrial({
       adapterId: "codex-cli",
       processExitCode: 1,
@@ -4264,11 +4366,39 @@ test("gateway client records and lists agent trial evidence", async () => {
     });
     const listed = await client.listAgentTrials({ adapterId: "codex-cli" });
     const loaded = await client.getAgentTrial(trial.id);
+    const workspace = prepareAgentWorkspace(store, {
+      adapterId: "local-shell-agent",
+      goal: "Verify Gateway attestation route",
+    });
+    const command = "node -e \"require('fs').writeFileSync('gateway-attested.txt','ok')\"";
+    const pendingLaunch = await launchAgentWorkspace(store, { workspaceId: workspace.id, execute: true, command });
+    approveTicket(store, pendingLaunch.approval.id);
+    const launch = await launchAgentWorkspace(store, {
+      workspaceId: workspace.id,
+      execute: true,
+      command,
+      approvalId: pendingLaunch.approval.id,
+    });
+    const acceptanceCommand = "node -e \"process.exit(require('fs').readFileSync('gateway-attested.txt','utf8')==='ok'?0:1)\"";
+    const pendingAttestation = await client.attestAgentLaunchTrial({ launchId: launch.id, acceptanceCommand });
+    approveTicket(store, pendingAttestation.approval.id);
+    const attested = await client.attestAgentLaunchTrial({
+      launchId: launch.id,
+      acceptanceCommand,
+      approvalId: pendingAttestation.approval.id,
+    });
+    const attestedList = await client.listAgentTrials({ attested: true });
 
     assert.equal(contract.interface, "spruceagent.agent-trials");
+    assert.equal(attestationContract.interface, "spruceagent.agent-trial-attestation");
     assert.equal(trial.status, "failed");
     assert.equal(listed.summary.total, 1);
     assert.equal(loaded.id, trial.id);
+    assert.equal(pendingAttestation.status, "requires_approval");
+    assert.equal(attested.trial.status, "passed");
+    assert.equal("stdout" in attested.trial.provenance.acceptanceEvidence, false);
+    assert.equal(attestedList.summary.total, 1);
+    assert.equal(attestedList.items[0].attestedByLauncher, true);
   } finally {
     await closeServer(gateway.server);
   }

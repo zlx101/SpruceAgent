@@ -21,6 +21,7 @@ const REQUIRED_PATHS = [
   "apps/desktop/app.js",
   "apps/desktop/styles.css",
   "packages/core/src/index.js",
+  "packages/core/src/agent-trial-attestation.js",
   "tests/core.test.js",
   "docs/open-source-alpha-quickstart.md",
   "docs/contextos-index-safety-v0.md",

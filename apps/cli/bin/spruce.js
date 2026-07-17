@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   addMemory,
+  attestAgentLaunchTrial,
   archiveWorkflow,
   assessWorkspaceIndexFreshness,
   approveSkill,
@@ -47,6 +48,7 @@ import {
   getAgentLauncherContract,
   getAgentTrial,
   getAgentTrialContract,
+  getAgentTrialAttestationContract,
   getAgentWorkspace,
   getAgentWorkspaceContract,
   getLaunchReview,
@@ -1381,9 +1383,29 @@ async function handleAgent(action, args = []) {
     return;
   }
 
+  if (action === "trial-attest") {
+    const [launchId, ...flagArgs] = args;
+    if (!launchId) throw new Error("usage: spruce agent trial-attest <launchId> --command <acceptanceCommand> [--approvalId <id>] [--timeoutMs <ms>] [--noWorkspaceChange]");
+    const flags = parseFlags(flagArgs);
+    if (!flags.command) throw new Error("--command is required");
+    printJson(await attestAgentLaunchTrial(store, {
+      launchId,
+      acceptanceCommand: flags.command,
+      approvalId: flags.approvalId,
+      timeoutMs: flags.timeoutMs,
+      maxBuffer: flags.maxBuffer,
+      category: flags.category,
+      failureCode: flags.failureCode,
+      expectedWorkspaceChange: !Boolean(flags.noWorkspaceChange),
+      trustMode: flags.trustMode,
+      actor: flags.actor ?? "local-user",
+    }));
+    return;
+  }
+
   if (action === "trial-record") {
     const [adapterId, ...flagArgs] = args;
-    if (!adapterId) throw new Error("usage: spruce agent trial-record <adapterId> --processExitCode <code> --changedFileCount <count> --acceptanceStatus <passed|failed|not_run> [--acceptanceExitCode <code>] --policyStatus <allowed|blocked>");
+    if (!adapterId) throw new Error("usage: spruce agent trial-record <adapterId> --processExitCode <code> --changedFileCount <count> --baselineWorkspaceClean true|false --acceptanceStatus <passed|failed|not_run> [--acceptanceExitCode <code>] --acceptanceWorkspaceStable true|false --policyStatus <allowed|blocked>");
     const flags = parseFlags(flagArgs);
     printJson(recordAgentTrial(store, {
       adapterId,
@@ -1398,6 +1420,8 @@ async function handleAgent(action, args = []) {
       policyStatus: flags.policyStatus,
       failureCode: flags.failureCode,
       expectedWorkspaceChange: !Boolean(flags.noWorkspaceChange),
+      baselineWorkspaceClean: String(flags.baselineWorkspaceClean) === "true",
+      acceptanceWorkspaceStable: String(flags.acceptanceWorkspaceStable) === "true",
       actor: flags.actor ?? "local-user",
     }));
     return;
@@ -1408,6 +1432,7 @@ async function handleAgent(action, args = []) {
     printJson(listAgentTrials(store, {
       adapterId: flags.adapterId,
       status: flags.status,
+      attested: flags.attested === undefined ? undefined : String(flags.attested) === "true",
     }));
     return;
   }
@@ -1416,6 +1441,11 @@ async function handleAgent(action, args = []) {
     const [trialId] = args;
     if (!trialId) throw new Error("usage: spruce agent trial-detail <trialId>");
     printJson(getAgentTrial(store, trialId));
+    return;
+  }
+
+  if (action === "trial-attestation-contract") {
+    printJson(getAgentTrialAttestationContract());
     return;
   }
 
@@ -1751,10 +1781,12 @@ Usage:
   ${executable} agent workspace-contract
   ${executable} agent launcher-contract
   ${executable} agent review-contract
-  ${executable} agent trial-record <adapterId> --processExitCode 0 --changedFileCount 1 --acceptanceStatus passed --acceptanceExitCode 0 --policyStatus allowed
-  ${executable} agent trials [--adapterId codex-cli] [--status passed|failed]
+  ${executable} agent trial-attest <launchId> --command "npm test" [--approvalId <id>] [--timeoutMs 120000]
+  ${executable} agent trial-record <adapterId> --processExitCode 0 --changedFileCount 1 --baselineWorkspaceClean true --acceptanceStatus passed --acceptanceExitCode 0 --acceptanceWorkspaceStable true --policyStatus allowed
+  ${executable} agent trials [--adapterId codex-cli] [--status passed|failed] [--attested true|false]
   ${executable} agent trial-detail <trialId>
   ${executable} agent trial-contract
+  ${executable} agent trial-attestation-contract
   ${executable} agent probe [--adapterIds codex-cli,claude-code] [--version]
   ${executable} agent probes
   ${executable} agent probe-detail <probeId>

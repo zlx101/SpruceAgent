@@ -140,6 +140,10 @@ export {
   summarizeAgentTrials,
 } from "./agent-trials.js";
 export {
+  attestAgentLaunchTrial,
+  getAgentTrialAttestationContract,
+} from "./agent-trial-attestation.js";
+export {
   getAgentWorkspace,
   getAgentWorkspaceContract,
   listAgentWorkspaces,

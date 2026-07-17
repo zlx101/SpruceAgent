@@ -6,7 +6,7 @@ import { createId, nowIso } from "./id.js";
 import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
 
 export const TASK_ROUTER_CONTRACT = Object.freeze({
-  version: "0.2.0",
+  version: "0.3.0",
   interface: "spruceagent.task-router",
   sourceKind: "goal_constraints_and_capability_snapshot",
   outputKind: "explainable_agent_route_draft",
@@ -16,7 +16,7 @@ export const TASK_ROUTER_CONTRACT = Object.freeze({
     "Task Router v0 produces route drafts only and never launches agents or calls models.",
     "Eligibility is based on observed availability, declared capabilities, hard constraints, and explicit user preferences.",
     "The router does not infer model quality from provider or product names and publishes no opaque quality score.",
-    "Recorded Agent Trials are exposed with provenance; a reported failed latest trial conservatively blocks execute routing but never creates an automatic winner.",
+    "Recorded Agent Trials are exposed with provenance; a failed effective outcome blocks execute routing, and Launcher-attested evidence takes precedence over supplied observations.",
     "Execute mode only routes adapters already enabled by the gated Agent Launcher.",
     "Every external CLI assignment remains preview-only until launcher support is explicitly promoted.",
   ],
@@ -170,7 +170,7 @@ function buildCandidate(input) {
   if (input.observed.status !== "available") reasons.push("adapter_not_available");
   if (missingCapabilities.length) reasons.push(`missing_capabilities:${missingCapabilities.join(",")}`);
   if (input.mode === "execute" && !input.observed.launcherExecutionSupported) reasons.push("launcher_execution_not_enabled");
-  if (input.mode === "execute" && input.observed.empiricalValidation?.reportedOutcome === "failed") reasons.push("latest_reported_trial_failed");
+  if (input.mode === "execute" && input.observed.empiricalValidation?.effectiveOutcome === "failed") reasons.push("latest_effective_trial_failed");
   const adapterPreference = input.preferredAdapterIds.indexOf(adapter.id);
   const providerPreference = input.preferredProviders.indexOf(adapter.provider);
   return {
@@ -185,7 +185,9 @@ function buildCandidate(input) {
     launcherExecutionSupported: input.observed.launcherExecutionSupported,
     empiricalValidation: input.observed.empiricalValidation ?? {
       status: "unverified",
+      effectiveOutcome: null,
       reportedOutcome: null,
+      attestedOutcome: null,
       attestation: "none",
       trialCount: 0,
       passRate: null,

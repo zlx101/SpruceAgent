@@ -59,7 +59,9 @@ export function createGatewayClient(options = {}) {
     listAgentTrials: (input = {}) => request("GET", `/v1/agent-trials${agentTrialParams(input)}`),
     getAgentTrial: (trialId) => request("GET", `/v1/agent-trials/${encodePathPart(trialId)}`),
     agentTrialContract: () => request("GET", "/v1/agent-trials/contract"),
+    agentTrialAttestationContract: () => request("GET", "/v1/agent-trials/attestation-contract"),
     recordAgentTrial: (input = {}) => request("POST", "/v1/agent-trials", input),
+    attestAgentLaunchTrial: (input = {}) => request("POST", "/v1/agent-trials/attest", input),
     listCapabilityProbes: () => request("GET", "/v1/capability-probes"),
     getCapabilityProbe: (probeId) => request("GET", `/v1/capability-probes/${encodePathPart(probeId)}`),
     capabilityProbeContract: () => request("GET", "/v1/capability-probes/contract"),
@@ -214,6 +216,7 @@ function agentTrialParams(input = {}) {
   const params = new URLSearchParams();
   if (input.adapterId) params.set("adapterId", input.adapterId);
   if (input.status) params.set("status", input.status);
+  if (input.attested !== undefined) params.set("attested", String(Boolean(input.attested)));
   const value = params.toString();
   return value ? `?${value}` : "";
 }

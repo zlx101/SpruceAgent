@@ -1,80 +1,99 @@
 # Agent Trial Evidence v0
 
-Agent Trial v0 gives SpruceAgent a factual ledger for external Agent experiments. It exists because command discovery, a version string, a zero exit code, or an Agent's own summary does not prove that a task succeeded.
+Agent Trial v0 gives SpruceAgent a factual ledger for Agent execution experiments. It exists because command discovery, a version string, a zero exit code, or an Agent's own summary does not prove task success.
 
 ## Pass Rule
 
-A trial is `passed` only when all four checks are true:
+A Trial is `passed` only when all six checks are true:
 
 1. the Agent process exits with code `0`;
-2. the expected workspace effect is observed;
-3. an independent acceptance command passes;
-4. execution was not blocked by policy.
-
-Formally:
+2. the launch baseline has no pre-existing project changes;
+3. the expected workspace effect is observed;
+4. an independent acceptance command passes;
+5. the workspace fingerprint remains stable while acceptance runs;
+6. execution is allowed by policy.
 
 ```text
 passed = processCompleted
+      && baselineWorkspaceClean
       && workspaceEffectObserved
       && acceptancePassed
+      && acceptanceWorkspaceStable
       && policyAllowed
 ```
 
-A zero process exit with no diff is a failed trial when the task expected a workspace change. Authentication errors, insufficient credit, timeouts, read-only policy blocks, missing diffs, and failed acceptance checks remain failures.
+A zero exit with no expected diff is a failure. An acceptance command that exits `0` but changes the workspace is also a failure.
 
 ## Provenance
 
-Trial v0 records supplied observations. Records therefore include:
+Two evidence sources are explicit and never conflated:
 
-```json
-{
-  "provenance": {
-    "kind": "supplied_observation",
-    "attestedByLauncher": false
-  }
-}
+- `supplied_observation`: bounded facts supplied through `trial-record`; not independently verified by SpruceAgent.
+- `launcher_attested`: created from a successful Agent Launch plus a separately approved acceptance command and Git workspace fingerprints.
+
+Capability Probe reports supplied-only evidence as `status: reported` and Launcher evidence as `status: attested`. When both exist for an adapter, the latest Launcher-attested outcome is the effective routing evidence. A supplied pass cannot override Launcher-attested evidence.
+
+Attestation is a local execution-chain claim about one execution under one acceptance command. It is not a cryptographic signature, tamper-proof ledger, universal model-quality claim, benchmark ranking, or permission to merge or publish changes.
+
+## Launcher Attestation Flow
+
+```text
+completed Agent Launch
+  -> acceptance policy evaluation
+  -> exact TrustKernel approval
+  -> workspace fingerprint before acceptance
+  -> bounded acceptance execution
+  -> workspace fingerprint after acceptance
+  -> Launcher-attested Trial
 ```
 
-This distinction is intentional. A recorded outcome is not yet a Launcher-attested benchmark. Capability Probe exposes it as `status: reported` with a separate `reportedOutcome`. SpruceAgent must not market a reported pass as independently verified execution.
-
-The next evidence level requires Agent Launcher to create the trial directly from immutable launch, Git, and acceptance artifacts.
+Attestation rejects Git mutation commands before approval. It never commits, pushes, merges, rebases, resets, cleans, checks out, switches, or creates worktrees.
 
 ## Stored Data
 
-Trial v0 stores bounded structured fields only:
+The Trial stores bounded structured fields only:
 
-- adapter ID and provider;
-- task ID and category, not the task prompt;
+- adapter, task/category, launch ID, and provenance;
 - process and acceptance exit codes;
 - duration and changed-file count;
-- policy status;
-- derived checks and failure codes;
-- supplied-observation provenance.
+- policy and derived checks;
+- command/output SHA-256 hashes and output byte counts for attested Trials;
+- before/after workspace hashes and stability result.
 
-It does not store prompts, free-text notes, terminal logs, source diffs, credentials, model responses, or environment values.
+It does not store prompts, free-text notes, terminal logs, source diffs, credentials, model responses, environment values, acceptance output, or acceptance command text. The exact command remains in the normal approval record required to authorize execution, not in the Trial evidence record.
 
-## Statistics
+## Statistics And Routing
 
-`listAgentTrials` reports totals, pass/fail counts, pass rate, median duration, and latest reported outcome per adapter. These statistics are descriptive. They do not create a quality score or choose a winner.
+`listAgentTrials` reports totals, pass/fail counts, provenance counts, pass rate, median duration, latest supplied outcome, latest attested outcome, and effective outcome per adapter. In execute mode, a failed effective outcome blocks that adapter. Trial statistics never select a winner automatically.
 
-Before quality-based routing is permitted, SpruceAgent needs repeated, comparable tasks segmented by category, model/version, repository class, context size, cost, latency, and acceptance quality.
+Quality-based selection still requires repeated comparable tasks segmented by category, model/version, repository class, context size, cost, latency, and acceptance quality.
 
 ## CLI
 
 ```text
+spruce agent trial-attest <launchId> --command <acceptanceCommand> \
+  [--approvalId <id>] [--timeoutMs <milliseconds>] [--noWorkspaceChange]
+
 spruce agent trial-record <adapterId> \
   --processExitCode <code> \
   --durationMs <milliseconds> \
   --changedFileCount <count> \
+  --baselineWorkspaceClean <true|false> \
   --acceptanceStatus <passed|failed|not_run> \
   --acceptanceExitCode <code> \
+  --acceptanceWorkspaceStable <true|false> \
   --policyStatus <allowed|blocked> \
   [--failureCode <code>]
 
-spruce agent trials [--adapterId <adapterId>] [--status passed|failed]
+spruce agent trials [--adapterId <adapterId>] [--status passed|failed] [--attested true|false]
 spruce agent trial-detail <trialId>
 spruce agent trial-contract
+spruce agent trial-attestation-contract
 ```
+
+Manual observations must explicitly provide baseline cleanliness and acceptance workspace stability; omitted evidence cannot produce a passing Trial.
+
+The first `trial-attest` call returns `requires_approval`. Approve that exact ticket, then repeat the command with `--approvalId`.
 
 ## Gateway
 
@@ -83,7 +102,11 @@ GET  /v1/agent-trials
 GET  /v1/agent-trials/:trialId
 POST /v1/agent-trials
 GET  /v1/agent-trials/contract
+POST /v1/agent-trials/attest
+GET  /v1/agent-trials/attestation-contract
 ```
+
+`GET /v1/agent-trials` accepts `adapterId`, `status`, and `attested=true|false` filters.
 
 ## Storage
 
@@ -96,4 +119,4 @@ GET  /v1/agent-trials/contract
 
 ## Safety Boundary
 
-Agent Trial v0 never launches an Agent, calls a model, mutates Git, executes acceptance commands, or selects a winning adapter. It records and derives outcomes from supplied observations only.
+Agent Trial recording never launches an Agent or calls a model. Launcher attestation can execute only an independently approved, bounded acceptance command against the completed launch workspace. Neither path mutates Git history, promotes changes, publishes results, or performs automatic model selection.

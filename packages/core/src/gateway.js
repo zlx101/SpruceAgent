@@ -40,6 +40,7 @@ import {
   listAgentTrials,
   recordAgentTrial,
 } from "./agent-trials.js";
+import { attestAgentLaunchTrial, getAgentTrialAttestationContract } from "./agent-trial-attestation.js";
 import {
   createTaskRoute,
   getTaskRoute,
@@ -370,7 +371,7 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       method: "POST",
       path: "/v1/agent-trials",
       authRequired: true,
-      description: "Record a controlled execution observation without prompts, logs, diffs, or credentials.",
+      description: "Record a supplied execution observation without prompts, logs, diffs, or credentials.",
     },
     {
       id: "agent_trials.contract",
@@ -378,6 +379,20 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/agent-trials/contract",
       authRequired: true,
       description: "Read the Agent Trial evidence contract.",
+    },
+    {
+      id: "agent_trials.attest",
+      method: "POST",
+      path: "/v1/agent-trials/attest",
+      authRequired: true,
+      description: "Run independently approved acceptance and create Launcher-attested Trial evidence.",
+    },
+    {
+      id: "agent_trials.attestation_contract",
+      method: "GET",
+      path: "/v1/agent-trials/attestation-contract",
+      authRequired: true,
+      description: "Read the Agent Trial attestation contract.",
     },
     {
       id: "capability_probes.list",
@@ -1176,11 +1191,23 @@ async function routeRequest(store, request, url, body) {
     return ok(listAgentTrials(store, {
       adapterId: url.searchParams.get("adapterId") ?? undefined,
       status: url.searchParams.get("status") ?? undefined,
+      attested: url.searchParams.has("attested") ? url.searchParams.get("attested") === "true" : undefined,
     }));
   }
 
   if (request.method === "GET" && url.pathname === "/v1/agent-trials/contract") {
     return ok(getAgentTrialContract());
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/agent-trials/attestation-contract") {
+    return ok(getAgentTrialAttestationContract());
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/agent-trials/attest") {
+    return ok(await attestAgentLaunchTrial(store, {
+      ...body,
+      actor: body.actor ?? "gateway-user",
+    }));
   }
 
   if (request.method === "GET" && pathParts[1] === "agent-trials" && pathParts[2]) {
