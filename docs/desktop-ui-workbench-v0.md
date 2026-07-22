@@ -22,9 +22,11 @@ The HTML/CSS/JS assets are local static files. API calls still require the Gatew
 
 ## What It Shows
 
-The first screen is backed by `GET /v1/inbox` and renders:
+The first screen is backed by Gateway routes including `GET /v1/status`, `GET /v1/context/freshness`, `GET /v1/inbox`, and `GET /v1/fleet-runs`. It renders:
 
+- system overview across ContextOS, Memory, TrustKernel, SkillForge, Workflow, Agent Mesh, Fleet, and Artifacts
 - run launcher
+- context evidence search
 - workflow editor
 - workflow builder
 - source map panels
@@ -93,6 +95,9 @@ Workbench v0 supports:
 - inspect launch review packages through `GET /v1/launch-reviews/:reviewId`
 - create redacted local capability snapshots through `POST /v1/capability-probes`
 - create and inspect explainable task route drafts through `/v1/agent-routes`
+- inspect Fleet Run orchestration records through `GET /v1/fleet-runs`
+- inspect a Fleet Run detail through `GET /v1/fleet-runs/:fleetRunId`
+- create Context Evidence packs through `POST /v1/context/evidence`
 
 ## Safety Boundary
 
@@ -105,6 +110,7 @@ Workbench v0 does not bypass TrustKernel.
 - workflow builder calls only draft or save definitions and do not execute steps
 - workflow draft editing is local UI state until `Save Draft`
 - source map panels are read-only evidence views
+- context evidence search is read-only; quarantined evidence remains withheld from model/planning/execution authority
 - SkillForge evaluation calls do not execute, replay, or approve skill steps
 - SkillForge promotion calls require the evaluation gate
 - workflow archive calls do not delete workflow history
@@ -123,6 +129,7 @@ Workbench v0 does not bypass TrustKernel.
 - agent workspace prepare calls may create local git worktrees under `.spruceagent/worktrees`, but do not execute external CLIs, commit, push, merge, or approve changes
 - agent launch preview calls do not execute commands from the browser UI
 - Agent Launcher v0 external coding CLI execution remains disabled; only explicit `local-shell-agent` execution through CLI or Gateway payloads can run after TrustKernel policy checks
+- Fleet Run views are read-only; fleet creation, approvals, execution, and cancellation still require explicit Gateway or CLI calls
 - tool execution still flows through TrustKernel
 
 ## Files
@@ -139,7 +146,7 @@ Run Inbox v0 made the product state visible. Workbench v0 makes it actionable an
 This is the first real operating surface for SpruceAgent:
 
 ```text
-Draft Workflow -> Review Steps -> Save Workflow -> Version / Archive / Restore -> Evaluate Skill -> Plan Agent Adapter -> Prepare Workspace -> Launch Preview -> Launch / Skill / Workflow -> Inspect -> Approve / Reject -> Resume -> Artifact -> Report -> Audit
+System Overview -> Evidence -> Draft Workflow -> Review Steps -> Save Workflow -> Version / Archive / Restore -> Evaluate Skill -> Plan Agent Adapter -> Prepare Workspace -> Route Task -> Fleet Review -> Launch Preview -> Launch / Skill / Workflow -> Inspect -> Approve / Reject -> Resume -> Artifact -> Report -> Audit
 ```
 
 It is still local-first, conservative, and auditable.

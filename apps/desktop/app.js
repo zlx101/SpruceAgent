@@ -1,6 +1,9 @@
 const state = {
   gatewayUrl: localStorage.getItem("spruce.gatewayUrl") || window.location.origin,
   token: localStorage.getItem("spruce.gatewayToken") || "",
+  status: null,
+  contextFreshness: null,
+  contextEvidence: null,
   inbox: null,
   skills: [],
   candidateSkills: [],
@@ -18,6 +21,8 @@ const state = {
   capabilityProbeDetail: null,
   taskRoutes: null,
   taskRouteDetail: null,
+  fleetRuns: null,
+  fleetRunDetail: null,
   workflows: [],
   workflowVersions: null,
   workflowDraft: null,
@@ -32,6 +37,7 @@ const state = {
 const nodes = {
   form: document.querySelector("#connection-form"),
   runForm: document.querySelector("#run-form"),
+  contextEvidenceForm: document.querySelector("#context-evidence-form"),
   workflowForm: document.querySelector("#workflow-form"),
   workflowBuilderForm: document.querySelector("#workflow-builder-form"),
   gatewayUrl: document.querySelector("#gateway-url"),
@@ -46,6 +52,10 @@ const nodes = {
   runRequestApprovals: document.querySelector("#run-request-approvals"),
   runExecuteCandidate: document.querySelector("#run-execute-candidate"),
   runSubmit: document.querySelector("#run-submit"),
+  contextEvidenceQuery: document.querySelector("#context-evidence-query"),
+  contextEvidenceLimit: document.querySelector("#context-evidence-limit"),
+  contextEvidenceMemoryLimit: document.querySelector("#context-evidence-memory-limit"),
+  contextEvidenceSubmit: document.querySelector("#context-evidence-submit"),
   workflowName: document.querySelector("#workflow-name"),
   workflowSummary: document.querySelector("#workflow-summary"),
   workflowSkill: document.querySelector("#workflow-skill"),
@@ -70,7 +80,10 @@ const nodes = {
   workflowBuilderPreview: document.querySelector("#workflow-builder-preview"),
   refreshButton: document.querySelector("#refresh-button"),
   statusLine: document.querySelector("#status-line"),
+  systemState: document.querySelector("#system-state"),
+  systemOverview: document.querySelector("#system-overview"),
   launchState: document.querySelector("#launch-state"),
+  contextEvidenceState: document.querySelector("#context-evidence-state"),
   workflowEditorState: document.querySelector("#workflow-editor-state"),
   workflowBuilderState: document.querySelector("#workflow-builder-state"),
   skillState: document.querySelector("#skill-state"),
@@ -87,6 +100,7 @@ const nodes = {
   agentLaunchCount: document.querySelector("#agent-launch-count"),
   launchReviewCount: document.querySelector("#launch-review-count"),
   taskRouteCount: document.querySelector("#task-route-count"),
+  fleetRunCount: document.querySelector("#fleet-run-count"),
   decisionQueueState: document.querySelector("#decision-queue-state"),
   approvalState: document.querySelector("#approval-state"),
   resumeState: document.querySelector("#resume-state"),
@@ -118,6 +132,11 @@ const nodes = {
   capabilityProbePanel: document.querySelector("#capability-probe-panel"),
   taskRouteList: document.querySelector("#task-route-list"),
   taskRoutePanel: document.querySelector("#task-route-panel"),
+  contextEvidenceList: document.querySelector("#context-evidence-list"),
+  contextEvidencePanel: document.querySelector("#context-evidence-panel"),
+  fleetRunState: document.querySelector("#fleet-run-state"),
+  fleetRunList: document.querySelector("#fleet-run-list"),
+  fleetRunPanel: document.querySelector("#fleet-run-panel"),
   workflowList: document.querySelector("#workflow-list"),
   workflowVersionList: document.querySelector("#workflow-version-list"),
   workflowRunList: document.querySelector("#workflow-run-list"),
@@ -147,6 +166,11 @@ nodes.refreshButton.addEventListener("click", refresh);
 nodes.runForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   await submitRun();
+});
+
+nodes.contextEvidenceForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await searchContextEvidenceFromWorkbench();
 });
 
 nodes.workflowForm.addEventListener("submit", async (event) => {
@@ -249,6 +273,12 @@ nodes.taskRouteList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action='task-route-view']");
   if (!button) return;
   await loadTaskRoute(button.dataset.routeId);
+});
+
+nodes.fleetRunList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action='fleet-run-view']");
+  if (!button) return;
+  await loadFleetRun(button.dataset.fleetRunId);
 });
 
 nodes.workflowList.addEventListener("click", async (event) => {
@@ -368,7 +398,9 @@ async function refresh() {
   state.busy = true;
   setStatus("Loading");
   try {
-    const [inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches, launchReviews, capabilityProbes, taskRoutes] = await Promise.all([
+    const [status, contextFreshness, inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches, launchReviews, capabilityProbes, taskRoutes, fleetRuns] = await Promise.all([
+      get("/v1/status"),
+      get("/v1/context/freshness"),
       get("/v1/inbox"),
       get("/v1/skills?status=approved"),
       get("/v1/skills?status=candidates"),
@@ -383,7 +415,10 @@ async function refresh() {
       get("/v1/launch-reviews"),
       get("/v1/capability-probes"),
       get("/v1/agent-routes"),
+      get("/v1/fleet-runs"),
     ]);
+    state.status = status;
+    state.contextFreshness = contextFreshness;
     state.inbox = inbox;
     state.skills = skills;
     state.candidateSkills = candidateSkills;
@@ -398,6 +433,7 @@ async function refresh() {
     state.launchReviews = launchReviews;
     state.capabilityProbes = capabilityProbes;
     state.taskRoutes = taskRoutes;
+    state.fleetRuns = fleetRuns;
     render();
     setStatus(`Connected - ${state.approvalQueue.status.replace(/_/g, " ")}`);
   } catch (error) {
@@ -444,16 +480,20 @@ async function handleDecisionQueueAction(button) {
 }
 
 async function refreshAfterRunControlAction() {
-  const [inbox, workflowInbox, approvalQueue, artifacts] = await Promise.all([
+  const [status, inbox, workflowInbox, approvalQueue, artifacts, fleetRuns] = await Promise.all([
+    get("/v1/status"),
     get("/v1/inbox"),
     get("/v1/workflows/inbox"),
     get("/v1/approval-queue"),
     get("/v1/artifacts?limit=20"),
+    get("/v1/fleet-runs"),
   ]);
+  state.status = status;
   state.inbox = inbox;
   state.workflowInbox = workflowInbox;
   state.approvalQueue = approvalQueue;
   state.artifacts = artifacts;
+  state.fleetRuns = fleetRuns;
   render();
 }
 
@@ -696,6 +736,36 @@ async function submitRun() {
   } finally {
     state.busy = false;
     nodes.runSubmit.disabled = false;
+  }
+}
+
+async function searchContextEvidenceFromWorkbench() {
+  if (state.busy) return;
+  const query = nodes.contextEvidenceQuery.value.trim();
+  if (!query) {
+    nodes.contextEvidenceState.textContent = "Query required";
+    setStatus("Context evidence query required", true);
+    return;
+  }
+  state.busy = true;
+  nodes.contextEvidenceSubmit.disabled = true;
+  nodes.contextEvidenceState.textContent = "Searching";
+  setStatus("Searching context evidence");
+  try {
+    state.contextEvidence = await post("/v1/context/evidence", {
+      query,
+      limit: Number(nodes.contextEvidenceLimit.value || 5),
+      memoryLimit: Number(nodes.contextEvidenceMemoryLimit.value || 3),
+    });
+    nodes.contextEvidenceState.textContent = `${state.contextEvidence.summary.allowedForModelCount} allowed / ${state.contextEvidence.summary.quarantinedCount} quarantined`;
+    renderContextEvidence(state.contextEvidence);
+    setStatus(`Evidence ready - ${state.contextEvidence.summary.sourceCount} sources`);
+  } catch (error) {
+    nodes.contextEvidenceState.textContent = "Failed";
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+    nodes.contextEvidenceSubmit.disabled = false;
   }
 }
 
@@ -1047,7 +1117,12 @@ function render() {
     summary: { total: 0, routedCount: 0, blockedCount: 0, needsInputCount: 0 },
     items: [],
   };
+  const fleetRuns = state.fleetRuns || {
+    summary: { total: 0, activeCount: 0, awaitingApprovalCount: 0, completedCount: 0, failedCount: 0, cancelledCount: 0 },
+    items: [],
+  };
 
+  nodes.systemState.textContent = state.status ? "Connected" : "Disconnected";
   nodes.pendingCount.textContent = inbox.summary.pendingApprovalCount;
   nodes.decisionCount.textContent = approvalQueue.summary.pendingDecisionCount + approvalQueue.summary.readyToResumeCount;
   nodes.resumableCount.textContent = inbox.summary.resumableRunCount;
@@ -1058,6 +1133,7 @@ function render() {
   nodes.agentLaunchCount.textContent = agentLaunches.summary.total;
   nodes.launchReviewCount.textContent = launchReviews.summary.total;
   nodes.taskRouteCount.textContent = taskRoutes.summary.total;
+  nodes.fleetRunCount.textContent = fleetRuns.summary.total;
   nodes.skillState.textContent = `${skills.length}`;
   nodes.candidateSkillState.textContent = `${candidateSkills.length} candidates`;
   nodes.skillEvaluationState.textContent = `${skillEvaluations.length} reports`;
@@ -1075,7 +1151,10 @@ function render() {
   nodes.taskRouteState.textContent = capabilityProbes.summary.total
     ? `${taskRoutes.summary.routedCount} routed / ${taskRoutes.summary.needsInputCount ?? 0} needs input / ${taskRoutes.summary.blockedCount} blocked`
     : "No capability probe";
+  nodes.fleetRunState.textContent = `${fleetRuns.summary.total} total / ${fleetRuns.summary.activeCount} active / ${fleetRuns.summary.awaitingApprovalCount} awaiting approval`;
 
+  renderSystemOverview(state.status, state.contextFreshness);
+  renderContextEvidence(state.contextEvidence);
   renderSkills(skills);
   renderCandidateSkills(candidateSkills);
   renderSkillEvaluations(skillEvaluations);
@@ -1091,6 +1170,8 @@ function render() {
   renderCapabilityProbePanel(state.capabilityProbeDetail);
   renderTaskRoutes(taskRoutes.items);
   renderTaskRoutePanel(state.taskRouteDetail);
+  renderFleetRuns(fleetRuns.items);
+  renderFleetRunPanel(state.fleetRunDetail);
   renderWorkflowSkillOptions(skills);
   renderWorkflowDraft(state.workflowDraft);
   renderWorkflows(workflows);
@@ -1103,6 +1184,103 @@ function render() {
   renderArtifacts(artifacts.items);
   renderArtifactPanel(state.artifactDetail);
   renderDetail(state.detail);
+}
+
+function renderSystemOverview(status, freshness) {
+  nodes.systemOverview.replaceChildren();
+  const modules = [
+    ["ContextOS", `${status?.indexedDocumentCount ?? 0} indexed`, freshness?.status ?? "unknown"],
+    ["Memory", `${status?.memoryCount ?? 0} notes`, "available"],
+    ["TrustKernel", `${status?.pendingApprovalCount ?? 0} pending`, status?.pendingApprovalCount ? "pending" : "clear"],
+    ["SkillForge", `${status?.approvedSkillCount ?? 0} approved / ${status?.candidateSkillCount ?? 0} candidate`, "available"],
+    ["Workflow", `${status?.workflowCount ?? 0} workflows`, "available"],
+    ["Agent Mesh", `${status?.agentAdapterCount ?? 0} adapters / ${status?.taskRouteCount ?? 0} routes`, "available"],
+    ["Fleet", `${status?.fleetRunCount ?? 0} runs`, status?.fleetRunCount ? "available" : "empty"],
+    ["Artifacts", `${status?.artifactCount ?? 0} artifacts`, "available"],
+  ];
+  for (const [name, value, statusText] of modules) {
+    const item = document.createElement("article");
+    item.className = "overview-item";
+    item.append(
+      textNode("div", name, "overview-title"),
+      textNode("div", value, "overview-value"),
+      pillNode(statusText, statusClass(statusText)),
+    );
+    nodes.systemOverview.appendChild(item);
+  }
+}
+
+function renderContextEvidence(pack) {
+  if (!pack) {
+    nodes.contextEvidencePanel.textContent = "{}";
+    nodes.contextEvidenceList.replaceChildren();
+    nodes.contextEvidenceList.appendChild(emptyInline("Search evidence for a task or repo concept"));
+    return;
+  }
+  replaceList(nodes.contextEvidenceList, pack.sources || [], (source) => itemNode({
+    title: source.title || source.id,
+    meta: [
+      [statusClass(source.safety?.status), source.safety?.status || "-"],
+      ["kind", source.kind],
+      ["trust", source.trust?.level],
+      ["model", source.access?.model],
+      ["planning", source.access?.planning],
+      ["fresh", source.freshness?.status],
+    ],
+    actions: [],
+  }));
+  nodes.contextEvidencePanel.textContent = JSON.stringify({
+    query: pack.query,
+    summary: pack.summary,
+    safety: pack.safety,
+    freshness: pack.freshness,
+    sources: (pack.sources || []).map((source) => ({
+      id: source.id,
+      kind: source.kind,
+      title: source.title,
+      origin: source.origin,
+      retrieval: source.retrieval,
+      trust: source.trust,
+      freshness: source.freshness,
+      access: source.access,
+      safety: source.safety,
+      excerpt: source.excerpt,
+    })),
+  }, null, 2);
+}
+
+function renderFleetRuns(items) {
+  replaceList(nodes.fleetRunList, items, (item) => itemNode({
+    title: item.goal || item.id,
+    meta: [
+      [statusClass(item.status), item.status],
+      ["role", item.role],
+      ["adapter", item.adapterId],
+      ["candidates", `${item.candidateCount} candidates`],
+      ["parallel", item.maxParallel],
+      ["updated", formatTime(item.updatedAt || item.createdAt)],
+    ],
+    actions: [fleetRunViewButton(item.id)],
+  }));
+}
+
+function renderFleetRunPanel(fleetRun) {
+  nodes.fleetRunPanel.textContent = fleetRun ? JSON.stringify({
+    id: fleetRun.id,
+    status: fleetRun.status,
+    routeId: fleetRun.routeId,
+    traceId: fleetRun.traceId,
+    goal: fleetRun.goal,
+    role: fleetRun.role,
+    adapterId: fleetRun.adapterId,
+    candidateCount: fleetRun.candidateCount,
+    maxParallel: fleetRun.maxParallel,
+    summary: fleetRun.summary,
+    units: fleetRun.units,
+    review: fleetRun.review,
+    cancellation: fleetRun.cancellation,
+    limits: fleetRun.limits,
+  }, null, 2) : "{}";
 }
 
 function renderWorkflowSkillOptions(skills) {
@@ -1927,6 +2105,18 @@ async function loadTaskRoute(routeId) {
   }
 }
 
+async function loadFleetRun(fleetRunId) {
+  if (!fleetRunId) return;
+  setStatus("Loading fleet run");
+  try {
+    state.fleetRunDetail = await get(`/v1/fleet-runs/${encodeURIComponent(fleetRunId)}`);
+    renderFleetRunPanel(state.fleetRunDetail);
+    setStatus(`Loaded fleet run - ${shortId(fleetRunId)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 function renderDetail(detail) {
   nodes.detailPanel.replaceChildren();
   if (!detail) {
@@ -2419,6 +2609,16 @@ function taskRouteViewButton(routeId) {
   return button;
 }
 
+function fleetRunViewButton(fleetRunId) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "fleet-run-view";
+  button.dataset.fleetRunId = fleetRunId;
+  button.innerHTML = '<span aria-hidden="true">&#128065;</span><span>View</span>';
+  return button;
+}
+
 function libraryButton(action, id, iconHtml, label) {
   const button = document.createElement("button");
   button.className = "item-action secondary";
@@ -2458,8 +2658,8 @@ function shortId(value) {
 }
 
 function statusClass(value) {
-  if (["available", "completed", "dry_run", "approved", "passed", "recorded"].includes(value)) return "completed";
-  if (["failed", "blocked", "completed_with_blockers"].includes(value)) return "failed";
+  if (["available", "allowed", "clear", "completed", "dry_run", "approved", "passed", "recorded", "fresh"].includes(value)) return "completed";
+  if (["failed", "blocked", "completed_with_blockers", "quarantined", "stale"].includes(value)) return "failed";
   if (["requires_approval", "action_required", "pending_decision", "candidate", "needs_review", "planned"].includes(value)) return "pending";
   if (["ready_to_resume", "approved_unresumable"].includes(value)) return "ready";
   return "";

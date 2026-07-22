@@ -209,7 +209,7 @@ h2 {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -237,6 +237,32 @@ h2 {
 
 .work-section {
   margin-top: 18px;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.overview-item {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-height: 112px;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.overview-title {
+  font-weight: 720;
+}
+
+.overview-value {
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .run-form {
@@ -548,6 +574,11 @@ button:disabled {
 }
 
 .artifact-preview {
+  margin-top: 12px;
+}
+
+.evidence-preview,
+.fleet-run-preview {
   margin-top: 12px;
 }
 

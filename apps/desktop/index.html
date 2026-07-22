@@ -30,13 +30,16 @@
         </form>
 
         <nav class="nav-list" aria-label="Workbench views">
+          <a href="#system">System</a>
           <a href="#launch">Launch</a>
+          <a href="#context-evidence">Evidence</a>
           <a href="#workflow-editor">Editor</a>
           <a href="#workflow-builder">Builder</a>
           <a href="#skills">Skills</a>
           <a href="#skillforge">SkillForge</a>
           <a href="#workflows">Workflows</a>
           <a href="#agents">Agents</a>
+          <a href="#fleet">Fleet</a>
           <a href="#workflow-runs">Workflow Runs</a>
           <a href="#decision-queue">Queue</a>
           <a href="#approvals">Approvals</a>
@@ -99,6 +102,18 @@
             <span class="metric-label">Routes</span>
             <strong id="task-route-count">0</strong>
           </article>
+          <article class="metric">
+            <span class="metric-label">Fleet</span>
+            <strong id="fleet-run-count">0</strong>
+          </article>
+        </section>
+
+        <section id="system" class="work-section">
+          <div class="section-heading">
+            <h2>System Overview</h2>
+            <span id="system-state" class="section-state">Disconnected</span>
+          </div>
+          <div id="system-overview" class="overview-grid"></div>
         </section>
 
         <section id="launch" class="work-section">
@@ -160,6 +175,32 @@
               <button id="run-submit" class="primary-action" type="submit"><span aria-hidden="true">&#9654;</span><span>Run</span></button>
             </div>
           </form>
+        </section>
+
+        <section id="context-evidence" class="work-section">
+          <div class="section-heading">
+            <h2>Context Evidence</h2>
+            <span id="context-evidence-state" class="section-state">Ready</span>
+          </div>
+          <form id="context-evidence-form" class="run-form">
+            <label class="field-wide">
+              <span>Query</span>
+              <input id="context-evidence-query" name="query" spellcheck="false" placeholder="TrustKernel approval">
+            </label>
+            <label>
+              <span>Workspace limit</span>
+              <input id="context-evidence-limit" name="limit" type="number" min="1" max="20" value="5">
+            </label>
+            <label>
+              <span>Memory limit</span>
+              <input id="context-evidence-memory-limit" name="memoryLimit" type="number" min="0" max="20" value="3">
+            </label>
+            <div class="form-actions">
+              <button id="context-evidence-submit" class="primary-action" type="submit"><span aria-hidden="true">&#8981;</span><span>Search</span></button>
+            </div>
+          </form>
+          <div id="context-evidence-list" class="item-list evidence-list"></div>
+          <pre id="context-evidence-panel" class="json-view evidence-preview">{}</pre>
         </section>
 
         <section id="workflow-editor" class="work-section">
@@ -324,6 +365,15 @@
           <pre id="capability-probe-panel" class="json-view agent-plan-preview">{}</pre>
           <div id="task-route-list" class="item-list"></div>
           <pre id="task-route-panel" class="json-view agent-plan-preview">{}</pre>
+        </section>
+
+        <section id="fleet" class="work-section">
+          <div class="section-heading">
+            <h2>Fleet Runs</h2>
+            <span id="fleet-run-state" class="section-state">0</span>
+          </div>
+          <div id="fleet-run-list" class="item-list"></div>
+          <pre id="fleet-run-panel" class="json-view fleet-run-preview">{}</pre>
         </section>
 
         <section id="workflow-versions" class="work-section">
