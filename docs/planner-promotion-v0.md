@@ -5,6 +5,7 @@ SpruceAgent now has a promotion layer between LLM drafts and executable plans.
 This layer is deliberately conservative.
 
 LLM output does not become executable just because it looks like a tool call.
+When Context Evidence is available, tool candidates must also cite allowed evidence ids.
 
 ## Known Facts
 
@@ -35,8 +36,27 @@ Each promoted step includes:
 - requested input
 - promotion status
 - policy preview
+- evidence refs
+- evidence gate result
 - executable flag
 - reason
+
+## Evidence Binding
+
+Planner Promotion v0.2 accepts an optional Context Evidence pack.
+
+When supplied, every draft step that requests a tool must include `evidenceRefs`.
+
+Promotion blocks the step when:
+
+- no evidence ref is supplied
+- an evidence id does not exist in the current evidence pack
+- the cited evidence is quarantined
+- the cited evidence is withheld from planning
+
+Accepted evidence is recorded as provenance only. It does not grant execution authority.
+
+Stale evidence is surfaced as `passed_with_stale_evidence` in the evidence gate. Freshness enforcement remains owned by run preflight, so callers that require current context should use `--requireFreshContext` or `refreshContext`.
 
 ## Promotion Status
 
@@ -88,7 +108,9 @@ It only classifies candidate steps.
 - it never writes files
 - it never runs shell commands
 - it never promotes unknown tools
+- it never promotes evidence-bound tool candidates without allowed evidence refs
 - it does not treat a policy preview as approval
+- it does not treat evidence as tool authority
 - `candidatePlan` does not replace the current rule-based execution plan
 
 ## Why It Matters
@@ -96,7 +118,7 @@ It only classifies candidate steps.
 This is the safe bridge toward real LLM planning:
 
 ```text
-LLM Draft -> Candidate Plan -> Policy Preview -> Candidate Execution -> TrustKernel -> Tool Result
+LLM Draft -> Evidence Gate -> Candidate Plan -> Policy Preview -> Candidate Execution -> TrustKernel -> Tool Result
 ```
 
 Without this layer, model output would either be ignored forever or trusted too early.

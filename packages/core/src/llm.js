@@ -280,6 +280,7 @@ function normalizeLlmResponse(response, provider) {
     executable: false,
     toolName: typeof step.toolName === "string" ? step.toolName : null,
     input: step.input && typeof step.input === "object" && !Array.isArray(step.input) ? step.input : step.input ?? null,
+    evidenceRefs: normalizeDraftEvidenceRefs(step),
   }));
   return normalized;
 }
@@ -304,7 +305,8 @@ function buildSystemPrompt() {
     "You may draft a plan, but you must not claim to execute tools.",
     "Every proposed step must be non-executable and must respect TrustKernel approval boundaries.",
     "A proposed step may include toolName and input only as a requested candidate for later Planner Promotion.",
-    "Return shape: {\"summary\":\"string\",\"proposedSteps\":[{\"id\":\"string\",\"kind\":\"analysis|planning|context|safety|tool\",\"description\":\"string\",\"executable\":false,\"toolName\":\"string|null\",\"input\":\"object|null\"}],\"constraints\":[\"string\"]}.",
+    "When proposing a tool candidate, include evidenceRefs with one or more evidence ids from the supplied context.",
+    "Return shape: {\"summary\":\"string\",\"proposedSteps\":[{\"id\":\"string\",\"kind\":\"analysis|planning|context|safety|tool\",\"description\":\"string\",\"executable\":false,\"toolName\":\"string|null\",\"input\":\"object|null\",\"evidenceRefs\":[\"string\"]}],\"constraints\":[\"string\"]}.",
   ].join("\n");
 }
 
@@ -315,10 +317,14 @@ function buildUserPrompt(request) {
       query: request.context?.query,
       resultCount: request.context?.resultCount ?? 0,
       results: (request.context?.results ?? []).slice(0, 5).map((item) => ({
+        evidenceId: item.evidenceId,
         path: item.path,
         score: item.score,
         snippet: item.snippet,
+        trust: item.trust,
+        freshness: item.freshness,
       })),
+      evidence: request.context?.evidence,
     },
     knownFacts: request.knownFacts,
     skill: request.skill
@@ -366,7 +372,17 @@ function sanitizeDraftSteps(steps) {
     executable: false,
     toolName: typeof step.toolName === "string" ? step.toolName : null,
     input: step.input && typeof step.input === "object" && !Array.isArray(step.input) ? step.input : step.input ?? null,
+    evidenceRefs: normalizeDraftEvidenceRefs(step),
   }));
+}
+
+function normalizeDraftEvidenceRefs(step = {}) {
+  const refs = Array.isArray(step.evidenceRefs)
+    ? step.evidenceRefs
+    : Array.isArray(step.evidenceIds)
+      ? step.evidenceIds
+      : [];
+  return [...new Set(refs.map((item) => String(item).trim()).filter(Boolean))];
 }
 
 function parseJsonObjectFromText(text) {
@@ -427,6 +443,7 @@ function redactLlmRequest(request, provider) {
     context: {
       query: request.context?.query,
       resultCount: request.context?.resultCount ?? 0,
+      evidenceIds: (request.context?.results ?? []).map((item) => item.evidenceId).filter(Boolean),
       paths: (request.context?.results ?? []).map((item) => item.path),
     },
     knownFacts: request.knownFacts,

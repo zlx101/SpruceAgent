@@ -111,12 +111,13 @@ export async function runAgent(store, input) {
       })
     : null;
   const candidatePlan = input.promotePlan && llm?.status === "drafted"
-    ? promoteLlmDraftToCandidatePlan({
-        llm,
-        trustMode,
-        allowedTools: input.plannerAllowedTools,
-      })
-    : null;
+      ? promoteLlmDraftToCandidatePlan({
+          llm,
+          trustMode,
+          allowedTools: input.plannerAllowedTools,
+          contextEvidence,
+        })
+      : null;
   if (candidatePlan) {
     appendTraceEvent(store, trace.id, "planner.promotion", candidatePlan);
   }
