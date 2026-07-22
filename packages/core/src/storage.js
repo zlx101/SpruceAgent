@@ -24,6 +24,8 @@ export function ensureStore(store) {
   fs.mkdirSync(path.join(store.root, "workflow-history"), { recursive: true });
   fs.mkdirSync(path.join(store.root, "evaluations"), { recursive: true });
   fs.mkdirSync(path.join(store.root, "skill-evaluations"), { recursive: true });
+  fs.mkdirSync(path.join(store.root, "outcome-fixtures"), { recursive: true });
+  fs.mkdirSync(path.join(store.root, "outcome-results"), { recursive: true });
   fs.mkdirSync(path.join(store.root, "agent-workspaces"), { recursive: true });
   fs.mkdirSync(path.join(store.root, "agent-launches"), { recursive: true });
   fs.mkdirSync(path.join(store.root, "launch-reviews"), { recursive: true });
@@ -47,6 +49,8 @@ export function ensureStore(store) {
   touch(path.join(store.root, "approval-index.jsonl"));
   touch(path.join(store.root, "evaluation-index.jsonl"));
   touch(path.join(store.root, "skill-evaluation-index.jsonl"));
+  touch(path.join(store.root, "outcome-fixture-index.jsonl"));
+  touch(path.join(store.root, "outcome-result-index.jsonl"));
   touch(path.join(store.root, "skill-version-index.jsonl"));
   touch(path.join(store.root, "skill-replay-fixture-index.jsonl"));
   touch(path.join(store.root, "skill-replay-result-index.jsonl"));

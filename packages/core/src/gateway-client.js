@@ -152,6 +152,14 @@ export function createGatewayClient(options = {}) {
     listEvaluations: () => request("GET", "/v1/evaluations"),
     getEvaluation: (evaluationId) => request("GET", `/v1/evaluations/${encodePathPart(evaluationId)}`),
     evaluateTrace: (traceId) => request("POST", "/v1/evaluations/trace", { traceId }),
+    outcomeEvaluationContract: () => request("GET", "/v1/outcomes/contract"),
+    listOutcomeFixtures: () => request("GET", "/v1/outcomes/fixtures"),
+    getOutcomeFixture: (fixtureId) => request("GET", `/v1/outcomes/fixtures/${encodePathPart(fixtureId)}`),
+    createOutcomeFixture: (input) => request("POST", "/v1/outcomes/fixtures", input),
+    evaluateOutcomeFixture: (fixtureId, input = {}) => request("POST", `/v1/outcomes/fixtures/${encodePathPart(fixtureId)}/evaluate`, input),
+    summarizeOutcomeFixture: (fixtureId) => request("GET", `/v1/outcomes/fixtures/${encodePathPart(fixtureId)}/summary`),
+    listOutcomeResults: (input = {}) => request("GET", `/v1/outcomes/results${outcomeResultParams(input)}`),
+    getOutcomeResult: (resultId) => request("GET", `/v1/outcomes/results/${encodePathPart(resultId)}`),
   };
 }
 
@@ -174,6 +182,14 @@ function artifactParams(input = {}) {
   if (input.traceId) params.set("traceId", input.traceId);
   if (input.kind) params.set("kind", input.kind);
   if (input.sourceKind) params.set("sourceKind", input.sourceKind);
+  if (input.status) params.set("status", input.status);
+  const value = params.toString();
+  return value ? `?${value}` : "";
+}
+
+function outcomeResultParams(input = {}) {
+  const params = new URLSearchParams();
+  if (input.fixtureId) params.set("fixtureId", input.fixtureId);
   if (input.status) params.set("status", input.status);
   const value = params.toString();
   return value ? `?${value}` : "";

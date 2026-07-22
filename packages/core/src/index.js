@@ -7,6 +7,17 @@ export { listTools, findTool } from "./tools.js";
 export { evaluatePolicy, auditPolicyDecision } from "./policy.js";
 export { evaluateTrace, getEvaluation, listEvaluations } from "./evaluations.js";
 export {
+  createOutcomeFixture,
+  evaluateOutcomeFixture,
+  getOutcomeEvaluationContract,
+  getOutcomeEvaluationResult,
+  getOutcomeFixture,
+  listOutcomeEvaluationResults,
+  listOutcomeFixtures,
+  OUTCOME_EVALUATION_CONTRACT,
+  summarizeOutcomeFixture,
+} from "./outcome-evaluations.js";
+export {
   createGatewayHandler,
   createGatewayServer,
   ensureGatewayToken,

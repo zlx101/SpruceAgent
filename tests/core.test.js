@@ -19,6 +19,7 @@ import {
   createApprovalTicket,
   createAgentAdapterRunPlan,
   createFleetRun,
+  createOutcomeFixture,
   createLaunchReview,
   createTaskRoute,
   createSkillReplayFixture,
@@ -30,6 +31,7 @@ import {
   evaluatePolicy,
   evaluateSkillCandidate,
   evaluateTrace,
+  evaluateOutcomeFixture,
   exportSkillPackage,
   executeApprovedCandidateStep,
   executeTool,
@@ -55,6 +57,9 @@ import {
   getAgentLauncherContract,
   getFleetRun,
   getFleetRunContract,
+  getOutcomeEvaluationContract,
+  getOutcomeEvaluationResult,
+  getOutcomeFixture,
   getExternalCliLauncherContract,
   getAgentTrial,
   getAgentTrialContract,
@@ -104,6 +109,8 @@ import {
   listAgentAdapters,
   listAgentLaunches,
   listFleetRuns,
+  listOutcomeEvaluationResults,
+  listOutcomeFixtures,
   listAgentTrials,
   listAgentWorkspaces,
   listLaunchReviews,
@@ -148,6 +155,7 @@ import {
   runWorkflow,
   searchWorkspaceContext,
   searchMemory,
+  summarizeOutcomeFixture,
   startGatewayServer,
   verifyGatewayToken,
   startTrace,
@@ -167,6 +175,8 @@ test("workspace store initializes core files", () => {
   assert.ok(fs.existsSync(path.join(store.root, "approval-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "evaluation-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "skill-evaluation-index.jsonl")));
+  assert.ok(fs.existsSync(path.join(store.root, "outcome-fixture-index.jsonl")));
+  assert.ok(fs.existsSync(path.join(store.root, "outcome-result-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "skill-version-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "skill-replay-fixture-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "skill-replay-result-index.jsonl")));
@@ -1562,6 +1572,131 @@ test("evaluation flags approval-gated workflow traces", async () => {
   assert.ok(evaluation.recommendedNextActions.some((action) => action.includes("approval")));
 });
 
+test("outcome suite evaluates immutable deterministic trace and workspace evidence", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, "README.md"), "Outcome evidence is grounded.", "utf8");
+  fs.writeFileSync(path.join(dir, "outcome.txt"), "verified artifact", "utf8");
+  fs.writeFileSync(path.join(dir, "outcome.json"), JSON.stringify({ status: "ready", nested: { version: 1 } }), "utf8");
+  buildWorkspaceIndex(store);
+  const workflow = createWorkflow(store, {
+    name: "Outcome Evidence Workflow",
+    steps: [{ kind: "tool", toolName: "file.read", input: { path: "README.md" } }],
+  });
+  const run = await runWorkflow(store, workflow.id);
+  const fixture = createOutcomeFixture(store, {
+    name: "Completed workspace evidence",
+    description: "Requires a completed workflow and stable local artifacts.",
+    validators: [
+      { kind: "trace_event", eventType: "workflow.completed", minimumCount: 1 },
+      { kind: "completion_status", eventType: "workflow.completed", allowedStatuses: ["completed"] },
+      { kind: "workspace_file", path: "outcome.txt", assertion: "contains", text: "verified" },
+      { kind: "json_file", path: "outcome.json", requiredKeys: ["status", "nested"], expectedValues: { status: "ready", "nested.version": 1 } },
+    ],
+  });
+
+  const first = evaluateOutcomeFixture(store, fixture.id, { traceId: run.traceId });
+  const second = evaluateOutcomeFixture(store, fixture.id, { traceId: run.traceId });
+  const summary = summarizeOutcomeFixture(store, fixture.id);
+
+  assert.equal(getOutcomeEvaluationContract().interface, "spruceagent.outcome-evaluations");
+  assert.match(fixture.fixtureFingerprint, /^[a-f0-9]{64}$/);
+  assert.equal(first.status, "passed");
+  assert.equal(second.status, "passed");
+  assert.equal(getOutcomeFixture(store, fixture.id).fixtureFingerprint, fixture.fixtureFingerprint);
+  assert.equal(getOutcomeEvaluationResult(store, first.id).status, "passed");
+  assert.equal(listOutcomeFixtures(store).summary.total, 1);
+  assert.equal(listOutcomeEvaluationResults(store, { fixtureId: fixture.id }).summary.passedCount, 2);
+  assert.equal(summary.summary.passAtLeastOne, true);
+  assert.equal(summary.summary.passAll, true);
+  assert.equal(summary.summary.stablePass, true);
+  assert.equal(summary.summary.passRate, 1);
+});
+
+test("outcome suite preserves safety vetoes and distinguishes unstable evidence", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const allowedTrace = startTrace(store, { goal: "Allowed outcome evidence" });
+  const deniedTrace = startTrace(store, { goal: "Denied outcome evidence" });
+  await executeTool(store, {
+    traceId: deniedTrace.id,
+    toolName: "file.write",
+    trustMode: "observe",
+    input: { path: "blocked.txt", content: "no" },
+  });
+  const fixture = createOutcomeFixture(store, {
+    name: "No policy denials",
+    validators: [{ kind: "trace_event", eventType: "trace.started", minimumCount: 1 }],
+  });
+
+  const passed = evaluateOutcomeFixture(store, fixture.id, { traceId: allowedTrace.id });
+  const vetoed = evaluateOutcomeFixture(store, fixture.id, { traceId: deniedTrace.id });
+  const summary = summarizeOutcomeFixture(store, fixture.id);
+
+  assert.equal(passed.status, "passed");
+  assert.equal(vetoed.status, "failed");
+  assert.ok(vetoed.checks.some((check) => check.id === "safety_policy_deny" && check.veto));
+  assert.equal(summary.summary.passAtLeastOne, true);
+  assert.equal(summary.summary.passAll, false);
+  assert.equal(summary.summary.stablePass, false);
+  assert.equal(summary.summary.safetyVetoCount, 1);
+});
+
+test("outcome suite can bind Fleet status and candidate evidence to its trace", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const trace = startTrace(store, { goal: "Evaluate Fleet outcome evidence" });
+  const fleetRunId = "fleet_run_outcome_test";
+  fs.mkdirSync(path.join(store.root, "fleet-runs"), { recursive: true });
+  fs.writeFileSync(path.join(store.root, "fleet-runs", `${fleetRunId}.json`), JSON.stringify({
+    id: fleetRunId,
+    traceId: trace.id,
+    status: "completed",
+    units: [
+      { id: "candidate_1", status: "completed" },
+      { id: "candidate_2", status: "completed" },
+    ],
+  }), "utf8");
+  const fixture = createOutcomeFixture(store, {
+    name: "Fleet evidence completed",
+    validators: [
+      { kind: "trace_event", eventType: "trace.started", minimumCount: 1 },
+      { kind: "fleet_status", allowedStatuses: ["completed"] },
+      { kind: "fleet_candidates", minimumCompleted: 2, maximumFailed: 0, maximumCancelled: 0 },
+    ],
+  });
+
+  const result = evaluateOutcomeFixture(store, fixture.id, { fleetRunId });
+
+  assert.equal(result.status, "passed");
+  assert.equal(result.traceId, trace.id);
+  assert.equal(result.fleetRunId, fleetRunId);
+});
+
+test("outcome fixture rejects protected workspace paths and unsupported validators", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+
+  assert.throws(() => createOutcomeFixture(store, {
+    name: "Protected path",
+    validators: [{ kind: "workspace_file", path: ".spruceagent/config.json" }],
+  }), /protected workspace directories/);
+  assert.throws(() => createOutcomeFixture(store, {
+    name: "Unsupported validator",
+    validators: [{ kind: "semantic_judge" }],
+  }), /unsupported outcome validator kind/);
+
+  const fixture = createOutcomeFixture(store, {
+    name: "Integrity protected fixture",
+    validators: [{ kind: "trace_event", eventType: "trace.started", minimumCount: 1 }],
+  });
+  const fixturePath = path.join(store.root, "outcome-fixtures", `${fixture.id}.json`);
+  const tampered = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
+  tampered.name = "Tampered fixture";
+  fs.writeFileSync(fixturePath, JSON.stringify(tampered), "utf8");
+  assert.throws(() => getOutcomeFixture(store, fixture.id), /integrity check failed/);
+});
+
 test("gateway token is generated and required for v1 routes", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   const store = ensureStore(createStore(dir));
@@ -1743,6 +1878,11 @@ test("gateway route contract exposes stable route ids", () => {
   assert.ok(routeIds.includes("candidate.execute_approved"));
   assert.ok(routeIds.includes("run_continuation.contract"));
   assert.ok(routeIds.includes("runs.resume"));
+  assert.ok(routeIds.includes("outcomes.contract"));
+  assert.ok(routeIds.includes("outcomes.fixtures.create"));
+  assert.ok(routeIds.includes("outcomes.fixtures.evaluate"));
+  assert.ok(routeIds.includes("outcomes.fixtures.summary"));
+  assert.ok(routeIds.includes("outcomes.results.list"));
   assert.equal(contract.routes.find((route) => route.id === "health").authRequired, false);
   assert.equal(contract.routes.find((route) => route.id === "status").authRequired, true);
 });
@@ -1819,6 +1959,9 @@ test("gateway client reads status and route contract", async () => {
     const replayResults = await client.listSkillReplayResults();
     const skillPackages = await client.listSkillPackages();
     const skillPackageImports = await client.listSkillPackageImports();
+    const outcomeContract = await client.outcomeEvaluationContract();
+    const outcomeFixtures = await client.listOutcomeFixtures();
+    const outcomeResults = await client.listOutcomeResults();
     const inboxContract = await client.inboxContract();
     const contract = await client.contract();
     const llmContract = await client.llmContract();
@@ -1849,6 +1992,9 @@ test("gateway client reads status and route contract", async () => {
     assert.deepEqual(replayResults, []);
     assert.deepEqual(skillPackages, []);
     assert.deepEqual(skillPackageImports, []);
+    assert.equal(outcomeContract.interface, "spruceagent.outcome-evaluations");
+    assert.equal(outcomeFixtures.status, "empty");
+    assert.equal(outcomeResults.status, "empty");
     assert.equal(inboxContract.interface, "spruceagent.run-inbox");
     assert.ok(contract.routes.some((route) => route.id === "tools.run"));
     assert.equal(llmContract.interface, "spruceagent.llm-adapter");
@@ -1863,11 +2009,54 @@ test("gateway client reads status and route contract", async () => {
     assert.equal(status.agentAdapterCount >= 5, true);
     assert.equal(status.agentWorkspaceCount, 0);
     assert.equal(status.agentLaunchCount, 0);
+    assert.equal(status.outcomeFixtureCount, 0);
+    assert.equal(status.outcomeResultCount, 0);
     assert.equal(artifacts.status, "empty");
     assert.equal(workflowInbox.version, "0.1.0");
     assert.equal(workflowInboxContract.interface, "spruceagent.workflow-inbox");
     assert.equal(workflowDetailContract.interface, "spruceagent.workflow-detail");
     assert.equal(workflowContinuationContract.interface, "spruceagent.workflow-continuation");
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
+
+test("gateway client manages outcome fixtures and deterministic results without replay", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, "README.md"), "Gateway outcome evidence.", "utf8");
+  buildWorkspaceIndex(store);
+  const workflow = createWorkflow(store, {
+    name: "Gateway Outcome Workflow",
+    steps: [{ kind: "tool", toolName: "file.read", input: { path: "README.md" } }],
+  });
+  const run = await runWorkflow(store, workflow.id);
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const client = createGatewayClient({
+    baseUrl: `http://${gateway.host}:${gateway.port}`,
+    token: gateway.token,
+  });
+
+  try {
+    const fixture = await client.createOutcomeFixture({
+      name: "Gateway completed workflow",
+      validators: [
+        { kind: "trace_event", eventType: "workflow.completed", minimumCount: 1 },
+        { kind: "completion_status", eventType: "workflow.completed", allowedStatuses: ["completed"] },
+      ],
+    });
+    const result = await client.evaluateOutcomeFixture(fixture.id, { traceId: run.traceId });
+    const listed = await client.listOutcomeResults({ fixtureId: fixture.id });
+    const loadedFixture = await client.getOutcomeFixture(fixture.id);
+    const loadedResult = await client.getOutcomeResult(result.id);
+    const summary = await client.summarizeOutcomeFixture(fixture.id);
+
+    assert.equal(result.status, "passed");
+    assert.equal(listed.summary.passedCount, 1);
+    assert.equal(loadedFixture.fixtureFingerprint, fixture.fixtureFingerprint);
+    assert.equal(loadedResult.id, result.id);
+    assert.equal(summary.summary.passAtLeastOne, true);
+    assert.equal(summary.summary.stablePass, false);
   } finally {
     await closeServer(gateway.server);
   }

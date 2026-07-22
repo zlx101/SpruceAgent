@@ -76,6 +76,7 @@ Start here:
 - [Workflow Inbox / Detail v0](docs/workflow-inbox-detail-v0.md)
 - [Workflow Continuation v0](docs/workflow-continuation-v0.md)
 - [Evaluation v0](docs/evaluation-v0.md)
+- [Outcome Evaluation Suite v1](docs/outcome-evaluation-suite-v1.md)
 - [GatewayMesh Local API v0](docs/gatewaymesh-local-api-v0.md)
 - [Gateway Client and Route Contract v0](docs/gateway-client-and-contract-v0.md)
 - [LLM Adapter v0](docs/llm-adapter-v0.md)
@@ -152,6 +153,9 @@ npm run spruce -- workflow run <workflowId>
 npm run spruce -- workflow resume <traceId>
 npm run spruce -- eval trace <traceId>
 npm run spruce -- eval list
+npm run spruce -- outcome fixture-create --name "Completed run" --validators '[{"kind":"completion_status","allowedStatuses":["completed"]}]'
+npm run spruce -- outcome evaluate <fixtureId> --trace <traceId>
+npm run spruce -- outcome summary <fixtureId>
 npm run spruce -- llm contract
 npm run spruce -- llm providers
 npm run spruce -- llm validate deepseek

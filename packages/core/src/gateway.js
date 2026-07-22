@@ -64,6 +64,16 @@ import { getArtifact, getArtifactContract, listArtifacts } from "./artifacts.js"
 import { assessWorkspaceIndexFreshness, buildWorkspaceIndex, readWorkspaceIndex, searchWorkspaceContext } from "./context.js";
 import { evaluateTrace, getEvaluation, listEvaluations } from "./evaluations.js";
 import {
+  createOutcomeFixture,
+  evaluateOutcomeFixture,
+  getOutcomeEvaluationContract,
+  getOutcomeEvaluationResult,
+  getOutcomeFixture,
+  listOutcomeEvaluationResults,
+  listOutcomeFixtures,
+  summarizeOutcomeFixture,
+} from "./outcome-evaluations.js";
+import {
   evaluateSkillCandidate,
   getSkillEvaluation,
   getSkillEvaluationContract,
@@ -916,6 +926,62 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/evaluations/trace",
       authRequired: true,
       description: "Evaluate a trace by id.",
+    },
+    {
+      id: "outcomes.contract",
+      method: "GET",
+      path: "/v1/outcomes/contract",
+      authRequired: true,
+      description: "Read the Outcome Evaluation Suite v1 contract.",
+    },
+    {
+      id: "outcomes.fixtures.list",
+      method: "GET",
+      path: "/v1/outcomes/fixtures",
+      authRequired: true,
+      description: "List immutable outcome evaluation fixtures.",
+    },
+    {
+      id: "outcomes.fixtures.get",
+      method: "GET",
+      path: "/v1/outcomes/fixtures/:fixtureId",
+      authRequired: true,
+      description: "Read an immutable outcome evaluation fixture.",
+    },
+    {
+      id: "outcomes.fixtures.create",
+      method: "POST",
+      path: "/v1/outcomes/fixtures",
+      authRequired: true,
+      description: "Create an immutable deterministic outcome evaluation fixture.",
+    },
+    {
+      id: "outcomes.fixtures.evaluate",
+      method: "POST",
+      path: "/v1/outcomes/fixtures/:fixtureId/evaluate",
+      authRequired: true,
+      description: "Evaluate an existing trace and optional Fleet record against a fixture without re-execution.",
+    },
+    {
+      id: "outcomes.fixtures.summary",
+      method: "GET",
+      path: "/v1/outcomes/fixtures/:fixtureId/summary",
+      authRequired: true,
+      description: "Summarize repeated outcome evaluation evidence for one fixture.",
+    },
+    {
+      id: "outcomes.results.list",
+      method: "GET",
+      path: "/v1/outcomes/results",
+      authRequired: true,
+      description: "List deterministic outcome evaluation results.",
+    },
+    {
+      id: "outcomes.results.get",
+      method: "GET",
+      path: "/v1/outcomes/results/:resultId",
+      authRequired: true,
+      description: "Read one deterministic outcome evaluation result.",
     },
     {
       id: "contract",
@@ -1920,6 +1986,47 @@ async function routeRequest(store, request, url, body) {
     return ok(evaluateTrace(store, body.traceId));
   }
 
+  if (request.method === "GET" && url.pathname === "/v1/outcomes/contract") {
+    return ok(getOutcomeEvaluationContract());
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/outcomes/fixtures") {
+    return ok(listOutcomeFixtures(store));
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/outcomes/fixtures") {
+    return ok(createOutcomeFixture(store, {
+      ...body,
+      actor: body.actor ?? "gateway-user",
+    }));
+  }
+
+  if (request.method === "GET" && pathParts[1] === "outcomes" && pathParts[2] === "fixtures" && pathParts[3] && pathParts[4] === "summary") {
+    return ok(summarizeOutcomeFixture(store, pathParts[3]));
+  }
+
+  if (request.method === "POST" && pathParts[1] === "outcomes" && pathParts[2] === "fixtures" && pathParts[3] && pathParts[4] === "evaluate") {
+    return ok(evaluateOutcomeFixture(store, pathParts[3], {
+      traceId: body.traceId,
+      fleetRunId: body.fleetRunId,
+    }));
+  }
+
+  if (request.method === "GET" && pathParts[1] === "outcomes" && pathParts[2] === "fixtures" && pathParts[3] && !pathParts[4]) {
+    return ok(getOutcomeFixture(store, pathParts[3]));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/outcomes/results") {
+    return ok(listOutcomeEvaluationResults(store, {
+      fixtureId: url.searchParams.get("fixtureId") ?? undefined,
+      status: url.searchParams.get("status") ?? undefined,
+    }));
+  }
+
+  if (request.method === "GET" && pathParts[1] === "outcomes" && pathParts[2] === "results" && pathParts[3] && !pathParts[4]) {
+    return ok(getOutcomeEvaluationResult(store, pathParts[3]));
+  }
+
   return notFound();
 }
 
@@ -1946,6 +2053,8 @@ function gatewayStatus(store) {
     fleetRunCount: listFleetRuns(store).summary.total,
     artifactCount: listArtifacts(store).summary.total,
     evaluationCount: listEvaluations(store).length,
+    outcomeFixtureCount: listOutcomeFixtures(store).summary.total,
+    outcomeResultCount: listOutcomeEvaluationResults(store).summary.total,
     skillEvaluationCount: listSkillEvaluations(store).length,
     skillReplayFixtureCount: listSkillReplayFixtures(store).length,
     skillReplayResultCount: listSkillReplayResults(store).length,

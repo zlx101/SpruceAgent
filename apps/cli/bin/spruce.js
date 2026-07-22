@@ -20,6 +20,7 @@ import {
   createSkillReplayFixture,
   createGatewayClient,
   createFleetRun,
+  createOutcomeFixture,
   createStore,
   createWorkflow,
   createWorkflowFromDraft,
@@ -30,6 +31,7 @@ import {
   evaluatePolicy,
   evaluateSkillCandidate,
   evaluateTrace,
+  evaluateOutcomeFixture,
   exportSkillPackage,
   executeApprovedCandidateStep,
   executeTool,
@@ -37,6 +39,9 @@ import {
   getEvaluation,
   getFleetRun,
   getFleetRunContract,
+  getOutcomeEvaluationContract,
+  getOutcomeEvaluationResult,
+  getOutcomeFixture,
   getCandidateApprovalContract,
   getCandidateExecutionContract,
   getGatewayAuthStatus,
@@ -103,6 +108,8 @@ import {
   listArtifacts,
   listEvaluations,
   listFleetRuns,
+  listOutcomeEvaluationResults,
+  listOutcomeFixtures,
   listSkillEvaluations,
   listSkillPackageImports,
   listSkillPackages,
@@ -140,6 +147,7 @@ import {
   executeFleetRun,
   searchWorkspaceContext,
   searchMemory,
+  summarizeOutcomeFixture,
   startTrace,
   startGatewayServer,
   updateWorkflow,
@@ -204,6 +212,8 @@ async function main() {
       taskRouteCount: listTaskRoutes(store).summary.total,
       artifactCount: listArtifacts(store).summary.total,
       evaluationCount: listEvaluations(store).length,
+      outcomeFixtureCount: listOutcomeFixtures(store).summary.total,
+      outcomeResultCount: listOutcomeEvaluationResults(store).summary.total,
       skillEvaluationCount: listSkillEvaluations(store).length,
       skillReplayFixtureCount: listSkillReplayFixtures(store).length,
       skillReplayResultCount: listSkillReplayResults(store).length,
@@ -288,6 +298,11 @@ async function main() {
 
   if (command === "eval" || command === "evaluation") {
     handleEvaluation(subcommand, rest);
+    return;
+  }
+
+  if (command === "outcome" || command === "outcomes") {
+    handleOutcome(subcommand, rest);
     return;
   }
 
@@ -1115,6 +1130,76 @@ function handleEvaluation(action, args) {
   throw new Error("usage: spruce eval <trace|list|get>");
 }
 
+function handleOutcome(action, args = []) {
+  if (action === "contract") {
+    printJson(getOutcomeEvaluationContract());
+    return;
+  }
+
+  if (action === "fixture-create") {
+    const flags = parseFlags(args);
+    if (!flags.name || !flags.validators) {
+      throw new Error("usage: spruce outcome fixture-create --name <name> --validators <json> [--description <text>] [--safety <json>]");
+    }
+    printJson(createOutcomeFixture(store, {
+      name: flags.name,
+      description: flags.description,
+      validators: parseJson(flags.validators),
+      safety: flags.safety ? parseJson(flags.safety) : undefined,
+      actor: flags.actor ?? "local-user",
+    }));
+    return;
+  }
+
+  if (!action || action === "fixtures") {
+    printJson(listOutcomeFixtures(store));
+    return;
+  }
+
+  if (action === "fixture") {
+    const [fixtureId] = args;
+    if (!fixtureId) throw new Error("usage: spruce outcome fixture <fixtureId>");
+    printJson(getOutcomeFixture(store, fixtureId));
+    return;
+  }
+
+  if (action === "evaluate") {
+    const [fixtureId, ...flagArgs] = args;
+    if (!fixtureId) throw new Error("usage: spruce outcome evaluate <fixtureId> --trace <traceId> [--fleet <fleetRunId>]");
+    const flags = parseFlags(flagArgs);
+    printJson(evaluateOutcomeFixture(store, fixtureId, {
+      traceId: flags.trace,
+      fleetRunId: flags.fleet,
+    }));
+    return;
+  }
+
+  if (action === "results") {
+    const flags = parseFlags(args);
+    printJson(listOutcomeEvaluationResults(store, {
+      fixtureId: flags.fixture,
+      status: flags.status,
+    }));
+    return;
+  }
+
+  if (action === "result") {
+    const [resultId] = args;
+    if (!resultId) throw new Error("usage: spruce outcome result <resultId>");
+    printJson(getOutcomeEvaluationResult(store, resultId));
+    return;
+  }
+
+  if (action === "summary") {
+    const [fixtureId] = args;
+    if (!fixtureId) throw new Error("usage: spruce outcome summary <fixtureId>");
+    printJson(summarizeOutcomeFixture(store, fixtureId));
+    return;
+  }
+
+  throw new Error("usage: spruce outcome <contract|fixture-create|fixtures|fixture|evaluate|results|result|summary>");
+}
+
 async function handleGateway(action, args) {
   if (action === "token") {
     const flags = parseFlags(args);
@@ -1905,6 +1990,11 @@ Usage:
   ${executable} workflow detail <traceId>
   ${executable} eval trace <traceId>
   ${executable} eval list
+  ${executable} outcome contract
+  ${executable} outcome fixture-create --name "Readme exists" --validators "[{\"kind\":\"completion_status\",\"allowedStatuses\":[\"completed\"]}]"
+  ${executable} outcome fixtures
+  ${executable} outcome evaluate <fixtureId> --trace <traceId> [--fleet <fleetRunId>]
+  ${executable} outcome summary <fixtureId>
   ${executable} llm contract
   ${executable} llm provider-contract
   ${executable} llm providers

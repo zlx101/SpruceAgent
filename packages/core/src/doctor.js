@@ -44,6 +44,7 @@ const REQUIRED_PATHS = [
   "docs/capability-probe-task-router-v0.md",
   "docs/agent-trial-evidence-v0.md",
   "docs/llm-provider-registry-v0.md",
+  "docs/outcome-evaluation-suite-v1.md",
   "docs/public-showcase-v0.md",
   "docs/release-checklist.md",
 ];
