@@ -204,6 +204,12 @@ export {
   readWorkspaceIndex,
   searchWorkspaceContext,
 } from "./context.js";
+export {
+  CONTEXT_EVIDENCE_CONTRACT,
+  createContextEvidencePack,
+  createModelContextFromEvidence,
+  getContextEvidenceContract,
+} from "./context-evidence.js";
 export { assessRunRisk, runPreflight } from "./preflight.js";
 export { runAgent } from "./agent-runner.js";
 export { getPlannerPromotionContract, promoteLlmDraftToCandidatePlan } from "./planner.js";

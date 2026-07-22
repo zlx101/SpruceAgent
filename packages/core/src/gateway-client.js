@@ -127,6 +127,8 @@ export function createGatewayClient(options = {}) {
     indexContext: (input = {}) => request("POST", "/v1/context/index", input),
     contextFreshness: (input = {}) => request("GET", `/v1/context/freshness${input.maxChanges ? `?maxChanges=${encodeURIComponent(input.maxChanges)}` : ""}`),
     searchContext: (input) => request("POST", "/v1/context/search", input),
+    contextEvidenceContract: () => request("GET", "/v1/context/evidence-contract"),
+    createContextEvidence: (input) => request("POST", "/v1/context/evidence", input),
     runAgent: (input) => request("POST", "/v1/runs", input),
     getRun: (traceId) => request("GET", `/v1/runs/${encodePathPart(traceId)}`),
     resumeRun: (traceId, input = {}) => request("POST", `/v1/runs/${encodePathPart(traceId)}/resume`, input),

@@ -1,5 +1,6 @@
 import { addMemory } from "./memory.js";
 import { createContextPack, readWorkspaceIndex } from "./context.js";
+import { createContextEvidencePack, createModelContextFromEvidence } from "./context-evidence.js";
 import { executeTool } from "./executor.js";
 import { requestCandidateApprovals } from "./candidate-approvals.js";
 import { executeCandidatePlan } from "./candidate-executor.js";
@@ -59,6 +60,15 @@ export async function runAgent(store, input) {
     limit: input.contextLimit ?? 5,
   });
   appendTraceEvent(store, trace.id, "agent.context", contextPack);
+  const contextEvidence = createContextEvidencePack(store, {
+    query: contextQuery,
+    context: contextPack,
+    limit: input.contextLimit ?? 5,
+    memoryLimit: input.memoryContextLimit ?? 5,
+    includeMemory: input.includeMemoryEvidence !== false,
+  });
+  const modelContext = createModelContextFromEvidence(contextEvidence);
+  appendTraceEvent(store, trace.id, "context.evidence", contextEvidence);
   const contextFreshness = preflight.context.final;
   appendTraceEvent(store, trace.id, "context.staleness", contextFreshness);
 
@@ -71,6 +81,7 @@ export async function runAgent(store, input) {
       knownFacts,
       preflight,
       context: contextPack,
+      contextEvidence,
       contextFreshness,
       skill: selectedSkill,
       plan: null,
@@ -94,7 +105,7 @@ export async function runAgent(store, input) {
         traceId: trace.id,
         provider: llmProvider,
         goal,
-        context: contextPack,
+        context: modelContext,
         knownFacts,
         skill: selectedSkill,
       })
@@ -126,6 +137,7 @@ export async function runAgent(store, input) {
       knownFacts,
       preflight,
       context: contextPack,
+      contextEvidence,
       contextFreshness,
       skill: selectedSkill,
       plan,
@@ -148,6 +160,7 @@ export async function runAgent(store, input) {
       knownFacts,
       preflight,
       context: contextPack,
+      contextEvidence,
       contextFreshness,
       skill: selectedSkill,
       plan,
@@ -237,6 +250,7 @@ export async function runAgent(store, input) {
     knownFacts,
     preflight,
     context: contextPack,
+    contextEvidence,
     contextFreshness,
     skill: selectedSkill,
     plan,

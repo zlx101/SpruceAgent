@@ -431,6 +431,10 @@ export function createSourceMap(store, input = {}) {
   };
 }
 
+export function redactContextSecrets(value) {
+  return redactSecrets(String(value ?? ""));
+}
+
 function walk(dir, onFile) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.isDirectory()) {

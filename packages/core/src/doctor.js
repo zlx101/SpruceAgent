@@ -30,6 +30,7 @@ const REQUIRED_PATHS = [
   "docs/contextos-index-safety-v0.md",
   "docs/contextos-incremental-index-v0.md",
   "docs/contextos-staleness-guard-v0.md",
+  "docs/context-evidence-contract-v1.md",
   "docs/run-preflight-auto-reindex-v0.md",
   "docs/run-risk-preflight-v0.md",
   "docs/approval-queue-v0.md",

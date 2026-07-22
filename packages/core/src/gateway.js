@@ -62,6 +62,7 @@ import { approveTicket, getApprovalTicket, listApprovalTickets, rejectTicket } f
 import { getApprovalQueue, getApprovalQueueContract } from "./approval-queue.js";
 import { getArtifact, getArtifactContract, listArtifacts } from "./artifacts.js";
 import { assessWorkspaceIndexFreshness, buildWorkspaceIndex, readWorkspaceIndex, searchWorkspaceContext } from "./context.js";
+import { createContextEvidencePack, getContextEvidenceContract } from "./context-evidence.js";
 import { evaluateTrace, getEvaluation, listEvaluations } from "./evaluations.js";
 import {
   createOutcomeFixture,
@@ -751,6 +752,20 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/context/search",
       authRequired: true,
       description: "Search indexed workspace context.",
+    },
+    {
+      id: "context.evidence_contract",
+      method: "GET",
+      path: "/v1/context/evidence-contract",
+      authRequired: true,
+      description: "Read the Context Evidence Contract and its safety boundaries.",
+    },
+    {
+      id: "context.evidence",
+      method: "POST",
+      path: "/v1/context/evidence",
+      authRequired: true,
+      description: "Build a read-only, provenance-aware context evidence pack.",
     },
     {
       id: "runs.create",
@@ -1745,6 +1760,21 @@ async function routeRequest(store, request, url, body) {
     return ok(searchWorkspaceContext(store, body.query ?? "", {
       limit: body.limit,
       snippetLength: body.snippetLength,
+    }));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/context/evidence-contract") {
+    return ok(getContextEvidenceContract());
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/context/evidence") {
+    return ok(createContextEvidencePack(store, {
+      query: body.query ?? body.context,
+      limit: body.limit,
+      snippetLength: body.snippetLength,
+      memoryLimit: body.memoryLimit,
+      includeMemory: body.includeMemory !== false,
+      maxChanges: body.maxChanges,
     }));
   }
 

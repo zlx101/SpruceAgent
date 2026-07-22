@@ -16,6 +16,7 @@ import {
   createLaunchReview,
   createTaskRoute,
   createContextPack,
+  createContextEvidencePack,
   configureLlmProvider,
   createSkillReplayFixture,
   createGatewayClient,
@@ -43,6 +44,7 @@ import {
   getOutcomeEvaluationResult,
   getOutcomeFixture,
   getCandidateApprovalContract,
+  getContextEvidenceContract,
   getCandidateExecutionContract,
   getGatewayAuthStatus,
   getGatewayRouteContract,
@@ -683,6 +685,24 @@ function handleContext(action, args) {
     return;
   }
 
+  if (action === "evidence-contract") {
+    printJson(getContextEvidenceContract());
+    return;
+  }
+
+  if (action === "evidence") {
+    const flags = parseFlags(args);
+    const query = flags._.join(" ").trim();
+    printJson(createContextEvidencePack(store, {
+      query,
+      limit: flags.limit,
+      memoryLimit: flags.memoryLimit,
+      includeMemory: flags.includeMemory !== false,
+      maxChanges: flags.maxChanges,
+    }));
+    return;
+  }
+
   if (action === "show") {
     const [relativePath] = args;
     if (!relativePath) throw new Error("usage: spruce context show <path>");
@@ -690,7 +710,7 @@ function handleContext(action, args) {
     return;
   }
 
-  throw new Error("usage: spruce context <index|freshness|preflight|search|pack|show>");
+  throw new Error("usage: spruce context <index|freshness|preflight|search|pack|evidence|evidence-contract|show>");
 }
 
 function handleSkill(action, args) {
@@ -1963,6 +1983,8 @@ Usage:
   ${executable} context freshness
   ${executable} context preflight [--requireFreshContext] [--refreshContext]
   ${executable} context search "TrustKernel"
+  ${executable} context evidence "TrustKernel approval" [--limit 5] [--memoryLimit 3]
+  ${executable} context evidence-contract
   ${executable} context show README.md
   ${executable} policy check --tool shell.execute --command "git status"
   ${executable} skill propose --name "Name" --summary "Summary" --steps "step one,step two"

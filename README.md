@@ -60,6 +60,7 @@ Start here:
 - [Approval Queue v0](docs/approval-queue-v0.md)
 - [Run Artifact Store v0](docs/run-artifact-store-v0.md)
 - [ContextOS Source Map v0](docs/contextos-source-map-v0.md)
+- [Context Evidence Contract v1](docs/context-evidence-contract-v1.md)
 - [Agent Run Loop v0](docs/agent-run-loop-v0.md)
 - [SkillForge v0](docs/skillforge-v0.md)
 - [Skill Lifecycle v0](docs/skill-lifecycle-v0.md)
@@ -118,6 +119,7 @@ npm run spruce -- approval approve <approvalId>
 npm run spruce -- tool run file.write --path notes.txt --content "hello" --approvalId <approvalId>
 npm run spruce -- context index
 npm run spruce -- context search "TrustKernel" --limit 3
+npm run spruce -- context evidence "TrustKernel approval" --limit 3 --memoryLimit 3
 npm run spruce -- run "Read TrustKernel context safely" --context "TrustKernel" --limit 2
 npm run spruce -- run "Plan only" --context "TrustKernel" --dryRun
 npm run spruce -- run "Draft with mock LLM" --context "TrustKernel" --llm mock --dryRun
