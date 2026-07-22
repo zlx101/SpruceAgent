@@ -2257,6 +2257,7 @@ function renderDetailSummary(detail) {
     ["Approvals", detail.summary.approvalCount],
     ["Pending", detail.summary.pendingApprovalCount],
     ["Candidate", detail.summary.candidateStepCount],
+    ["Evidence", evidenceSummaryLabel(detail.summary.candidateEvidence)],
     ["Tools", detail.summary.toolResultCount],
     ["Artifacts", detail.summary.artifactCount ?? detail.artifacts?.length ?? 0],
   ]) {
@@ -2285,9 +2286,23 @@ function renderCandidateSteps(steps) {
   for (const step of steps) {
     const row = document.createElement("div");
     row.className = "step-row";
+    const body = document.createElement("div");
+    body.className = "step-title";
+    body.appendChild(textNode("div", step.description || step.id));
+    const meta = document.createElement("div");
+    meta.className = "item-meta";
+    meta.append(
+      pillNode(`evidence ${step.evidenceGate?.status || "not_required"}`, statusClass(step.evidenceGate?.status)),
+      pillNode(`${step.evidenceRefs?.length ?? 0} refs`),
+    );
+    if (step.evidenceGate?.acceptedRefs?.length) {
+      meta.appendChild(pillNode(step.evidenceGate.acceptedRefs.map((ref) => ref.id).join(", ")));
+    }
+    if (step.evidenceGate?.reason) meta.appendChild(pillNode(step.evidenceGate.reason, statusClass(step.evidenceGate.status)));
+    body.appendChild(meta);
     row.append(
       textNode("div", step.toolName || "-", "step-tool"),
-      textNode("div", step.description || step.id, "step-title"),
+      body,
       pillNode(step.promotionStatus, statusClass(step.promotionStatus)),
     );
     block.appendChild(row);
@@ -2658,11 +2673,16 @@ function shortId(value) {
 }
 
 function statusClass(value) {
-  if (["available", "allowed", "clear", "completed", "dry_run", "approved", "passed", "recorded", "fresh"].includes(value)) return "completed";
+  if (["available", "allowed", "clear", "completed", "dry_run", "approved", "passed", "recorded", "fresh", "not_required"].includes(value)) return "completed";
   if (["failed", "blocked", "completed_with_blockers", "quarantined", "stale"].includes(value)) return "failed";
-  if (["requires_approval", "action_required", "pending_decision", "candidate", "needs_review", "planned"].includes(value)) return "pending";
+  if (["requires_approval", "action_required", "pending_decision", "candidate", "needs_review", "planned", "passed_with_stale_evidence"].includes(value)) return "pending";
   if (["ready_to_resume", "approved_unresumable"].includes(value)) return "ready";
   return "";
+}
+
+function evidenceSummaryLabel(evidence) {
+  if (!evidence?.required) return "not required";
+  return `${evidence.citedStepCount ?? 0}/${evidence.sourceCount ?? 0} cited`;
 }
 
 function formatTime(value) {

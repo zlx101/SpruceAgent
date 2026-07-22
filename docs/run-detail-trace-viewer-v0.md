@@ -38,6 +38,7 @@ Workbench adds a `Details` action on pending approvals, resumable runs, and rece
 
 - run summary
 - candidate steps
+- candidate evidence gate status
 - approval status
 - timeline
 - tool results
@@ -74,6 +75,7 @@ Run Detail v0 is read-only.
 - it does not resume runs
 - it does not execute tools
 - it does not ask an LLM to reinterpret events
+- it shows Planner Promotion evidence gates without treating evidence as execution authority
 - it includes raw trace events so UI summaries remain auditable
 
 This keeps the product surface useful without adding hidden authority.

@@ -79,6 +79,7 @@ export function getRunDetail(store, traceId) {
       pendingApprovalCount: approvals.filter((approval) => approval.status === "pending").length,
       decisionQueueCount: traceDecisionQueue.summary.total,
       candidateStepCount: run.candidatePlan?.promotedSteps?.length ?? 0,
+      candidateEvidence: summarizeCandidateEvidence(run.candidatePlan),
       toolResultCount: events.filter((event) => event.type === "tool.result").length,
       artifactCount: artifacts.length,
       evaluationCount: evaluations.length,
@@ -140,10 +141,25 @@ function buildCandidateSteps(candidatePlan, approvals) {
       input: step.input ?? step.requestedInput,
       reason: step.reason,
       policyPreview: step.policyPreview,
+      evidenceRefs: step.evidenceRefs ?? [],
+      evidenceGate: step.evidenceGate ?? null,
       approvals: stepApprovals,
       latestApprovalStatus: stepApprovals.at(-1)?.status ?? null,
     };
   });
+}
+
+function summarizeCandidateEvidence(candidatePlan) {
+  const steps = candidatePlan?.promotedSteps ?? [];
+  const gates = steps.map((step) => step.evidenceGate).filter(Boolean);
+  return {
+    required: Boolean(candidatePlan?.evidence?.required),
+    sourceCount: candidatePlan?.evidence?.sourceCount ?? 0,
+    citedStepCount: candidatePlan?.evidence?.citedStepCount ?? steps.filter((step) => step.evidenceRefs?.length).length,
+    passedStepCount: gates.filter((gate) => new Set(["passed", "passed_with_stale_evidence"]).has(gate.status)).length,
+    blockedStepCount: candidatePlan?.evidence?.blockedStepCount ?? gates.filter((gate) => gate.status === "blocked").length,
+    staleEvidenceStepCount: candidatePlan?.evidence?.staleEvidenceStepCount ?? gates.filter((gate) => gate.status === "passed_with_stale_evidence").length,
+  };
 }
 
 function approvalSummary(ticket) {

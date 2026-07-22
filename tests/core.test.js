@@ -4162,8 +4162,13 @@ test("run detail reconstructs candidate approvals and resume trace", async () =>
 
   assert.equal(pending.status, "requires_approval");
   assert.equal(pending.summary.pendingApprovalCount, 1);
+  assert.equal(pending.summary.candidateEvidence.required, true);
+  assert.equal(pending.summary.candidateEvidence.citedStepCount, 1);
+  assert.equal(pending.summary.candidateEvidence.passedStepCount, 1);
   assert.equal(pending.decisionQueue.items[0].status, "pending_decision");
   assert.equal(pending.candidateSteps[0].id, "write_note");
+  assert.equal(pending.candidateSteps[0].evidenceGate.status, "passed");
+  assert.equal(pending.candidateSteps[0].evidenceRefs[0], "evidence_workspace_1");
   assert.equal(pending.candidateSteps[0].latestApprovalStatus, "pending");
   assert.ok(pending.timeline.some((event) => event.type === "planner.promotion"));
   assert.ok(pending.timeline.some((event) => event.type === "candidate.approval.created"));
