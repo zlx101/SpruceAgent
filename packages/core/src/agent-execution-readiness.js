@@ -1,6 +1,7 @@
 import { getAgentAdapter } from "./agent-adapters.js";
 import { getLatestCapabilityProbe } from "./capability-probe.js";
 import { assessWorkspaceIndexFreshness } from "./context.js";
+import { listAgentTrials } from "./agent-trials.js";
 import { nowIso } from "./id.js";
 
 export const AGENT_EXECUTION_READINESS_CONTRACT = Object.freeze({
@@ -28,8 +29,14 @@ export function assessAgentExecutionReadiness(store, input = {}) {
   if (!probe) blockers.push({ id: "capability_probe_missing", reason: "Run a fresh capability probe before requesting external execution." });
   else if (!capability?.launcherExecutionSupported || capability.status !== "available") blockers.push({ id: "launcher_unavailable", reason: "The selected adapter is not available for SpruceAgent's gated launcher." });
   if (context.status !== "fresh") blockers.push({ id: "context_not_fresh", reason: "Refresh ContextOS before external execution.", status: context.status });
-  const empirical = capability?.empiricalValidation;
-  if (empirical?.status !== "attested" || empirical.effectiveOutcome !== "passed") blockers.push({ id: "attested_trial_required", reason: "A latest Launcher-attested passing trial is required; reported or failed trials do not unlock execution." });
+  // Capability probes are intentionally point-in-time observations. Trial
+  // attestation is written to its own append-only ledger, so reading that
+  // ledger here lets a completed acceptance immediately affect readiness
+  // without requiring an unrelated second probe.
+  const trials = listAgentTrials(store, { adapterId });
+  const trialEvidence = trials.summary.byAdapter[adapterId] ?? null;
+  const hasAttestedPassingTrial = trialEvidence?.latestAttestedStatus === "passed";
+  if (!hasAttestedPassingTrial) blockers.push({ id: "attested_trial_required", reason: "A latest Launcher-attested passing trial is required; reported or failed trials do not unlock execution." });
   const trialBlockers = blockers.filter((item) => item.id !== "attested_trial_required");
   const status = blockers.some((item) => item.id === "launcher_unavailable" || item.id === "capability_probe_missing")
     ? "blocked"
@@ -44,6 +51,12 @@ export function assessAgentExecutionReadiness(store, input = {}) {
     canRequestExecutionApproval: status === "ready",
     adapter: { id: adapter.id, name: adapter.name, kind: adapter.kind },
     probe: probe ? { id: probe.id, createdAt: probe.createdAt, adapter: capability ? { status: capability.status, launcherExecutionSupported: capability.launcherExecutionSupported, empiricalValidation: capability.empiricalValidation } : null } : null,
+    trials: {
+      source: "live_agent_trial_ledger",
+      latestAttestedStatus: trialEvidence?.latestAttestedStatus ?? null,
+      latestAttestedTrialId: trialEvidence?.latestAttestedTrialId ?? null,
+      attestedCount: trialEvidence?.attestedCount ?? 0,
+    },
     context: { status: context.status, indexedAt: context.indexedAt ?? null, summary: context.summary },
     blockers,
     limits: AGENT_EXECUTION_READINESS_CONTRACT.safetyBoundary,

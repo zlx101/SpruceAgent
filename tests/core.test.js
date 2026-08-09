@@ -5320,6 +5320,8 @@ test("agent trial attestation independently verifies a completed launch", async 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   initGitRepo(dir);
   const store = ensureStore(createStore(dir));
+  buildWorkspaceIndex(store);
+  const preAttestationProbe = probeAgentCapabilities(store, { adapterIds: ["local-shell-agent"] });
   const workspace = prepareAgentWorkspace(store, {
     adapterId: "local-shell-agent",
     goal: "Produce independently accepted output",
@@ -5351,6 +5353,11 @@ test("agent trial attestation independently verifies a completed launch", async 
   const evidence = completed.trial.provenance.acceptanceEvidence;
   const listed = listAgentTrials(store, { attested: true });
   const probe = probeAgentCapabilities(store, { adapterIds: ["local-shell-agent"] });
+  buildWorkspaceIndex(store);
+  const readiness = assessAgentExecutionReadiness(store, {
+    adapterId: "local-shell-agent",
+    probe: preAttestationProbe,
+  });
 
   assert.equal(getAgentTrialAttestationContract().interface, "spruceagent.agent-trial-attestation");
   assert.equal(pendingAttestation.status, "requires_approval");
@@ -5367,6 +5374,11 @@ test("agent trial attestation independently verifies a completed launch", async 
   assert.equal(probe.adapters[0].empiricalValidation.status, "attested");
   assert.equal(probe.adapters[0].empiricalValidation.effectiveOutcome, "passed");
   assert.equal(probe.summary.launcherAttestedAdapterCount, 1);
+  assert.equal(preAttestationProbe.adapters[0].empiricalValidation.status, "unverified");
+  assert.equal(readiness.status, "ready");
+  assert.equal(readiness.canRequestExecutionApproval, true);
+  assert.equal(readiness.trials.source, "live_agent_trial_ledger");
+  assert.equal(readiness.trials.latestAttestedTrialId, completed.trial.id);
 
   await assert.rejects(
     () => attestAgentLaunchTrial(store, {
