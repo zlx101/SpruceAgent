@@ -41,6 +41,7 @@
           <a href="#agents">Agents</a>
           <a href="#fleet">Fleet</a>
           <a href="#squads">Squads</a>
+          <a href="#tasks">Tasks</a>
           <a href="#workflow-runs">Workflow Runs</a>
           <a href="#decision-queue">Queue</a>
           <a href="#approvals">Approvals</a>
@@ -106,6 +107,10 @@
           <article class="metric">
             <span class="metric-label">Fleet</span>
             <strong id="fleet-run-count">0</strong>
+          </article>
+          <article class="metric">
+            <span class="metric-label">Tasks</span>
+            <strong id="execution-task-count">0</strong>
           </article>
         </section>
 
@@ -386,6 +391,18 @@
           <div id="squad-list" class="item-list"></div>
           <div id="squad-readiness-panel" class="fleet-live-panel" aria-live="polite"></div>
           <pre id="squad-panel" class="json-view fleet-run-preview">{}</pre>
+        </section>
+
+        <section id="tasks" class="work-section">
+          <div class="section-heading">
+            <h2>Execution Tasks</h2>
+            <span id="execution-task-state" class="section-state">0</span>
+          </div>
+          <div class="toolbar section-toolbar">
+            <button id="execution-task-create-button" class="secondary-button" type="button">Create Task</button>
+          </div>
+          <div id="execution-task-list" class="item-list"></div>
+          <pre id="execution-task-panel" class="json-view fleet-run-preview">{}</pre>
         </section>
 
         <section id="workflow-versions" class="work-section">

@@ -29,6 +29,8 @@ const state = {
   squadDetail: null,
   squadReadiness: null,
   squadExecutionReadiness: {},
+  executionTasks: null,
+  executionTaskDetail: null,
   workflows: [],
   workflowVersions: null,
   workflowDraft: null,
@@ -107,6 +109,7 @@ const nodes = {
   launchReviewCount: document.querySelector("#launch-review-count"),
   taskRouteCount: document.querySelector("#task-route-count"),
   fleetRunCount: document.querySelector("#fleet-run-count"),
+  executionTaskCount: document.querySelector("#execution-task-count"),
   decisionQueueState: document.querySelector("#decision-queue-state"),
   approvalState: document.querySelector("#approval-state"),
   resumeState: document.querySelector("#resume-state"),
@@ -148,6 +151,10 @@ const nodes = {
   squadList: document.querySelector("#squad-list"),
   squadPanel: document.querySelector("#squad-panel"),
   squadReadinessPanel: document.querySelector("#squad-readiness-panel"),
+  executionTaskState: document.querySelector("#execution-task-state"),
+  executionTaskCreateButton: document.querySelector("#execution-task-create-button"),
+  executionTaskList: document.querySelector("#execution-task-list"),
+  executionTaskPanel: document.querySelector("#execution-task-panel"),
   workflowList: document.querySelector("#workflow-list"),
   workflowVersionList: document.querySelector("#workflow-version-list"),
   workflowRunList: document.querySelector("#workflow-run-list"),
@@ -337,6 +344,13 @@ nodes.squadReadinessPanel.addEventListener("click", async (event) => {
   }
 });
 
+nodes.executionTaskCreateButton.addEventListener("click", createExecutionTaskFromWorkbench);
+nodes.executionTaskList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action]");
+  if (!button) return;
+  await handleExecutionTaskAction(button);
+});
+
 nodes.workflowList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action]");
   if (!button) return;
@@ -454,7 +468,7 @@ async function refresh() {
   state.busy = true;
   setStatus("Loading");
   try {
-    const [status, contextFreshness, inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches, launchReviews, capabilityProbes, taskRoutes, fleetRuns, squads] = await Promise.all([
+    const [status, contextFreshness, inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches, launchReviews, capabilityProbes, taskRoutes, fleetRuns, squads, executionTasks] = await Promise.all([
       get("/v1/status"),
       get("/v1/context/freshness"),
       get("/v1/inbox"),
@@ -473,6 +487,7 @@ async function refresh() {
       get("/v1/agent-routes"),
       get("/v1/fleet-runs"),
       get("/v1/squads"),
+      get("/v1/execution-tasks/board"),
     ]);
     state.status = status;
     state.contextFreshness = contextFreshness;
@@ -492,6 +507,7 @@ async function refresh() {
     state.taskRoutes = taskRoutes;
     state.fleetRuns = fleetRuns;
     state.squads = squads;
+    state.executionTasks = executionTasks;
     render();
     setStatus(`Connected - ${state.approvalQueue.status.replace(/_/g, " ")}`);
   } catch (error) {
@@ -560,6 +576,80 @@ async function refreshAfterRunControlAction() {
   state.fleetRuns = fleetRuns;
   state.agentLaunches = agentLaunches;
   render();
+}
+
+async function createExecutionTaskFromWorkbench() {
+  if (state.busy) return;
+  const goal = window.prompt("Describe the bounded goal for this durable task:");
+  if (!goal?.trim()) return;
+  const nextAction = window.prompt("What is the next non-authorizing action? (optional)");
+  try {
+    state.busy = true;
+    const task = await post("/v1/execution-tasks", {
+      goal: goal.trim(),
+      nextAction: nextAction?.trim() || undefined,
+      actor: "workbench-user",
+    });
+    await loadExecutionTasks();
+    state.executionTaskDetail = task;
+    render();
+    setStatus(`Task created - ${shortId(task.id)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+  }
+}
+
+async function handleExecutionTaskAction(button) {
+  if (state.busy) return;
+  const taskId = button.dataset.taskId;
+  if (!taskId) return;
+  try {
+    state.busy = true;
+    let task;
+    if (button.dataset.action === "execution-task-view") {
+      task = await get(`/v1/execution-tasks/${encodeURIComponent(taskId)}`);
+      state.executionTaskDetail = task;
+      render();
+      return;
+    }
+    if (button.dataset.action === "execution-task-claim") {
+      task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/claim`, {
+        owner: "workbench-user",
+        actor: "workbench-user",
+      });
+    }
+    if (button.dataset.action === "execution-task-wait") {
+      const humanGate = window.prompt("State the concrete decision required from a human:");
+      if (!humanGate?.trim()) return;
+      task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/update`, {
+        status: "waiting_for_human",
+        humanGate: humanGate.trim(),
+        actor: "workbench-user",
+      });
+    }
+    if (button.dataset.action === "execution-task-complete") {
+      if (!window.confirm("Mark this control task completed? This does not approve or execute anything.")) return;
+      task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/update`, {
+        status: "completed",
+        actor: "workbench-user",
+      });
+    }
+    if (!task) return;
+    await loadExecutionTasks();
+    state.executionTaskDetail = task;
+    render();
+    setStatus(`Task ${task.status.replace(/_/g, " ")} - ${shortId(task.id)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+  }
+}
+
+async function loadExecutionTasks() {
+  state.executionTasks = await get("/v1/execution-tasks/board");
 }
 
 function decisionActionBody(action) {
@@ -1187,6 +1277,11 @@ function render() {
     items: [],
   };
   const squads = state.squads || { summary: { total: 0, plannedCount: 0 }, items: [] };
+  const executionTasks = state.executionTasks || {
+    summary: { total: 0, attentionCount: 0, byStatus: {} },
+    items: [],
+    attention: [],
+  };
 
   nodes.systemState.textContent = state.status ? "Connected" : "Disconnected";
   nodes.pendingCount.textContent = inbox.summary.pendingApprovalCount;
@@ -1200,6 +1295,7 @@ function render() {
   nodes.launchReviewCount.textContent = launchReviews.summary.total;
   nodes.taskRouteCount.textContent = taskRoutes.summary.total;
   nodes.fleetRunCount.textContent = fleetRuns.summary.total;
+  nodes.executionTaskCount.textContent = executionTasks.summary.total;
   nodes.skillState.textContent = `${skills.length}`;
   nodes.candidateSkillState.textContent = `${candidateSkills.length} candidates`;
   nodes.skillEvaluationState.textContent = `${skillEvaluations.length} reports`;
@@ -1219,6 +1315,7 @@ function render() {
     : "No capability probe";
   nodes.fleetRunState.textContent = `${fleetRuns.summary.total} total / ${fleetRuns.summary.activeCount} active / ${fleetRuns.summary.awaitingApprovalCount} awaiting approval`;
   nodes.squadState.textContent = `${squads.summary.total} total / ${squads.summary.plannedCount} planned`;
+  nodes.executionTaskState.textContent = `${executionTasks.summary.total} total / ${executionTasks.summary.attentionCount} needs attention`;
 
   renderSystemOverview(state.status, state.contextFreshness);
   renderContextEvidence(state.contextEvidence);
@@ -1241,6 +1338,8 @@ function render() {
   renderFleetRunPanel(state.fleetRunDetail);
   renderSquads(squads.items);
   renderSquadPanel(state.squadDetail, state.squadReadiness);
+  renderExecutionTasks(executionTasks.items);
+  renderExecutionTaskPanel(state.executionTaskDetail);
   renderWorkflowSkillOptions(skills);
   renderWorkflowDraft(state.workflowDraft);
   renderWorkflows(workflows);
@@ -1699,6 +1798,28 @@ function renderTaskRoutes(items) {
 
 function renderTaskRoutePanel(route) {
   nodes.taskRoutePanel.textContent = route ? JSON.stringify(route, null, 2) : "{}";
+}
+
+function renderExecutionTasks(items) {
+  replaceList(nodes.executionTaskList, items, (item) => itemNode({
+    title: item.goal || item.id,
+    meta: [
+      [statusClass(item.status), item.status],
+      ["owner", item.owner || "unclaimed"],
+      ["next", item.nextAction || "no next action"],
+      ["updated", formatTime(item.updatedAt)],
+    ],
+    actions: [
+      executionTaskButton("execution-task-view", item.id, "&#128065;", "View", "secondary"),
+      ...(item.status === "open" && !item.owner ? [executionTaskButton("execution-task-claim", item.id, "&#9998;", "Claim")] : []),
+      ...(!["completed", "cancelled", "waiting_for_human"].includes(item.status) ? [executionTaskButton("execution-task-wait", item.id, "&#9888;", "Need Decision", "secondary")] : []),
+      ...(!["completed", "cancelled"].includes(item.status) ? [executionTaskButton("execution-task-complete", item.id, "&#10003;", "Complete", "secondary")] : []),
+    ],
+  }));
+}
+
+function renderExecutionTaskPanel(task) {
+  nodes.executionTaskPanel.textContent = task ? JSON.stringify(task, null, 2) : "{}";
 }
 
 function renderAgentLaunchPanel(launch, readiness = null) {
@@ -2704,6 +2825,12 @@ function actionButton(action, approvalId, iconHtml, label, variant = "") {
   button.dataset.action = action;
   button.dataset.approvalId = approvalId;
   button.innerHTML = `<span aria-hidden="true">${iconHtml}</span><span>${label}</span>`;
+  return button;
+}
+
+function executionTaskButton(action, taskId, iconHtml, label, variant = "") {
+  const button = actionButton(action, taskId, iconHtml, label, variant);
+  button.dataset.taskId = taskId;
   return button;
 }
 
