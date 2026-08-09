@@ -105,6 +105,7 @@ Workbench v0 supports:
 - cancel an Execution Task only after explicitly recording the cancellation reason; this does not stop a running Agent or alter approvals
 - mark a task blocked only after recording the concrete blocker that prevents its next action
 - resume a blocked or human-waiting task only after recording why it can resume and the next action
+- send the last observed task version with each task mutation so a concurrent control-state update is rejected for refresh rather than silently overwritten
 - inspect any task's parent and Follow Up chain through a read-only Lineage action
 - create a fresh follow-up task from a completed or cancelled task, preserving the terminal record rather than reopening it
 - inspect a completed task's immutable completion statement and local evidence snapshot through the **Closure** action

@@ -632,12 +632,13 @@ async function handleExecutionTaskAction(button) {
       render();
       return;
     }
+    const currentTask = await get(`/v1/execution-tasks/${encodeURIComponent(taskId)}`);
     if (button.dataset.action === "execution-task-links") {
-      const current = await get(`/v1/execution-tasks/${encodeURIComponent(taskId)}`);
-      const links = window.prompt("Set comma-separated local links (for example agent_trial:<id>). Leave blank to clear all links:", (current.links || []).join(", "));
+      const links = window.prompt("Set comma-separated local links (for example agent_trial:<id>). Leave blank to clear all links:", (currentTask.links || []).join(", "));
       if (links === null) return;
       task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/update`, {
         links: links.split(",").map((item) => item.trim()).filter(Boolean),
+        ifUpdatedAt: currentTask.updatedAt,
         note: "links updated from workbench",
         actor: "workbench-user",
       });
@@ -649,29 +650,31 @@ async function handleExecutionTaskAction(button) {
       task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/follow-up`, {
         goal: goal.trim(),
         nextAction: nextAction?.trim() || undefined,
+        ifUpdatedAt: currentTask.updatedAt,
         actor: "workbench-user",
       });
     }
     if (button.dataset.action === "execution-task-claim") {
       task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/claim`, {
         owner: "workbench-user",
+        ifUpdatedAt: currentTask.updatedAt,
         actor: "workbench-user",
       });
     }
     if (button.dataset.action === "execution-task-handoff") {
-      const current = await get(`/v1/execution-tasks/${encodeURIComponent(taskId)}`);
-      if (!current.owner) throw new Error("Only a claimed task can be handed off");
-      const owner = window.prompt(`Hand off from ${current.owner} to:`);
+      if (!currentTask.owner) throw new Error("Only a claimed task can be handed off");
+      const owner = window.prompt(`Hand off from ${currentTask.owner} to:`);
       if (!owner?.trim()) return;
       const handoffSummary = window.prompt("Record the bounded handoff context for the audit ledger:");
       if (!handoffSummary?.trim()) return;
-      const nextAction = window.prompt("State the next non-authorizing action for the new owner:", current.nextAction || "");
+      const nextAction = window.prompt("State the next non-authorizing action for the new owner:", currentTask.nextAction || "");
       if (!nextAction?.trim()) return;
       task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/handoff`, {
-        fromOwner: current.owner,
+        fromOwner: currentTask.owner,
         owner: owner.trim(),
         handoffSummary: handoffSummary.trim(),
         nextAction: nextAction.trim(),
+        ifUpdatedAt: currentTask.updatedAt,
         actor: "workbench-user",
       });
     }
@@ -681,6 +684,7 @@ async function handleExecutionTaskAction(button) {
       task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/update`, {
         status: "waiting_for_human",
         humanGate: humanGate.trim(),
+        ifUpdatedAt: currentTask.updatedAt,
         actor: "workbench-user",
       });
     }
@@ -690,6 +694,7 @@ async function handleExecutionTaskAction(button) {
       task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/update`, {
         status: "blocked",
         blocker: blocker.trim(),
+        ifUpdatedAt: currentTask.updatedAt,
         actor: "workbench-user",
       });
     }
@@ -701,6 +706,7 @@ async function handleExecutionTaskAction(button) {
       task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/resume`, {
         resumptionSummary: resumptionSummary.trim(),
         nextAction: nextAction.trim(),
+        ifUpdatedAt: currentTask.updatedAt,
         actor: "workbench-user",
       });
     }
@@ -711,6 +717,7 @@ async function handleExecutionTaskAction(button) {
       task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/update`, {
         status: "completed",
         completionSummary: completionSummary.trim(),
+        ifUpdatedAt: currentTask.updatedAt,
         actor: "workbench-user",
       });
     }
@@ -721,6 +728,7 @@ async function handleExecutionTaskAction(button) {
       task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/update`, {
         status: "cancelled",
         cancellationSummary: cancellationSummary.trim(),
+        ifUpdatedAt: currentTask.updatedAt,
         actor: "workbench-user",
       });
     }

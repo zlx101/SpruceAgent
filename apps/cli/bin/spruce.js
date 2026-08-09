@@ -665,6 +665,7 @@ function handleExecutionTask(action, args) {
       nextAction: flags.nextAction,
       evidenceRefs: splitCsv(flags.evidenceRefs),
       links: splitCsv(flags.links),
+      ifUpdatedAt: flags.ifUpdatedAt,
       actor: flags.by ?? "local-user",
     }));
     return;
@@ -676,6 +677,7 @@ function handleExecutionTask(action, args) {
     const flags = parseFlags(flagArgs);
     printJson(claimExecutionTask(store, taskId, {
       owner: flags.owner,
+      ifUpdatedAt: flags.ifUpdatedAt,
       actor: flags.by ?? "local-user",
     }));
     return;
@@ -688,6 +690,7 @@ function handleExecutionTask(action, args) {
     printJson(resumeExecutionTask(store, taskId, {
       nextAction: flags.nextAction,
       resumptionSummary: flags.resumptionSummary,
+      ifUpdatedAt: flags.ifUpdatedAt,
       actor: flags.by ?? "local-user",
     }));
     return;
@@ -702,6 +705,7 @@ function handleExecutionTask(action, args) {
       owner: flags.owner,
       handoffSummary: flags.handoffSummary,
       nextAction: flags.nextAction,
+      ifUpdatedAt: flags.ifUpdatedAt,
       actor: flags.by ?? "local-user",
     }));
     return;
@@ -718,6 +722,7 @@ function handleExecutionTask(action, args) {
       blocker: flags.blocker,
       completionSummary: flags.completionSummary,
       cancellationSummary: flags.cancellationSummary,
+      ifUpdatedAt: flags.ifUpdatedAt,
       note: flags.note,
       actor: flags.by ?? "local-user",
     };

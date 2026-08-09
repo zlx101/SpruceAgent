@@ -18,6 +18,7 @@ export const EXECUTION_TASK_CONTRACT = Object.freeze({
     "Waiting-for-human state requires a concrete decision gate instead of silently treating missing authority as a blocker.",
     "Blocked state requires a concrete blocker statement so the board remains actionable; recording it does not request or grant authority.",
     "Resuming a blocked or waiting task requires a concrete resumption summary and next action; resumption does not execute any work.",
+    "Mutation callers may provide the task's exact updatedAt value as ifUpdatedAt; a stale value is rejected instead of overwriting newer control state.",
     "Task lineage is a read-only projection of follow-up records; diagnostics never repair links or change task authority.",
     "Ownership changes require an explicit handoff with the current owner, a handoff summary, and a next action; generic updates cannot transfer ownership.",
     "A follow-up links durable control state to a terminal task; it does not reopen, rerun, or authorize the prior task.",
@@ -69,6 +70,7 @@ export function createExecutionTask(store, input = {}) {
 
 export function createExecutionTaskFollowUp(store, taskId, input = {}) {
   const parent = getExecutionTask(store, taskId);
+  assertTaskRevision(parent, input);
   if (!["completed", "cancelled"].includes(parent.status)) throw new Error(`follow-up requires a terminal execution task: ${taskId}`);
   return createExecutionTask(store, { ...input, followUpOf: parent.id });
 }
@@ -101,6 +103,7 @@ export function listExecutionTasks(store, options = {}) {
 
 export function claimExecutionTask(store, taskId, input = {}) {
   const task = getExecutionTask(store, taskId);
+  assertTaskRevision(task, input);
   if (["completed", "cancelled"].includes(task.status)) throw new Error(`cannot claim terminal execution task: ${taskId}`);
   const owner = requiredText(input.owner ?? input.actor, "owner", 160);
   if (task.owner && task.owner !== owner) throw new Error(`execution task is already claimed by ${task.owner}`);
@@ -109,6 +112,7 @@ export function claimExecutionTask(store, taskId, input = {}) {
 
 export function updateExecutionTask(store, taskId, input = {}) {
   const task = getExecutionTask(store, taskId);
+  assertTaskRevision(task, input);
   const status = input.status === undefined ? task.status : normalizeStatus(input.status);
   if (["completed", "cancelled"].includes(task.status) && status !== task.status) {
     throw new Error(`cannot reopen terminal execution task: ${taskId}; create a follow-up task instead`);
@@ -161,6 +165,7 @@ export function updateExecutionTask(store, taskId, input = {}) {
 
 export function resumeExecutionTask(store, taskId, input = {}) {
   const task = getExecutionTask(store, taskId);
+  assertTaskRevision(task, input);
   if (!["blocked", "waiting_for_human"].includes(task.status)) {
     throw new Error(`only blocked or waiting execution tasks can resume: ${taskId}`);
   }
@@ -185,6 +190,7 @@ export function resumeExecutionTask(store, taskId, input = {}) {
 
 export function handoffExecutionTask(store, taskId, input = {}) {
   const task = getExecutionTask(store, taskId);
+  assertTaskRevision(task, input);
   if (["completed", "cancelled"].includes(task.status)) throw new Error(`cannot hand off terminal execution task: ${taskId}`);
   const fromOwner = requiredText(input.fromOwner, "fromOwner", 160);
   if (!task.owner) throw new Error(`execution task has no owner to hand off: ${taskId}`);
@@ -392,6 +398,11 @@ function normalizeList(value, limit, name) {
 }
 function requiredText(value, name, limit) { const text = optionalText(value, limit); if (!text) throw new Error(`${name} is required`); return text; }
 function optionalText(value, limit) { const text = String(value ?? "").trim(); return text ? text.slice(0, limit) : null; }
+function assertTaskRevision(task, input) {
+  if (input.ifUpdatedAt === undefined) return;
+  const expected = requiredText(input.ifUpdatedAt, "ifUpdatedAt", 80);
+  if (expected !== task.updatedAt) throw new Error(`execution task revision conflict: expected ${expected}, found ${task.updatedAt}`);
+}
 function requiredTaskId(value, name = "taskId") {
   const id = requiredText(value, name, 160);
   if (!/^[A-Za-z0-9_-]{1,160}$/.test(id)) throw new Error(`${name} must be a single safe identifier`);

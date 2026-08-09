@@ -38,6 +38,7 @@ Each record includes a bounded goal, optional scope and owner, next action, conc
 
 - Claiming uses a durable owner mutex. A task already claimed by a different owner cannot be claimed again.
 - An owner cannot be changed through a generic update or resume. A non-terminal claimed task can only move to a distinct owner through an explicit handoff that names the current owner, records a bounded `handoffSummary`, and supplies the incoming owner's `nextAction`; the ledger appends a dedicated `handed_off` event with both `fromOwner` and incoming `owner` in task history and the audit ledger.
+- Mutating operations optionally accept the exact `updatedAt` value previously read as `ifUpdatedAt`. A mismatch is rejected as a revision conflict, letting concurrent CLI, SDK, or Workbench users refresh before they overwrite newer local control state.
 - `waiting_for_human` requires a non-empty concrete `humanGate`.
 - `blocked` requires a non-empty concrete `blocker`; an unexplained blocked status is rejected.
 - Resuming a `blocked` or `waiting_for_human` task requires both a bounded `resumptionSummary` and an explicit `nextAction`; it clears the stale blocker or human gate and appends a dedicated `resumed` audit event.
@@ -68,6 +69,11 @@ npm run spruce -- task handoff <taskId> \
   --owner "release-reviewer" \
   --handoffSummary "Implementation evidence is ready for independent review" \
   --nextAction "Review the focused diff and validation output"
+# Pass the last observed version when coordinating with another operator.
+npm run spruce -- task update <taskId> \
+  --status blocked \
+  --blocker "Awaiting a repository-access decision" \
+  --ifUpdatedAt "2026-08-09T04:00:00.000Z"
 npm run spruce -- task update <taskId> \
   --status waiting_for_human \
   --humanGate "Approve the reviewed release decision"
@@ -91,6 +97,8 @@ npm run spruce -- task contract
 ```
 
 `--evidenceRefs` and `--links` accept comma-separated values. A caller can use IDs from existing routes, traces, artifacts, launch reviews, or trials, but the ledger does not reinterpret those values as authority.
+
+`--ifUpdatedAt` is optional on `claim`, `follow-up`, `handoff`, `resume`, and `update`; it is a local optimistic-concurrency guard, not an approval or execution token.
 
 For a resolvable local link, use `kind:<id>` where `<id>` is a single safe identifier (`A-Z`, `a-z`, `0-9`, `_`, or `-`, at most 160 characters). Paths, URLs, and IDs containing separators are reported as unsupported and are never passed to a local record reader.
 
@@ -123,6 +131,7 @@ The local Workbench has an **Execution Tasks** section with summary count, task 
 - **Create Task** prompts for a bounded goal and optional next action.
 - **Claim** records the fixed `workbench-user` owner through the normal Gateway route.
 - **Handoff** appears only for a non-terminal claimed task. It records the matching current owner, a distinct incoming owner, bounded handoff context, and the new next action; it only updates the local control ledger.
+- Every Workbench task mutation reads the task's current `updatedAt` first and sends it as `ifUpdatedAt`; a concurrent change produces a revision conflict for the operator to refresh, not a silent overwrite.
 - **Need Decision** prompts for the mandatory concrete human gate.
 - **Block** prompts for the mandatory concrete blocker; it is a coordination record only, not an escalation or an approval request.
 - **Resume** is available only for blocked or human-waiting tasks and requires a resumption explanation plus a next action. It records control state only; it does not run a tool or Agent.
