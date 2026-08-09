@@ -369,6 +369,7 @@ nodes.autopilotList.addEventListener("click", async (event) => {
   if (!button || state.busy) return;
   if (button.dataset.action === "autopilot-view") await loadAutopilot(button.dataset.autopilotId);
   if (button.dataset.action === "autopilot-triggers") await loadAutopilotTriggers(button.dataset.autopilotId);
+  if (button.dataset.action === "autopilot-last-task") await loadExecutionTaskReference(button.dataset.taskId);
   if (button.dataset.action === "autopilot-enable") await setAutopilotEnabledFromWorkbench(button, true);
   if (button.dataset.action === "autopilot-disable") await setAutopilotEnabledFromWorkbench(button, false);
 });
@@ -690,6 +691,22 @@ async function handleExecutionTaskAction(button) {
       task = await get(`/v1/execution-tasks/${encodeURIComponent(taskId)}/lineage`);
       state.executionTaskDetail = task;
       render();
+      return;
+    }
+    if (button.dataset.action === "execution-task-origin") {
+      const sourceTask = await get(`/v1/execution-tasks/${encodeURIComponent(taskId)}`);
+      if (sourceTask.origin?.kind !== "autopilot") throw new Error("This task has no Autopilot origin");
+      const [autopilot, triggers] = await Promise.all([
+        get(`/v1/autopilots/${encodeURIComponent(sourceTask.origin.autopilotId)}`),
+        get(`/v1/autopilots/${encodeURIComponent(sourceTask.origin.autopilotId)}/triggers`),
+      ]);
+      state.autopilotDetail = {
+        autopilot,
+        origin: sourceTask.origin,
+        trigger: triggers.items.find((item) => item.id === sourceTask.origin.triggerId) ?? null,
+      };
+      render();
+      setStatus(`Loaded Autopilot origin - ${shortId(sourceTask.origin.autopilotId)}`);
       return;
     }
     const currentTask = await get(`/v1/execution-tasks/${encodeURIComponent(taskId)}`);
@@ -2072,6 +2089,7 @@ function renderExecutionTasks(items, closureAttention = []) {
       [statusClass(item.status), item.status],
       ["owner", item.owner || "unclaimed"],
       ["next", item.nextAction || "no next action"],
+      ...(item.origin?.kind === "autopilot" ? [["origin", `autopilot ${shortId(item.origin.autopilotId)}`]] : []),
       ...(closureByTaskId.has(item.id) ? [["failed", `closure: ${closureByTaskId.get(item.id).code}`]] : []),
       ["updated", formatTime(item.updatedAt)],
     ],
@@ -2079,6 +2097,7 @@ function renderExecutionTasks(items, closureAttention = []) {
       executionTaskButton("execution-task-view", item.id, "&#128065;", "View", "secondary"),
       executionTaskButton("execution-task-evidence", item.id, "&#128269;", "Evidence", "secondary"),
       executionTaskButton("execution-task-lineage", item.id, "&#127795;", "Lineage", "secondary"),
+      ...(item.origin?.kind === "autopilot" ? [executionTaskButton("execution-task-origin", item.id, "&#128279;", "Autopilot Origin", "secondary")] : []),
       ... (["completed", "cancelled"].includes(item.status) ? [executionTaskButton("execution-task-closure", item.id, "&#128220;", "Closure", "secondary")] : []),
       executionTaskButton("execution-task-links", item.id, "&#128279;", "Update Links", "secondary"),
       ...(["completed", "cancelled"].includes(item.status) ? [executionTaskButton("execution-task-follow-up", item.id, "&#8618;", "Follow Up", "secondary")] : []),
@@ -2111,6 +2130,7 @@ function renderAutopilots(items, dueItems = []) {
     actions: [
       autopilotButton("autopilot-view", item.id, "&#128065;", "View"),
       autopilotButton("autopilot-triggers", item.id, "&#128221;", "Triggers", "secondary"),
+      ...(item.lastTaskId ? [autopilotLastTaskButton(item.lastTaskId)] : []),
       autopilotButton(item.enabled ? "autopilot-disable" : "autopilot-enable", item.id, item.enabled ? "&#9208;" : "&#9654;", item.enabled ? "Disable" : "Enable", "secondary", item.updatedAt),
     ],
   }));
@@ -2118,6 +2138,16 @@ function renderAutopilots(items, dueItems = []) {
 
 function renderAutopilotPanel(detail) {
   nodes.autopilotPanel.textContent = detail ? JSON.stringify(detail, null, 2) : "{}";
+}
+
+function autopilotLastTaskButton(taskId) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "autopilot-last-task";
+  button.dataset.taskId = taskId;
+  button.innerHTML = "<span aria-hidden=\"true\">&#128203;</span><span>Last Task</span>";
+  return button;
 }
 
 function renderAgentLaunchPanel(launch, readiness = null) {
