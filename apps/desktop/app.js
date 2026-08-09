@@ -1287,6 +1287,7 @@ function render() {
     summary: { total: 0, attentionCount: 0, byStatus: {} },
     items: [],
     attention: [],
+    evidenceAttention: [],
   };
 
   nodes.systemState.textContent = state.status ? "Connected" : "Disconnected";
@@ -1321,7 +1322,7 @@ function render() {
     : "No capability probe";
   nodes.fleetRunState.textContent = `${fleetRuns.summary.total} total / ${fleetRuns.summary.activeCount} active / ${fleetRuns.summary.awaitingApprovalCount} awaiting approval`;
   nodes.squadState.textContent = `${squads.summary.total} total / ${squads.summary.plannedCount} planned`;
-  nodes.executionTaskState.textContent = `${executionTasks.summary.total} total / ${executionTasks.summary.attentionCount} needs attention`;
+  nodes.executionTaskState.textContent = `${executionTasks.summary.total} total / ${executionTasks.summary.attentionCount} needs attention / ${(executionTasks.evidenceAttention || []).length} evidence issues`;
 
   renderSystemOverview(state.status, state.contextFreshness);
   renderContextEvidence(state.contextEvidence);
