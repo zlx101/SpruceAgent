@@ -15,6 +15,7 @@ const state = {
   agentWorkspaceDetail: null,
   agentLaunches: null,
   agentLaunchDetail: null,
+  agentLaunchReadiness: null,
   launchReviews: null,
   launchReviewDetail: null,
   capabilityProbes: null,
@@ -523,7 +524,12 @@ async function handleDecisionQueueAction(button) {
     const body = decisionActionBody(action);
     await post(action.path, body);
     await refreshAfterRunControlAction();
-    setStatus(`${titleCase(action.id)} complete`);
+    if (action.path === "/v1/agent-trials/attest" && body.launchId) {
+      await refreshAgentLaunchDetailAndReadiness(body.launchId);
+      setStatus(`Independent acceptance complete; execution gate: ${readinessSummary(state.agentLaunchReadiness)}`);
+    } else {
+      setStatus(`${titleCase(action.id)} complete`);
+    }
     if (button.dataset.traceKind === "workflow.run") {
       await loadWorkflowDetail(button.dataset.traceId, { scroll: false });
     } else if (button.dataset.traceId) {
@@ -1225,7 +1231,7 @@ function render() {
   renderAgentWorkspaces(agentWorkspaces.items);
   renderAgentWorkspacePanel(state.agentWorkspaceDetail);
   renderAgentLaunches(agentLaunches.items);
-  renderAgentLaunchPanel(state.agentLaunchDetail);
+  renderAgentLaunchPanel(state.agentLaunchDetail, state.agentLaunchReadiness);
   renderLaunchReviews(launchReviews.items);
   renderLaunchReviewPanel(state.launchReviewDetail);
   renderCapabilityProbePanel(state.capabilityProbeDetail);
@@ -1695,7 +1701,7 @@ function renderTaskRoutePanel(route) {
   nodes.taskRoutePanel.textContent = route ? JSON.stringify(route, null, 2) : "{}";
 }
 
-function renderAgentLaunchPanel(launch) {
+function renderAgentLaunchPanel(launch, readiness = null) {
   if (!launch) {
     nodes.agentLaunchPanel.textContent = "{}";
     return;
@@ -1715,6 +1721,14 @@ function renderAgentLaunchPanel(launch) {
     terminalLog: launch.terminalLog,
     git: launch.git,
     reviewGate: launch.reviewGate,
+    executionReadiness: readiness ? {
+      status: readiness.status,
+      canRequestTrialApproval: readiness.canRequestTrialApproval,
+      canRequestExecutionApproval: readiness.canRequestExecutionApproval,
+      blockers: readiness.blockers,
+      context: readiness.context,
+      trials: readiness.trials,
+    } : null,
     notes: launch.notes,
     limits: launch.limits,
   }, null, 2);
@@ -2188,6 +2202,7 @@ async function previewAgentLaunch(workspaceId) {
       workspaceId,
       execute: false,
     });
+    state.agentLaunchReadiness = null;
     state.agentLaunches = await get("/v1/agent-launches");
     render();
     setStatus(`Created launch preview - ${shortId(state.agentLaunchDetail.id)}`);
@@ -2200,9 +2215,9 @@ async function loadAgentLaunch(launchId) {
   if (!launchId) return;
   setStatus("Loading agent launch");
   try {
-    state.agentLaunchDetail = await get(`/v1/agent-launches/${encodeURIComponent(launchId)}`);
-    renderAgentLaunchPanel(state.agentLaunchDetail);
-    setStatus(`Loaded launch - ${shortId(launchId)}`);
+    await refreshAgentLaunchDetailAndReadiness(launchId);
+    renderAgentLaunchPanel(state.agentLaunchDetail, state.agentLaunchReadiness);
+    setStatus(`Loaded launch - ${shortId(launchId)}; execution gate: ${readinessSummary(state.agentLaunchReadiness)}`);
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -2243,13 +2258,21 @@ async function attestAgentLaunchFromWorkbench(launchId) {
     ]);
     state.agentLaunches = launches;
     state.agentLaunchDetail = detail;
+    state.agentLaunchReadiness = await get(`/v1/agent-adapters/${encodeURIComponent(detail.adapter.id)}/readiness`);
     render();
-    setStatus(`Independent acceptance recorded - ${shortId(result.trial.id)}`);
+    setStatus(`Independent acceptance recorded - ${shortId(result.trial.id)}; execution gate: ${readinessSummary(state.agentLaunchReadiness)}`);
   } catch (error) {
     setStatus(error.message, true);
   } finally {
     state.busy = false;
   }
+}
+
+async function refreshAgentLaunchDetailAndReadiness(launchId) {
+  const detail = await get(`/v1/agent-launches/${encodeURIComponent(launchId)}`);
+  const readiness = await get(`/v1/agent-adapters/${encodeURIComponent(detail.adapter.id)}/readiness`);
+  state.agentLaunchDetail = detail;
+  state.agentLaunchReadiness = readiness;
 }
 
 async function loadLaunchReview(reviewId) {
@@ -2948,6 +2971,12 @@ function statusClass(value) {
   if (["requires_approval", "action_required", "pending_decision", "candidate", "needs_review", "planned", "passed_with_stale_evidence"].includes(value)) return "pending";
   if (["ready_to_resume", "approved_unresumable"].includes(value)) return "ready";
   return "";
+}
+
+function readinessSummary(readiness) {
+  if (!readiness) return "not loaded";
+  const blockerIds = readiness.blockers?.map((item) => item.id).join(", ");
+  return blockerIds ? `${readiness.status} (${blockerIds})` : readiness.status;
 }
 
 function evidenceSummaryLabel(evidence) {
