@@ -2327,6 +2327,8 @@ async function routeRequest(store, request, url, body) {
 function gatewayStatus(store) {
   const index = readWorkspaceIndex(store);
   const executionTaskBoard = getExecutionTaskBoard(store);
+  const autopilots = listAutopilots(store);
+  const dueAutopilots = listDueAutopilots(store);
   return {
     root: store.root,
     auth: getGatewayAuthStatus(store),
@@ -2348,6 +2350,8 @@ function gatewayStatus(store) {
     executionTaskCount: listExecutionTasks(store).summary.total,
     executionTaskEvidenceIssueCount: executionTaskBoard.evidenceAttention.length,
     executionTaskClosureDiagnosticCount: executionTaskBoard.closureAttention.length,
+    autopilotCount: autopilots.items.length,
+    autopilotDueCount: dueAutopilots.items.length,
     fleetRunCount: listFleetRuns(store).summary.total,
     artifactCount: listArtifacts(store).summary.total,
     evaluationCount: listEvaluations(store).length,

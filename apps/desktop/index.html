@@ -112,6 +112,10 @@
             <span class="metric-label">Tasks</span>
             <strong id="execution-task-count">0</strong>
           </article>
+          <article class="metric">
+            <span class="metric-label">Autopilots</span>
+            <strong id="autopilot-count">0</strong>
+          </article>
         </section>
 
         <section id="system" class="work-section">
@@ -403,6 +407,19 @@
           </div>
           <div id="execution-task-list" class="item-list"></div>
           <pre id="execution-task-panel" class="json-view fleet-run-preview">{}</pre>
+        </section>
+
+        <section id="autopilots" class="work-section">
+          <div class="section-heading">
+            <h2>Autopilots</h2>
+            <span id="autopilot-state" class="section-state">0</span>
+          </div>
+          <div class="toolbar section-toolbar">
+            <button id="autopilot-run-due-button" class="secondary-button" type="button">Run Due Rules</button>
+          </div>
+          <p class="section-note">Autopilot v0 only creates open local Execution Tasks. It never launches an Agent, executes tools, or bypasses approvals.</p>
+          <div id="autopilot-list" class="item-list"></div>
+          <pre id="autopilot-panel" class="json-view fleet-run-preview">{}</pre>
         </section>
 
         <section id="workflow-versions" class="work-section">

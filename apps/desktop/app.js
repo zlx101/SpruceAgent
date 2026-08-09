@@ -31,6 +31,9 @@ const state = {
   squadExecutionReadiness: {},
   executionTasks: null,
   executionTaskDetail: null,
+  autopilots: null,
+  autopilotDue: null,
+  autopilotDetail: null,
   workflows: [],
   workflowVersions: null,
   workflowDraft: null,
@@ -110,6 +113,7 @@ const nodes = {
   taskRouteCount: document.querySelector("#task-route-count"),
   fleetRunCount: document.querySelector("#fleet-run-count"),
   executionTaskCount: document.querySelector("#execution-task-count"),
+  autopilotCount: document.querySelector("#autopilot-count"),
   decisionQueueState: document.querySelector("#decision-queue-state"),
   approvalState: document.querySelector("#approval-state"),
   resumeState: document.querySelector("#resume-state"),
@@ -155,6 +159,10 @@ const nodes = {
   executionTaskCreateButton: document.querySelector("#execution-task-create-button"),
   executionTaskList: document.querySelector("#execution-task-list"),
   executionTaskPanel: document.querySelector("#execution-task-panel"),
+  autopilotState: document.querySelector("#autopilot-state"),
+  autopilotRunDueButton: document.querySelector("#autopilot-run-due-button"),
+  autopilotList: document.querySelector("#autopilot-list"),
+  autopilotPanel: document.querySelector("#autopilot-panel"),
   workflowList: document.querySelector("#workflow-list"),
   workflowVersionList: document.querySelector("#workflow-version-list"),
   workflowRunList: document.querySelector("#workflow-run-list"),
@@ -353,6 +361,13 @@ nodes.executionTaskList.addEventListener("click", async (event) => {
   if (!button) return;
   await handleExecutionTaskAction(button);
 });
+nodes.autopilotRunDueButton.addEventListener("click", runDueAutopilotsFromWorkbench);
+nodes.autopilotList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action]");
+  if (!button || state.busy) return;
+  if (button.dataset.action === "autopilot-view") await loadAutopilot(button.dataset.autopilotId);
+  if (button.dataset.action === "autopilot-triggers") await loadAutopilotTriggers(button.dataset.autopilotId);
+});
 
 nodes.workflowList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action]");
@@ -471,7 +486,7 @@ async function refresh() {
   state.busy = true;
   setStatus("Loading");
   try {
-    const [status, contextFreshness, inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches, launchReviews, capabilityProbes, taskRoutes, fleetRuns, squads, executionTasks] = await Promise.all([
+    const [status, contextFreshness, inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches, launchReviews, capabilityProbes, taskRoutes, fleetRuns, squads, executionTasks, autopilots, autopilotDue] = await Promise.all([
       get("/v1/status"),
       get("/v1/context/freshness"),
       get("/v1/inbox"),
@@ -491,6 +506,8 @@ async function refresh() {
       get("/v1/fleet-runs"),
       get("/v1/squads"),
       get("/v1/execution-tasks/board"),
+      get("/v1/autopilots"),
+      get("/v1/autopilots/due"),
     ]);
     state.status = status;
     state.contextFreshness = contextFreshness;
@@ -511,6 +528,8 @@ async function refresh() {
     state.fleetRuns = fleetRuns;
     state.squads = squads;
     state.executionTasks = executionTasks;
+    state.autopilots = autopilots;
+    state.autopilotDue = autopilotDue;
     render();
     setStatus(`Connected - ${state.approvalQueue.status.replace(/_/g, " ")}`);
   } catch (error) {
@@ -760,6 +779,59 @@ async function loadExecutionTaskReference(taskId) {
     setStatus(`Loaded execution task - ${shortId(taskId)}`);
   } catch (error) {
     setStatus(error.message, true);
+  }
+}
+
+async function loadAutopilot(autopilotId) {
+  if (!autopilotId || state.busy) return;
+  setStatus("Loading Autopilot rule");
+  try {
+    state.autopilotDetail = await get(`/v1/autopilots/${encodeURIComponent(autopilotId)}`);
+    renderAutopilotPanel(state.autopilotDetail);
+    setStatus(`Loaded Autopilot - ${shortId(autopilotId)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+async function loadAutopilotTriggers(autopilotId) {
+  if (!autopilotId || state.busy) return;
+  setStatus("Loading Autopilot trigger ledger");
+  try {
+    const [autopilot, triggers] = await Promise.all([
+      get(`/v1/autopilots/${encodeURIComponent(autopilotId)}`),
+      get(`/v1/autopilots/${encodeURIComponent(autopilotId)}/triggers`),
+    ]);
+    state.autopilotDetail = { autopilot, triggers: triggers.items };
+    renderAutopilotPanel(state.autopilotDetail);
+    setStatus(`Loaded trigger ledger - ${shortId(autopilotId)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+async function runDueAutopilotsFromWorkbench() {
+  if (state.busy) return;
+  const dueCount = state.autopilotDue?.items?.length ?? 0;
+  if (!dueCount) return setStatus("No Autopilot rules are currently due");
+  if (!window.confirm(`Run ${dueCount} due Autopilot rule${dueCount === 1 ? "" : "s"}? This only creates open local Execution Tasks.`)) return;
+  try {
+    state.busy = true;
+    const result = await post("/v1/autopilots/run-due", { actor: "workbench-user" });
+    const [autopilots, autopilotDue, executionTasks, status] = await Promise.all([
+      get("/v1/autopilots"), get("/v1/autopilots/due"), get("/v1/execution-tasks/board"), get("/v1/status"),
+    ]);
+    state.autopilots = autopilots;
+    state.autopilotDue = autopilotDue;
+    state.executionTasks = executionTasks;
+    state.status = status;
+    state.autopilotDetail = result;
+    render();
+    setStatus(`Autopilot due run created ${result.results.length} open task${result.results.length === 1 ? "" : "s"}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
   }
 }
 
@@ -1395,6 +1467,8 @@ function render() {
     evidenceAttention: [],
     closureAttention: [],
   };
+  const autopilots = state.autopilots || { items: [] };
+  const autopilotDue = state.autopilotDue || { items: [] };
 
   nodes.systemState.textContent = state.status ? "Connected" : "Disconnected";
   nodes.pendingCount.textContent = inbox.summary.pendingApprovalCount;
@@ -1409,6 +1483,7 @@ function render() {
   nodes.taskRouteCount.textContent = taskRoutes.summary.total;
   nodes.fleetRunCount.textContent = fleetRuns.summary.total;
   nodes.executionTaskCount.textContent = executionTasks.summary.total;
+  nodes.autopilotCount.textContent = autopilots.items.length;
   nodes.skillState.textContent = `${skills.length}`;
   nodes.candidateSkillState.textContent = `${candidateSkills.length} candidates`;
   nodes.skillEvaluationState.textContent = `${skillEvaluations.length} reports`;
@@ -1429,6 +1504,8 @@ function render() {
   nodes.fleetRunState.textContent = `${fleetRuns.summary.total} total / ${fleetRuns.summary.activeCount} active / ${fleetRuns.summary.awaitingApprovalCount} awaiting approval`;
   nodes.squadState.textContent = `${squads.summary.total} total / ${squads.summary.plannedCount} planned`;
   nodes.executionTaskState.textContent = `${executionTasks.summary.total} total / ${executionTasks.summary.attentionCount} needs attention / ${(executionTasks.evidenceAttention || []).length} active evidence issues / ${(executionTasks.closureAttention || []).length} closure diagnostics`;
+  nodes.autopilotState.textContent = `${autopilots.items.length} rules / ${autopilotDue.items.length} due`;
+  nodes.autopilotRunDueButton.disabled = state.busy || !autopilotDue.items.length;
 
   renderSystemOverview(state.status, state.contextFreshness);
   renderContextEvidence(state.contextEvidence);
@@ -1453,6 +1530,8 @@ function render() {
   renderSquadPanel(state.squadDetail, state.squadReadiness);
   renderExecutionTasks(executionTasks.items, executionTasks.closureAttention || []);
   renderExecutionTaskPanel(state.executionTaskDetail);
+  renderAutopilots(autopilots.items, autopilotDue.items);
+  renderAutopilotPanel(state.autopilotDetail);
   renderWorkflowSkillOptions(skills);
   renderWorkflowDraft(state.workflowDraft);
   renderWorkflows(workflows);
@@ -1477,6 +1556,7 @@ function renderSystemOverview(status, freshness) {
     ["Workflow", `${status?.workflowCount ?? 0} workflows`, "available"],
     ["Agent Mesh", `${status?.agentAdapterCount ?? 0} adapters / ${status?.taskRouteCount ?? 0} routes`, "available"],
     ["Execution Tasks", `${status?.executionTaskCount ?? 0} tasks / ${status?.executionTaskEvidenceIssueCount ?? 0} evidence issues / ${status?.executionTaskClosureDiagnosticCount ?? 0} closure diagnostics`, (status?.executionTaskEvidenceIssueCount || status?.executionTaskClosureDiagnosticCount) ? "blocked" : "available"],
+    ["Autopilot", `${status?.autopilotCount ?? 0} rules / ${status?.autopilotDueCount ?? 0} due`, status?.autopilotDueCount ? "pending" : status?.autopilotCount ? "available" : "empty"],
     ["Fleet", `${status?.fleetRunCount ?? 0} runs`, status?.fleetRunCount ? "available" : "empty"],
     ["Artifacts", `${status?.artifactCount ?? 0} artifacts`, "available"],
   ];
@@ -1947,6 +2027,28 @@ function renderExecutionTasks(items, closureAttention = []) {
 
 function renderExecutionTaskPanel(task) {
   nodes.executionTaskPanel.textContent = task ? JSON.stringify(task, null, 2) : "{}";
+}
+
+function renderAutopilots(items, dueItems = []) {
+  const dueIds = new Set(dueItems.map((item) => item.id));
+  replaceList(nodes.autopilotList, items, (item) => itemNode({
+    title: item.name || item.id,
+    meta: [
+      [item.enabled ? "available" : "blocked", item.enabled ? "enabled" : "disabled"],
+      ...(dueIds.has(item.id) ? [["pending", "due now"]] : []),
+      ["interval", `${item.schedule?.intervalMinutes ?? "?"} min`],
+      ["next", formatTime(item.schedule?.nextDueAt)],
+      ["task", item.lastTaskId ? shortId(item.lastTaskId) : "none yet"],
+    ],
+    actions: [
+      autopilotButton("autopilot-view", item.id, "&#128065;", "View"),
+      autopilotButton("autopilot-triggers", item.id, "&#128221;", "Triggers", "secondary"),
+    ],
+  }));
+}
+
+function renderAutopilotPanel(detail) {
+  nodes.autopilotPanel.textContent = detail ? JSON.stringify(detail, null, 2) : "{}";
 }
 
 function renderAgentLaunchPanel(launch, readiness = null) {
@@ -3188,6 +3290,16 @@ function executionTaskReferenceButton(taskId) {
   button.dataset.action = "execution-task-reference-view";
   button.dataset.taskId = taskId;
   button.innerHTML = '<span aria-hidden="true">&#128203;</span><span>View Task</span>';
+  return button;
+}
+
+function autopilotButton(action, autopilotId, iconHtml, label, tone = "primary") {
+  const button = document.createElement("button");
+  button.className = `item-action ${tone}`;
+  button.type = "button";
+  button.dataset.action = action;
+  button.dataset.autopilotId = autopilotId;
+  button.innerHTML = `<span aria-hidden="true">${iconHtml}</span><span>${label}</span>`;
   return button;
 }
 
