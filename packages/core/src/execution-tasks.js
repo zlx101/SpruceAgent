@@ -108,12 +108,17 @@ export function updateExecutionTask(store, taskId, input = {}) {
 export function getExecutionTaskBoard(store) {
   const listed = listExecutionTasks(store);
   const rank = { waiting_for_human: 0, blocked: 1, in_progress: 2, open: 3, completed: 4, cancelled: 5 };
+  const active = listed.items.filter((item) => !["completed", "cancelled"].includes(item.status));
   return {
     ...listed,
     interface: "spruceagent.execution-task-board",
-    attention: [...listed.items]
-      .filter((item) => !["completed", "cancelled"].includes(item.status))
+    attention: [...active]
       .sort((a, b) => (rank[a.status] - rank[b.status]) || String(b.updatedAt).localeCompare(String(a.updatedAt))),
+    evidenceAttention: active.map((item) => {
+      const evidence = getExecutionTaskEvidence(store, item.id);
+      const issues = evidence.links.filter((link) => ["missing", "unsupported"].includes(link.status));
+      return issues.length ? { taskId: item.id, goal: item.goal, status: item.status, issues } : null;
+    }).filter(Boolean),
   };
 }
 

@@ -244,6 +244,7 @@ test("execution tasks preserve ownership, gates, evidence, and operator attentio
   assert.equal(getExecutionTask(store, task.id).humanGate, "Choose whether production deployment is in scope");
   assert.equal(listExecutionTasks(store).summary.byStatus.waiting_for_human, 1);
   assert.equal(board.attention[0].id, task.id);
+  assert.equal(board.evidenceAttention.length, 0);
   assert.throws(() => updateExecutionTask(store, task.id, { status: "waiting_for_human", humanGate: "" }), /humanGate is required/);
   assert.throws(() => claimExecutionTask(store, task.id, { owner: "other-agent" }), /already claimed/);
 });
@@ -275,6 +276,7 @@ test("execution task evidence resolves typed local records without granting auth
   assert.equal(evidence.links[2].status, "unsupported");
   assert.equal(evidence.links[3].status, "unsupported");
   assert.equal(evidence.evidenceRefs[0].authority, "reference_only");
+  assert.equal(getExecutionTaskBoard(store).evidenceAttention[0].issues.length, 3);
 });
 
 test("doctor reports alpha readiness without failed checks", () => {
