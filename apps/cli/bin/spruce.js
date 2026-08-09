@@ -20,6 +20,7 @@ import {
   createContextEvidencePack,
   createExecutionTask,
   createExecutionTaskFollowUp,
+  createAutopilot,
   configureLlmProvider,
   createSkillReplayFixture,
   createGatewayClient,
@@ -54,6 +55,8 @@ import {
   getExecutionTaskLineage,
   getExecutionTaskBoard,
   getExecutionTaskContract,
+  getAutopilot,
+  getAutopilotContract,
   getCandidateExecutionContract,
   getGatewayAuthStatus,
   getGatewayRouteContract,
@@ -119,6 +122,9 @@ import {
   listArtifacts,
   listEvaluations,
   listExecutionTasks,
+  listAutopilots,
+  listAutopilotTriggers,
+  listDueAutopilots,
   listFleetRuns,
   listOutcomeEvaluationResults,
   listOutcomeFixtures,
@@ -153,6 +159,7 @@ import {
   restoreSkillVersion,
   restoreWorkflowVersion,
   runDoctor,
+  runDueAutopilots,
   runAgent,
   runPreflight,
   runWorkflow,
@@ -167,6 +174,7 @@ import {
   handoffExecutionTask,
   updateExecutionTask,
   resumeExecutionTask,
+  triggerAutopilot,
   validateLlmProviderConfig,
   requestFleetRunApprovals,
   cancelFleetRun,
@@ -291,6 +299,11 @@ async function main() {
 
   if (command === "task" || command === "tasks") {
     handleExecutionTask(subcommand, rest);
+    return;
+  }
+
+  if (command === "autopilot" || command === "autopilots") {
+    handleAutopilot(subcommand, rest);
     return;
   }
 
@@ -733,6 +746,64 @@ function handleExecutionTask(action, args) {
   }
 
   throw new Error("usage: spruce task <list|board|contract|get|evidence|closure|lineage|create|follow-up|claim|handoff|resume|update>");
+}
+
+function handleAutopilot(action, args) {
+  if (!action || action === "list") {
+    const flags = parseFlags(args);
+    printJson(listAutopilots(store, { enabled: flags.enabled === undefined ? undefined : flags.enabled === "true" }));
+    return;
+  }
+  if (action === "contract") {
+    printJson(getAutopilotContract());
+    return;
+  }
+  if (action === "due") {
+    const flags = parseFlags(args);
+    printJson(listDueAutopilots(store, { now: flags.now }));
+    return;
+  }
+  if (action === "get" || action === "detail") {
+    const [autopilotId] = args;
+    if (!autopilotId) throw new Error("usage: spruce autopilot get <autopilotId>");
+    printJson(getAutopilot(store, autopilotId));
+    return;
+  }
+  if (action === "triggers") {
+    const [autopilotId, ...flagArgs] = args;
+    if (!autopilotId) throw new Error("usage: spruce autopilot triggers <autopilotId> [--limit 50]");
+    const flags = parseFlags(flagArgs);
+    printJson(listAutopilotTriggers(store, autopilotId, { limit: flags.limit }));
+    return;
+  }
+  if (action === "create") {
+    const flags = parseFlags(args);
+    printJson(createAutopilot(store, {
+      name: flags.name,
+      goal: flags.goal ?? flags._.join(" ").trim(),
+      intervalMinutes: flags.intervalMinutes ?? flags.interval,
+      firstDueAt: flags.firstDueAt,
+      scope: flags.scope,
+      nextAction: flags.nextAction,
+      evidenceRefs: splitCsv(flags.evidenceRefs),
+      links: splitCsv(flags.links),
+      actor: flags.by ?? "local-user",
+    }));
+    return;
+  }
+  if (action === "trigger") {
+    const [autopilotId, ...flagArgs] = args;
+    if (!autopilotId) throw new Error("usage: spruce autopilot trigger <autopilotId> [--now <ISO>] [--triggerKey <key>]");
+    const flags = parseFlags(flagArgs);
+    printJson(triggerAutopilot(store, autopilotId, { now: flags.now, triggerKey: flags.triggerKey, actor: flags.by ?? "local-user" }));
+    return;
+  }
+  if (action === "run-due") {
+    const flags = parseFlags(args);
+    printJson(runDueAutopilots(store, { now: flags.now, limit: flags.limit, actor: flags.by ?? "local-user" }));
+    return;
+  }
+  throw new Error("usage: spruce autopilot <list|contract|due|get|detail|triggers|create|trigger|run-due>");
 }
 
 function handleArtifact(action, args) {

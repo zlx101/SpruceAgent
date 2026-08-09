@@ -230,6 +230,17 @@ export {
   resumeExecutionTask,
   EXECUTION_TASK_CONTRACT,
 } from "./execution-tasks.js";
+export {
+  AUTOPILOT_CONTRACT,
+  createAutopilot,
+  getAutopilot,
+  getAutopilotContract,
+  listAutopilotTriggers,
+  listAutopilots,
+  listDueAutopilots,
+  runDueAutopilots,
+  triggerAutopilot,
+} from "./autopilots.js";
 export { runAgent } from "./agent-runner.js";
 export { getPlannerPromotionContract, promoteLlmDraftToCandidatePlan } from "./planner.js";
 export { executeCandidatePlan, getCandidateExecutionContract } from "./candidate-executor.js";

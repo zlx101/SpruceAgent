@@ -64,6 +64,7 @@ import {
 import { approveTicket, getApprovalTicket, listApprovalTickets, rejectTicket } from "./approvals.js";
 import { getApprovalQueue, getApprovalQueueContract } from "./approval-queue.js";
 import { claimExecutionTask, createExecutionTask, createExecutionTaskFollowUp, getExecutionTask, getExecutionTaskBoard, getExecutionTaskClosure, getExecutionTaskContract, getExecutionTaskEvidence, getExecutionTaskLineage, handoffExecutionTask, listExecutionTasks, resumeExecutionTask, updateExecutionTask } from "./execution-tasks.js";
+import { createAutopilot, getAutopilot, getAutopilotContract, listAutopilotTriggers, listAutopilots, listDueAutopilots, runDueAutopilots, triggerAutopilot } from "./autopilots.js";
 import { getArtifact, getArtifactContract, listArtifacts } from "./artifacts.js";
 import { assessWorkspaceIndexFreshness, buildWorkspaceIndex, readWorkspaceIndex, searchWorkspaceContext } from "./context.js";
 import { createContextEvidencePack, getContextEvidenceContract } from "./context-evidence.js";
@@ -322,6 +323,62 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/execution-tasks/:taskId/resume",
       authRequired: true,
       description: "Resume a blocked or waiting task with a recorded reason and next action; does not execute work.",
+    },
+    {
+      id: "autopilots.list",
+      method: "GET",
+      path: "/v1/autopilots",
+      authRequired: true,
+      description: "List durable interval rules whose only v0 action is creating a local execution task.",
+    },
+    {
+      id: "autopilots.due",
+      method: "GET",
+      path: "/v1/autopilots/due",
+      authRequired: true,
+      description: "Evaluate due Autopilot rules without changing state.",
+    },
+    {
+      id: "autopilots.contract",
+      method: "GET",
+      path: "/v1/autopilots/contract",
+      authRequired: true,
+      description: "Read Autopilot v0 safety and idempotency contract.",
+    },
+    {
+      id: "autopilots.get",
+      method: "GET",
+      path: "/v1/autopilots/:autopilotId",
+      authRequired: true,
+      description: "Read one durable Autopilot rule.",
+    },
+    {
+      id: "autopilots.triggers",
+      method: "GET",
+      path: "/v1/autopilots/:autopilotId/triggers",
+      authRequired: true,
+      description: "Read a rule's durable trigger ledger.",
+    },
+    {
+      id: "autopilots.create",
+      method: "POST",
+      path: "/v1/autopilots",
+      authRequired: true,
+      description: "Create an interval Autopilot rule; it does not start a background timer or execute work.",
+    },
+    {
+      id: "autopilots.run_due",
+      method: "POST",
+      path: "/v1/autopilots/run-due",
+      authRequired: true,
+      description: "Trigger currently due rules with durable idempotency; each result only creates an open local task.",
+    },
+    {
+      id: "autopilots.trigger",
+      method: "POST",
+      path: "/v1/autopilots/:autopilotId/trigger",
+      authRequired: true,
+      description: "Trigger one due rule and record its task-creation result; never launches an agent or tool.",
     },
     {
       id: "artifacts.list",
@@ -1442,6 +1499,15 @@ async function routeRequest(store, request, url, body) {
   if (request.method === "POST" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "handoff" && !pathParts[4]) return ok(handoffExecutionTask(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
   if (request.method === "POST" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "resume" && !pathParts[4]) return ok(resumeExecutionTask(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
   if (request.method === "POST" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "update" && !pathParts[4]) return ok(updateExecutionTask(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
+
+  if (request.method === "GET" && url.pathname === "/v1/autopilots") return ok(listAutopilots(store, { enabled: url.searchParams.has("enabled") ? url.searchParams.get("enabled") === "true" : undefined }));
+  if (request.method === "GET" && url.pathname === "/v1/autopilots/due") return ok(listDueAutopilots(store, { now: url.searchParams.get("now") ?? undefined }));
+  if (request.method === "GET" && url.pathname === "/v1/autopilots/contract") return ok(getAutopilotContract());
+  if (request.method === "POST" && url.pathname === "/v1/autopilots") return ok(createAutopilot(store, { ...body, actor: body.actor ?? "gateway-user" }));
+  if (request.method === "POST" && url.pathname === "/v1/autopilots/run-due") return ok(runDueAutopilots(store, { ...body, actor: body.actor ?? "gateway-user" }));
+  if (request.method === "GET" && pathParts[1] === "autopilots" && pathParts[2] && pathParts[3] === "triggers" && !pathParts[4]) return ok(listAutopilotTriggers(store, pathParts[2], { limit: url.searchParams.get("limit") ?? undefined }));
+  if (request.method === "POST" && pathParts[1] === "autopilots" && pathParts[2] && pathParts[3] === "trigger" && !pathParts[4]) return ok(triggerAutopilot(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
+  if (request.method === "GET" && pathParts[1] === "autopilots" && pathParts[2] && !pathParts[3]) return ok(getAutopilot(store, pathParts[2]));
 
   if (request.method === "GET" && url.pathname === "/v1/artifacts") {
     return ok(listArtifacts(store, {

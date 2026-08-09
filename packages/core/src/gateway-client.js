@@ -47,6 +47,14 @@ export function createGatewayClient(options = {}) {
     handoffExecutionTask: (taskId, input = {}) => request("POST", `/v1/execution-tasks/${encodePathPart(taskId)}/handoff`, input),
     resumeExecutionTask: (taskId, input = {}) => request("POST", `/v1/execution-tasks/${encodePathPart(taskId)}/resume`, input),
     updateExecutionTask: (taskId, input = {}) => request("POST", `/v1/execution-tasks/${encodePathPart(taskId)}/update`, input),
+    listAutopilots: (input = {}) => request("GET", `/v1/autopilots${autopilotParams(input)}`),
+    listDueAutopilots: (input = {}) => request("GET", `/v1/autopilots/due${input.now ? `?now=${encodeURIComponent(input.now)}` : ""}`),
+    autopilotContract: () => request("GET", "/v1/autopilots/contract"),
+    getAutopilot: (autopilotId) => request("GET", `/v1/autopilots/${encodePathPart(autopilotId)}`),
+    listAutopilotTriggers: (autopilotId, input = {}) => request("GET", `/v1/autopilots/${encodePathPart(autopilotId)}/triggers${input.limit ? `?limit=${encodeURIComponent(input.limit)}` : ""}`),
+    createAutopilot: (input = {}) => request("POST", "/v1/autopilots", input),
+    runDueAutopilots: (input = {}) => request("POST", "/v1/autopilots/run-due", input),
+    triggerAutopilot: (autopilotId, input = {}) => request("POST", `/v1/autopilots/${encodePathPart(autopilotId)}/trigger`, input),
     artifacts: (input = {}) => request("GET", `/v1/artifacts${artifactParams(input)}`),
     artifact: (artifactId) => request("GET", `/v1/artifacts/${encodePathPart(artifactId)}`),
     artifactContract: () => request("GET", "/v1/artifacts/contract"),
@@ -296,6 +304,13 @@ function executionTaskParams(input = {}) {
   const params = new URLSearchParams();
   if (input.status) params.set("status", input.status);
   if (input.owner) params.set("owner", input.owner);
+  const value = params.toString();
+  return value ? `?${value}` : "";
+}
+
+function autopilotParams(input = {}) {
+  const params = new URLSearchParams();
+  if (input.enabled !== undefined) params.set("enabled", String(Boolean(input.enabled)));
   const value = params.toString();
   return value ? `?${value}` : "";
 }

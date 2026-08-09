@@ -20,6 +20,7 @@ import {
   createContextEvidencePack,
   createExecutionTask,
   createExecutionTaskFollowUp,
+  createAutopilot,
   createContextPack,
   createModelContextFromEvidence,
   createSourceMap,
@@ -79,6 +80,8 @@ import {
   getExecutionTaskEvidence,
   getExecutionTaskLineage,
   getExecutionTaskContract,
+  getAutopilot,
+  getAutopilotContract,
   getAgentTrial,
   getAgentTrialContract,
   getAgentTrialAttestationContract,
@@ -139,6 +142,9 @@ import {
   listTools,
   listEvaluations,
   listExecutionTasks,
+  listAutopilots,
+  listAutopilotTriggers,
+  listDueAutopilots,
   listLlmProviderConfigs,
   listSkillEvaluations,
   listSkillPackageImports,
@@ -172,6 +178,7 @@ import {
   restoreSkillVersion,
   restoreWorkflowVersion,
   runDoctor,
+  runDueAutopilots,
   runAgent,
   runPreflight,
   runWorkflow,
@@ -186,6 +193,7 @@ import {
   claimExecutionTask,
   handoffExecutionTask,
   resumeExecutionTask,
+  triggerAutopilot,
   validateLlmProviderConfig,
   cancelFleetRun,
 } from "../packages/core/src/index.js";
@@ -345,6 +353,51 @@ test("execution tasks preserve ownership, gates, evidence, and operator attentio
   });
   assert.equal(cancelled.cancellation.summary, "Follow-up scope moved to another release");
   assert.equal(getExecutionTaskClosure(store, followUp.id).cancellation.evidenceSnapshot.interface, "spruceagent.execution-task-evidence");
+});
+
+test("autopilots persist due scheduling and idempotently create only local execution tasks", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const autopilot = createAutopilot(store, {
+    name: "Daily review reminder",
+    goal: "Review the prior development evidence",
+    scope: "Local control-plane review only",
+    nextAction: "Claim the generated task and inspect its evidence",
+    evidenceRefs: ["tests/core.test.js"],
+    links: ["trace:trace_example"],
+    intervalMinutes: 60,
+    now: "2026-08-10T00:00:00.000Z",
+    firstDueAt: "2026-08-10T01:00:00.000Z",
+  });
+
+  assert.equal(getAutopilotContract().interface, "spruceagent.autopilots");
+  assert.equal(listAutopilots(store).items[0].id, autopilot.id);
+  assert.equal(listDueAutopilots(store, { now: "2026-08-10T00:59:59.000Z" }).items.length, 0);
+  assert.equal(listDueAutopilots(store, { now: "2026-08-10T01:00:00.000Z" }).items[0].id, autopilot.id);
+  assert.throws(() => triggerAutopilot(store, autopilot.id, { now: "2026-08-10T00:30:00.000Z" }), /not due/);
+
+  const trigger = triggerAutopilot(store, autopilot.id, { now: "2026-08-10T01:00:00.000Z", actor: "scheduler-test" });
+  const createdTask = getExecutionTask(store, trigger.taskId);
+  assert.equal(trigger.outcome, "execution_task_created");
+  assert.equal(trigger.reused, false);
+  assert.equal(createdTask.status, "open");
+  assert.equal(createdTask.createdBy, `autopilot:${autopilot.id}`);
+  assert.equal(createdTask.goal, "Review the prior development evidence");
+  assert.equal(createdTask.links[0], "trace:trace_example");
+  assert.equal(getAutopilot(store, autopilot.id).schedule.nextDueAt, "2026-08-10T02:00:00.000Z");
+  assert.equal(listAutopilotTriggers(store, autopilot.id).items.length, 1);
+
+  const replay = triggerAutopilot(store, autopilot.id, { now: "2026-08-10T02:00:00.000Z", triggerKey: trigger.triggerKey });
+  assert.equal(replay.reused, true);
+  assert.equal(replay.taskId, trigger.taskId);
+  assert.equal(listExecutionTasks(store).summary.total, 1);
+
+  const next = runDueAutopilots(store, { now: "2026-08-10T02:00:00.000Z", actor: "scheduler-test" });
+  assert.equal(next.considered, 1);
+  assert.equal(next.results[0].reused, false);
+  assert.equal(listExecutionTasks(store).summary.total, 2);
+  assert.equal(listDueAutopilots(store, { now: "2026-08-10T02:00:00.000Z" }).items.length, 0);
+  assert.throws(() => createAutopilot(store, { name: "Unsafe", goal: "No", intervalMinutes: 1 }), /between 5 and 10080/);
 });
 
 test("execution task evidence resolves typed local records without granting authority", () => {
@@ -2180,6 +2233,12 @@ test("gateway route contract exposes stable route ids", () => {
   assert.ok(routeIds.includes("outcomes.fixtures.evaluate"));
   assert.ok(routeIds.includes("outcomes.fixtures.summary"));
   assert.ok(routeIds.includes("outcomes.results.list"));
+  assert.ok(routeIds.includes("autopilots.list"));
+  assert.ok(routeIds.includes("autopilots.due"));
+  assert.ok(routeIds.includes("autopilots.contract"));
+  assert.ok(routeIds.includes("autopilots.create"));
+  assert.ok(routeIds.includes("autopilots.run_due"));
+  assert.ok(routeIds.includes("autopilots.trigger"));
   assert.equal(contract.routes.find((route) => route.id === "health").authRequired, false);
   assert.equal(contract.routes.find((route) => route.id === "status").authRequired, true);
 });
@@ -2432,6 +2491,39 @@ test("gateway client manages durable execution task control without execution", 
     });
     assert.equal(resumed.status, "in_progress");
     assert.equal(resumed.blocker, null);
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
+
+test("gateway client manages due Autopilot task creation without executing an agent", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const client = createGatewayClient({ baseUrl: `http://${gateway.host}:${gateway.port}`, token: gateway.token });
+
+  try {
+    for (const method of ["listAutopilots", "listDueAutopilots", "autopilotContract", "getAutopilot", "listAutopilotTriggers", "createAutopilot", "runDueAutopilots", "triggerAutopilot"]) {
+      assert.equal(typeof client[method], "function");
+    }
+    const contract = await client.autopilotContract();
+    const rule = await client.createAutopilot({
+      name: "Gateway scheduled review",
+      goal: "Review the gateway Autopilot evidence",
+      intervalMinutes: 30,
+      firstDueAt: "2026-08-10T03:00:00.000Z",
+    });
+    assert.equal(contract.interface, "spruceagent.autopilots");
+    assert.equal((await client.listAutopilots()).items[0].id, rule.id);
+    assert.equal((await client.listDueAutopilots({ now: "2026-08-10T02:59:59.000Z" })).items.length, 0);
+    const due = await client.runDueAutopilots({ now: "2026-08-10T03:00:00.000Z" });
+    assert.equal(due.results.length, 1);
+    const task = await client.getExecutionTask(due.results[0].taskId);
+    assert.equal(task.status, "open");
+    assert.equal(task.createdBy, `autopilot:${rule.id}`);
+    const replay = await client.triggerAutopilot(rule.id, { triggerKey: due.results[0].triggerKey });
+    assert.equal(replay.reused, true);
+    assert.equal((await client.listAutopilotTriggers(rule.id)).items.length, 1);
   } finally {
     await closeServer(gateway.server);
   }

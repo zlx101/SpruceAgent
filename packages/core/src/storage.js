@@ -34,6 +34,7 @@ export function ensureStore(store) {
   fs.mkdirSync(path.join(store.root, "agent-trials"), { recursive: true });
   fs.mkdirSync(path.join(store.root, "squads"), { recursive: true });
   fs.mkdirSync(path.join(store.root, "execution-tasks"), { recursive: true });
+  fs.mkdirSync(path.join(store.root, "autopilots"), { recursive: true });
   fs.mkdirSync(path.join(store.root, "worktrees"), { recursive: true });
 
   const configPath = path.join(store.root, "config.json");
@@ -66,6 +67,8 @@ export function ensureStore(store) {
   touch(path.join(store.root, "agent-trial-index.jsonl"));
   touch(path.join(store.root, "squad-index.jsonl"));
   touch(path.join(store.root, "execution-task-index.jsonl"));
+  touch(path.join(store.root, "autopilot-index.jsonl"));
+  touch(path.join(store.root, "autopilot-trigger-index.jsonl"));
   touch(path.join(store.root, "audit.jsonl"));
   return store;
 }
