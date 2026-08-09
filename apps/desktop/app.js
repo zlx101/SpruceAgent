@@ -626,6 +626,12 @@ async function handleExecutionTaskAction(button) {
       render();
       return;
     }
+    if (button.dataset.action === "execution-task-lineage") {
+      task = await get(`/v1/execution-tasks/${encodeURIComponent(taskId)}/lineage`);
+      state.executionTaskDetail = task;
+      render();
+      return;
+    }
     if (button.dataset.action === "execution-task-links") {
       const current = await get(`/v1/execution-tasks/${encodeURIComponent(taskId)}`);
       const links = window.prompt("Set comma-separated local links (for example agent_trial:<id>). Leave blank to clear all links:", (current.links || []).join(", "));
@@ -1880,6 +1886,7 @@ function renderExecutionTasks(items) {
     actions: [
       executionTaskButton("execution-task-view", item.id, "&#128065;", "View", "secondary"),
       executionTaskButton("execution-task-evidence", item.id, "&#128269;", "Evidence", "secondary"),
+      executionTaskButton("execution-task-lineage", item.id, "&#127795;", "Lineage", "secondary"),
       ... (["completed", "cancelled"].includes(item.status) ? [executionTaskButton("execution-task-closure", item.id, "&#128220;", "Closure", "secondary")] : []),
       executionTaskButton("execution-task-links", item.id, "&#128279;", "Update Links", "secondary"),
       ...(["completed", "cancelled"].includes(item.status) ? [executionTaskButton("execution-task-follow-up", item.id, "&#8618;", "Follow Up", "secondary")] : []),

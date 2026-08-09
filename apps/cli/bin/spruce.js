@@ -51,6 +51,7 @@ import {
   getExecutionTask,
   getExecutionTaskEvidence,
   getExecutionTaskClosure,
+  getExecutionTaskLineage,
   getExecutionTaskBoard,
   getExecutionTaskContract,
   getCandidateExecutionContract,
@@ -631,6 +632,13 @@ function handleExecutionTask(action, args) {
     return;
   }
 
+  if (action === "lineage") {
+    const [taskId] = args;
+    if (!taskId) throw new Error("usage: spruce task lineage <taskId>");
+    printJson(getExecutionTaskLineage(store, taskId));
+    return;
+  }
+
   if (action === "create") {
     const flags = parseFlags(args);
     printJson(createExecutionTask(store, {
@@ -706,7 +714,7 @@ function handleExecutionTask(action, args) {
     return;
   }
 
-  throw new Error("usage: spruce task <list|board|contract|get|evidence|closure|create|follow-up|claim|resume|update>");
+  throw new Error("usage: spruce task <list|board|contract|get|evidence|closure|lineage|create|follow-up|claim|resume|update>");
 }
 
 function handleArtifact(action, args) {
@@ -2130,6 +2138,7 @@ Usage:
   ${executable} task board
   ${executable} task evidence <taskId>
   ${executable} task closure <taskId>
+  ${executable} task lineage <taskId>
   ${executable} task contract
   ${executable} artifact list [--traceId <traceId>] [--kind tool_result]
   ${executable} artifact get <artifactId>

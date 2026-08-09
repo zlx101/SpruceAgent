@@ -18,6 +18,7 @@ export const EXECUTION_TASK_CONTRACT = Object.freeze({
     "Waiting-for-human state requires a concrete decision gate instead of silently treating missing authority as a blocker.",
     "Blocked state requires a concrete blocker statement so the board remains actionable; recording it does not request or grant authority.",
     "Resuming a blocked or waiting task requires a concrete resumption summary and next action; resumption does not execute any work.",
+    "Task lineage is a read-only projection of follow-up records; diagnostics never repair links or change task authority.",
     "A follow-up links durable control state to a terminal task; it does not reopen, rerun, or authorize the prior task.",
     "Terminal evidence is captured as a read-only local snapshot for audit; it is not an approval, independent verification, or execution authority.",
   ],
@@ -209,6 +210,71 @@ export function getExecutionTaskClosure(store, taskId) {
     completion: task.completion ?? null,
     cancellation: task.cancellation ?? null,
     diagnostic: diagnostic?.diagnostic ?? null,
+    limits: EXECUTION_TASK_CONTRACT.safetyBoundary,
+  };
+}
+
+export function getExecutionTaskLineage(store, taskId) {
+  const task = getExecutionTask(store, taskId);
+  const items = listExecutionTasks(store).items;
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const diagnostics = [];
+  const ancestors = [];
+  const visitedAncestors = new Set([task.id]);
+  let cursor = task;
+  while (cursor.followUpOf) {
+    if (visitedAncestors.has(cursor.followUpOf)) {
+      diagnostics.push({ code: "lineage_cycle", taskId: cursor.id, followUpOf: cursor.followUpOf });
+      break;
+    }
+    const parent = byId.get(cursor.followUpOf);
+    if (!parent) {
+      diagnostics.push({ code: "lineage_parent_missing", taskId: cursor.id, followUpOf: cursor.followUpOf });
+      break;
+    }
+    ancestors.unshift(parent);
+    visitedAncestors.add(parent.id);
+    cursor = parent;
+    if (ancestors.length >= 50) {
+      diagnostics.push({ code: "lineage_depth_limit", limit: 50 });
+      break;
+    }
+  }
+  const childrenByParent = new Map();
+  for (const item of items) {
+    if (!item.followUpOf) continue;
+    const children = childrenByParent.get(item.followUpOf) ?? [];
+    children.push(item);
+    childrenByParent.set(item.followUpOf, children);
+  }
+  const descendants = [];
+  const queue = [task.id];
+  const visitedDescendants = new Set([task.id]);
+  while (queue.length) {
+    const parentId = queue.shift();
+    for (const child of childrenByParent.get(parentId) ?? []) {
+      if (visitedDescendants.has(child.id)) {
+        diagnostics.push({ code: "lineage_cycle", taskId: parentId, followUpOf: child.id });
+        continue;
+      }
+      descendants.push(child);
+      visitedDescendants.add(child.id);
+      queue.push(child.id);
+      if (descendants.length >= 100) {
+        diagnostics.push({ code: "lineage_descendant_limit", limit: 100 });
+        queue.length = 0;
+        break;
+      }
+    }
+  }
+  return {
+    version: EXECUTION_TASK_CONTRACT.version,
+    interface: "spruceagent.execution-task-lineage",
+    task: taskSummary(task),
+    ancestors,
+    descendants,
+    summary: { ancestorCount: ancestors.length, descendantCount: descendants.length, generation: ancestors.length },
+    diagnostics,
     limits: EXECUTION_TASK_CONTRACT.safetyBoundary,
   };
 }

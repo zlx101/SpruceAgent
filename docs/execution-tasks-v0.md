@@ -102,11 +102,12 @@ All routes are local and require the existing Gateway Bearer token:
 | `GET` | `/v1/execution-tasks/:taskId` | Read one record. |
 | `GET` | `/v1/execution-tasks/:taskId/evidence` | Resolve typed local links as read-only evidence. |
 | `GET` | `/v1/execution-tasks/:taskId/closure` | Read a terminal task's completed or cancellation outcome and captured evidence snapshot. |
+| `GET` | `/v1/execution-tasks/:taskId/lineage` | Read the task's parent and Follow Up descendants as a diagnostic-only projection. |
 | `POST` | `/v1/execution-tasks/:taskId/claim` | Claim with an owner mutex. |
 | `POST` | `/v1/execution-tasks/:taskId/resume` | Resume a blocked or waiting task with an explanation and next action. |
 | `POST` | `/v1/execution-tasks/:taskId/update` | Update state, evidence, or a concrete human gate. |
 
-`createGatewayClient()` provides matching high-level methods: `listExecutionTasks`, `executionTaskBoard`, `executionTaskContract`, `getExecutionTask`, `executionTaskEvidence`, `executionTaskClosure`, `createExecutionTask`, `createExecutionTaskFollowUp`, `claimExecutionTask`, `resumeExecutionTask`, and `updateExecutionTask`.
+`createGatewayClient()` provides matching high-level methods: `listExecutionTasks`, `executionTaskBoard`, `executionTaskContract`, `getExecutionTask`, `executionTaskEvidence`, `executionTaskClosure`, `executionTaskLineage`, `createExecutionTask`, `createExecutionTaskFollowUp`, `claimExecutionTask`, `resumeExecutionTask`, and `updateExecutionTask`.
 
 ## Workbench
 
@@ -120,6 +121,7 @@ The local Workbench has an **Execution Tasks** section with summary count, task 
 - **Complete** asks for browser confirmation plus a bounded completion summary, then only records control state and that audit statement.
 - **Cancel** asks for browser confirmation plus a bounded cancellation reason; it only records task control state and never stops a running Agent or revokes an approval.
 - **Closure** reads a terminal outcome statement and its preserved evidence snapshot.
+- **Lineage** reads the parent and Follow Up chain of any task, including diagnostics for missing parent records or corrupted cycles.
 - **Follow Up** appears on a terminal task and creates a new, linked control-state record; it does not reopen or execute the original task.
 - **View** reads the stored ledger record.
 
@@ -140,3 +142,7 @@ Actual execution remains with the existing TrustKernel, ContextOS freshness chec
 ## Terminal snapshots and diagnostics
 
 The snapshot records what the local typed-link resolver reported at the exact moment an operator completed or cancelled a task. It does **not** prove the external work, re-validate a tool result, stop a running Agent, revoke an approval, or authorize a later action. The task board exposes `closureAttention` only when a terminal record lacks a snapshot or a captured typed link was already missing or unsupported. It is a migration/audit diagnostic, never an execution gate.
+
+## Follow Up lineage
+
+`Lineage` projects the persisted `followUpOf` records into ordered ancestors and breadth-first descendants. It is read-only and bounded (50 ancestors and 100 descendants). Missing parents, cycles, or limit truncation become diagnostic records; SpruceAgent never repairs them automatically or treats a lineage relation as execution authority.

@@ -220,6 +220,7 @@ export {
   getExecutionTask,
   getExecutionTaskBoard,
   getExecutionTaskClosure,
+  getExecutionTaskLineage,
   getExecutionTaskEvidence,
   getExecutionTaskContract,
   listExecutionTasks,

@@ -40,6 +40,7 @@ export function createGatewayClient(options = {}) {
     getExecutionTask: (taskId) => request("GET", `/v1/execution-tasks/${encodePathPart(taskId)}`),
     executionTaskEvidence: (taskId) => request("GET", `/v1/execution-tasks/${encodePathPart(taskId)}/evidence`),
     executionTaskClosure: (taskId) => request("GET", `/v1/execution-tasks/${encodePathPart(taskId)}/closure`),
+    executionTaskLineage: (taskId) => request("GET", `/v1/execution-tasks/${encodePathPart(taskId)}/lineage`),
     createExecutionTask: (input = {}) => request("POST", "/v1/execution-tasks", input),
     createExecutionTaskFollowUp: (taskId, input = {}) => request("POST", `/v1/execution-tasks/${encodePathPart(taskId)}/follow-up`, input),
     claimExecutionTask: (taskId, input = {}) => request("POST", `/v1/execution-tasks/${encodePathPart(taskId)}/claim`, input),
