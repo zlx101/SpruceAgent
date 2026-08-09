@@ -160,6 +160,7 @@ const nodes = {
   executionTaskList: document.querySelector("#execution-task-list"),
   executionTaskPanel: document.querySelector("#execution-task-panel"),
   autopilotState: document.querySelector("#autopilot-state"),
+  autopilotCreateButton: document.querySelector("#autopilot-create-button"),
   autopilotRunDueButton: document.querySelector("#autopilot-run-due-button"),
   autopilotList: document.querySelector("#autopilot-list"),
   autopilotPanel: document.querySelector("#autopilot-panel"),
@@ -361,6 +362,7 @@ nodes.executionTaskList.addEventListener("click", async (event) => {
   if (!button) return;
   await handleExecutionTaskAction(button);
 });
+nodes.autopilotCreateButton.addEventListener("click", createAutopilotFromWorkbench);
 nodes.autopilotRunDueButton.addEventListener("click", runDueAutopilotsFromWorkbench);
 nodes.autopilotList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action]");
@@ -618,6 +620,40 @@ async function createExecutionTaskFromWorkbench() {
     state.executionTaskDetail = task;
     render();
     setStatus(`Task created - ${shortId(task.id)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+  }
+}
+
+async function createAutopilotFromWorkbench() {
+  if (state.busy) return;
+  const name = window.prompt("Name this recurring control-state rule:");
+  if (!name?.trim()) return;
+  const goal = window.prompt("Describe the bounded Execution Task goal this rule may create:");
+  if (!goal?.trim()) return;
+  const intervalMinutes = window.prompt("Interval in minutes (5 to 10080):", "1440");
+  if (intervalMinutes === null) return;
+  const nextAction = window.prompt("What is the next non-authorizing action for the created task? (optional)");
+  try {
+    state.busy = true;
+    const rule = await post("/v1/autopilots", {
+      name: name.trim(),
+      goal: goal.trim(),
+      intervalMinutes: intervalMinutes.trim(),
+      nextAction: nextAction?.trim() || undefined,
+      actor: "workbench-user",
+    });
+    const [autopilots, autopilotDue, status] = await Promise.all([
+      get("/v1/autopilots"), get("/v1/autopilots/due"), get("/v1/status"),
+    ]);
+    state.autopilots = autopilots;
+    state.autopilotDue = autopilotDue;
+    state.status = status;
+    state.autopilotDetail = rule;
+    render();
+    setStatus(`Autopilot rule created - ${shortId(rule.id)}`);
   } catch (error) {
     setStatus(error.message, true);
   } finally {
