@@ -1904,6 +1904,7 @@ test("gateway route contract exposes stable route ids", () => {
   assert.ok(routeIds.includes("approval_queue.contract"));
   assert.ok(routeIds.includes("execution_tasks.list"));
   assert.ok(routeIds.includes("execution_tasks.create"));
+  assert.ok(routeIds.includes("execution_tasks.evidence"));
   assert.ok(routeIds.includes("execution_tasks.update"));
   assert.ok(routeIds.includes("artifacts.list"));
   assert.ok(routeIds.includes("artifacts.get"));
@@ -2160,6 +2161,7 @@ test("gateway client manages durable execution task control without execution", 
       note: "test evidence is ready",
     });
     const loaded = await client.getExecutionTask(task.id);
+    const evidence = await client.executionTaskEvidence(task.id);
     const listed = await client.listExecutionTasks({ owner: "reviewer" });
     const board = await client.executionTaskBoard();
 
@@ -2168,6 +2170,7 @@ test("gateway client manages durable execution task control without execution", 
     assert.equal(claimed.status, "in_progress");
     assert.equal(waiting.humanGate, "Approve the release decision");
     assert.equal(loaded.id, task.id);
+    assert.equal(evidence.interface, "spruceagent.execution-task-evidence");
     assert.equal(listed.summary.total, 1);
     assert.equal(board.attention[0].id, task.id);
     assert.equal(board.attention[0].status, "waiting_for_human");

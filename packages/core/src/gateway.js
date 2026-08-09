@@ -261,6 +261,13 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       description: "Read one durable execution-control task.",
     },
     {
+      id: "execution_tasks.evidence",
+      method: "GET",
+      path: "/v1/execution-tasks/:taskId/evidence",
+      authRequired: true,
+      description: "Resolve typed local task links as read-only evidence without granting authority.",
+    },
+    {
       id: "execution_tasks.create",
       method: "POST",
       path: "/v1/execution-tasks",

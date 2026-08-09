@@ -74,6 +74,7 @@ All routes are local and require the existing Gateway Bearer token:
 | `GET` | `/v1/execution-tasks/contract` | Read the safety contract. |
 | `POST` | `/v1/execution-tasks` | Create local control state. |
 | `GET` | `/v1/execution-tasks/:taskId` | Read one record. |
+| `GET` | `/v1/execution-tasks/:taskId/evidence` | Resolve typed local links as read-only evidence. |
 | `POST` | `/v1/execution-tasks/:taskId/claim` | Claim with an owner mutex. |
 | `POST` | `/v1/execution-tasks/:taskId/update` | Update state, evidence, or a concrete human gate. |
 
