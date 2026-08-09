@@ -3,7 +3,7 @@ import path from "node:path";
 import { createId, nowIso } from "./id.js";
 import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
 import { getArtifact } from "./artifacts.js";
-import { getAgentLaunch } from "./agent-launcher.js";
+import { getAgentLaunch, listAgentLaunches } from "./agent-launcher.js";
 import { getAgentTrial } from "./agent-trials.js";
 import { getFleetRun } from "./fleet-runs.js";
 import { getLaunchReview } from "./launch-review.js";
@@ -324,6 +324,9 @@ function captureEvidence(store, task, capturedAt) {
     taskId: task.id,
     capturedAt,
     links: task.links.map((link) => resolveLink(store, link)),
+    linkedLaunches: listAgentLaunches(store).items
+      .filter((launch) => launch.executionTaskId === task.id)
+      .map((launch) => ({ id: launch.id, status: launch.status, traceId: launch.traceId, authority: "declared_reference" })),
     evidenceRefs: task.evidenceRefs.map((ref) => ({ ref, status: "declared", authority: "reference_only" })),
     limits: EXECUTION_TASK_CONTRACT.safetyBoundary,
   };

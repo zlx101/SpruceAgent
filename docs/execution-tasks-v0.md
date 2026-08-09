@@ -100,6 +100,8 @@ npm run spruce -- task contract
 
 `--ifUpdatedAt` is optional on `claim`, `follow-up`, `handoff`, `resume`, and `update`; it is a local optimistic-concurrency guard, not an approval or execution token.
 
+An Agent Launch may separately declare `executionTaskId` (CLI: `spruce agent launch <workspaceId> --executionTaskId <taskId>`). Evidence views list matching launches as `declared_reference`; this is traceability metadata only and never validates work, changes task state, or grants authority.
+
 For a resolvable local link, use one of the supported `kind:<id>` values above, where `<id>` is a single safe identifier (`A-Z`, `a-z`, `0-9`, `_`, or `-`, at most 160 characters). Paths, URLs, and IDs containing separators are reported as unsupported and are never passed to a local record reader.
 
 ## Gateway and client

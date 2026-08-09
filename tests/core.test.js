@@ -360,16 +360,23 @@ test("execution task evidence resolves typed local records without granting auth
     policyStatus: "allowed",
   });
   const trace = startTrace(store, { goal: "Inspect linked execution trace" });
-  fs.mkdirSync(path.join(store.root, "agent-launches"), { recursive: true });
-  fs.writeFileSync(path.join(store.root, "agent-launches", "launch_demo.json"), JSON.stringify({
-    id: "launch_demo",
-    status: "completed",
-  }), "utf8");
   const task = createExecutionTask(store, {
     goal: "Inspect trial evidence",
     links: [`agent_trial:${trial.id}`, "artifact:artifact_missing", "agent_launch:launch_demo", `trace:${trace.id}`, "agent_trial:../outside", "free-form-note"],
     evidenceRefs: ["tests/core.test.js"],
   });
+  fs.mkdirSync(path.join(store.root, "agent-launches"), { recursive: true });
+  fs.writeFileSync(path.join(store.root, "agent-launches", "launch_demo.json"), JSON.stringify({
+    id: "launch_demo",
+    status: "completed",
+    executionTaskId: task.id,
+  }), "utf8");
+  fs.writeFileSync(path.join(store.root, "agent-launch-index.jsonl"), `${JSON.stringify({
+    id: "launch_demo",
+    status: "completed",
+    traceId: null,
+    executionTaskId: task.id,
+  })}\n`, "utf8");
   const evidence = getExecutionTaskEvidence(store, task.id);
 
   assert.equal(evidence.interface, "spruceagent.execution-task-evidence");
@@ -383,6 +390,12 @@ test("execution task evidence resolves typed local records without granting auth
   assert.equal(evidence.links[3].recordStatus, "running");
   assert.equal(evidence.links[4].status, "unsupported");
   assert.equal(evidence.links[5].status, "unsupported");
+  assert.deepEqual(evidence.linkedLaunches, [{
+    id: "launch_demo",
+    status: "completed",
+    traceId: null,
+    authority: "declared_reference",
+  }]);
   assert.equal(evidence.evidenceRefs[0].authority, "reference_only");
   assert.equal(getExecutionTaskBoard(store).evidenceAttention[0].issues.length, 3);
 });

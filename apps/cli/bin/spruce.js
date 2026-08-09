@@ -1719,6 +1719,7 @@ async function handleAgent(action, args = []) {
       execute: Boolean(flags.execute),
       trustMode: flags.trustMode ?? "approve",
       approvalId: flags.approvalId,
+      executionTaskId: flags.executionTaskId,
       timeoutMs: flags.timeoutMs,
       actor: flags.actor ?? "local-user",
       channel: "cli",

@@ -50,6 +50,7 @@ export function getAgentLauncherContract() {
 
 export async function launchAgentWorkspace(store, input = {}, runtime = {}) {
   const workspace = getAgentWorkspace(store, input.workspaceId);
+  const executionTaskId = normalizeExecutionTaskId(input.executionTaskId);
   const launchId = createId("agent_launch");
   const createdAt = nowIso();
   const execute = input.execute === true;
@@ -63,6 +64,7 @@ export async function launchAgentWorkspace(store, input = {}, runtime = {}) {
       launchId,
       workspaceId: workspace.id,
       adapterId: workspace.adapter.id,
+      executionTaskId,
     },
   });
 
@@ -81,6 +83,7 @@ export async function launchAgentWorkspace(store, input = {}, runtime = {}) {
       executionMode: "preview_only",
       workspace,
       traceId: trace.id,
+      executionTaskId,
       command: plannedCommand(workspace, input),
       notes: [
         "Launch was planned only.",
@@ -100,6 +103,7 @@ export async function launchAgentWorkspace(store, input = {}, runtime = {}) {
       executionMode: "external_cli_disabled",
       workspace,
       traceId: trace.id,
+      executionTaskId,
       command: plannedCommand(workspace, input),
       notes: [
         `${workspace.adapter.name} execution is not enabled in External CLI Launcher v1.`,
@@ -149,6 +153,7 @@ export async function launchAgentWorkspace(store, input = {}, runtime = {}) {
       executionMode: "policy_denied",
       workspace,
       traceId: trace.id,
+      executionTaskId,
       command,
       invocation: externalInvocation ? publicExternalCliInvocation(externalInvocation) : null,
       policyDecision: decision,
@@ -165,6 +170,7 @@ export async function launchAgentWorkspace(store, input = {}, runtime = {}) {
       input: approvalInput,
       decision,
       traceId: trace.id,
+      executionTaskId,
       requester: input.actor ?? "local-user",
       reason: "Agent Launcher invocation requires approval before execution.",
       metadata: {
@@ -229,6 +235,7 @@ export async function launchAgentWorkspace(store, input = {}, runtime = {}) {
     executionMode: externalInvocation ? "external_cli" : "local_shell",
     workspace,
     traceId: trace.id,
+    executionTaskId,
     command,
     policyDecision: decision,
     startedAt,
@@ -295,6 +302,7 @@ function buildLaunchRecord(input) {
     status: input.status,
     executionMode: input.executionMode,
     traceId: input.traceId,
+    executionTaskId: normalizeExecutionTaskId(input.executionTaskId),
     workspaceId: input.workspace.id,
     workspacePath: input.workspace.workspacePath,
     adapter: input.workspace.adapter,
@@ -326,6 +334,7 @@ function persistLaunch(store, record) {
     status: record.status,
     executionMode: record.executionMode,
     traceId: record.traceId,
+    executionTaskId: record.executionTaskId,
     workspaceId: record.workspaceId,
     adapter: record.adapter,
     goal: record.goal,
@@ -341,6 +350,13 @@ function persistLaunch(store, record) {
 
 function plannedCommand(workspace, input) {
   return input.command ?? `${workspace.launchPreview.command} ${workspace.launchPreview.args.join(" ")}`.trim();
+}
+
+function normalizeExecutionTaskId(value) {
+  if (value === undefined || value === null || String(value).trim() === "") return null;
+  const id = String(value).trim();
+  if (!/^[A-Za-z0-9_-]{1,160}$/.test(id)) throw new Error("executionTaskId must be a single safe identifier");
+  return id;
 }
 
 async function runCommand(command, cwd, input) {
