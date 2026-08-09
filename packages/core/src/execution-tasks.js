@@ -350,15 +350,20 @@ function terminalDiagnostic(task) {
     status: task.status,
     diagnostic: { code: "terminal_evidence_snapshot_missing", message: "This terminal task lacks an evidence snapshot." },
   };
-  const issues = snapshot.links.filter((link) => ["missing", "unsupported"].includes(link.status));
-  const adverse = snapshot.links.filter((link) => link.status === "resolved" && ["failed", "blocked", "cancelled", "requires_approval"].includes(link.recordStatus));
+  const issues = (snapshot.links ?? []).filter((link) => ["missing", "unsupported"].includes(link.status));
+  const adverse = (snapshot.links ?? []).filter((link) => link.status === "resolved" && isAdverseExecutionStatus(link.recordStatus));
+  const declaredAdverse = [
+    ...(snapshot.linkedLaunches ?? []).map((item) => ({ kind: "agent_launch", ...item })),
+    ...(snapshot.linkedFleetRuns ?? []).map((item) => ({ kind: "fleet_run", ...item })),
+    ...(snapshot.linkedSquads ?? []).map((item) => ({ kind: "squad", ...item })),
+  ].filter((item) => isAdverseExecutionStatus(item.status));
   if (issues.length) return {
     taskId: task.id,
     goal: task.goal,
     status: task.status,
     diagnostic: { code: "terminal_evidence_snapshot_issues", issues },
   };
-  return adverse.length ? {
+  if (adverse.length) return {
     taskId: task.id,
     goal: task.goal,
     status: task.status,
@@ -367,7 +372,21 @@ function terminalDiagnostic(task) {
       message: "A linked execution record had a non-success status when this task became terminal; this is diagnostic only.",
       links: adverse,
     },
+  };
+  return declaredAdverse.length ? {
+    taskId: task.id,
+    goal: task.goal,
+    status: task.status,
+    diagnostic: {
+      code: "terminal_declared_evidence_adverse_status",
+      message: "A declared Agent Launch, Fleet Run, or Squad record had a non-success status when this task became terminal; this is diagnostic only.",
+      records: declaredAdverse,
+    },
   } : null;
+}
+
+function isAdverseExecutionStatus(status) {
+  return ["failed", "blocked", "cancelled", "requires_approval", "preparation_failed", "approval_partial", "partial_failure"].includes(status);
 }
 
 function updateTask(store, task, changes, type, actor, note) {

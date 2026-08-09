@@ -426,6 +426,32 @@ test("terminal task diagnostics surface adverse resolved execution evidence with
   assert.equal(getExecutionTaskBoard(store).closureAttention[0].diagnostic.code, "terminal_evidence_adverse_status");
 });
 
+test("terminal task diagnostics surface adverse declared launch evidence without changing authority", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const task = createExecutionTask(store, { goal: "Record the declared launch failure" });
+  fs.writeFileSync(path.join(store.root, "agent-launches", "launch_declared_failed.json"), JSON.stringify({
+    id: "launch_declared_failed",
+    status: "failed",
+    executionTaskId: task.id,
+  }), "utf8");
+  fs.writeFileSync(path.join(store.root, "agent-launch-index.jsonl"), `${JSON.stringify({
+    id: "launch_declared_failed",
+    status: "failed",
+    executionTaskId: task.id,
+  })}\n`, "utf8");
+  updateExecutionTask(store, task.id, {
+    status: "completed",
+    completionSummary: "The declared failure was inspected and follow-up work was recorded.",
+  });
+
+  const closure = getExecutionTaskClosure(store, task.id);
+  assert.equal(closure.diagnostic.code, "terminal_declared_evidence_adverse_status");
+  assert.equal(closure.diagnostic.records[0].kind, "agent_launch");
+  assert.equal(closure.diagnostic.records[0].status, "failed");
+  assert.equal(getExecutionTaskBoard(store).closureAttention[0].diagnostic.code, "terminal_declared_evidence_adverse_status");
+});
+
 test("doctor reports alpha readiness without failed checks", () => {
   const report = runDoctor(path.resolve("."));
 

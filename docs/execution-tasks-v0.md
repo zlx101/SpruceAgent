@@ -161,7 +161,7 @@ Actual execution remains with the existing TrustKernel, ContextOS freshness chec
 
 ## Terminal snapshots and diagnostics
 
-The snapshot records what the local typed-link resolver reported at the exact moment an operator completed or cancelled a task. It does **not** prove the external work, re-validate a tool result, stop a running Agent, revoke an approval, or authorize a later action. The task board exposes `closureAttention` when a terminal record lacks a snapshot, a captured typed link was already missing or unsupported, or a resolved linked record had an adverse status (`failed`, `blocked`, `cancelled`, or `requires_approval`) at closure time. It is a read-only migration/audit diagnostic, never an execution gate or a source of authority.
+The snapshot records what the local typed-link resolver and declared Fleet, Squad, and Agent Launch projections reported at the exact moment an operator completed or cancelled a task. It does **not** prove the external work, re-validate a tool result, stop a running Agent, revoke an approval, or authorize a later action. The task board exposes `closureAttention` when a terminal record lacks a snapshot, a captured typed link was already missing or unsupported, or a linked/declared execution record had an adverse status (for example `failed`, `blocked`, `cancelled`, `requires_approval`, `preparation_failed`, or `partial_failure`) at closure time. It is a read-only migration/audit diagnostic, never an execution gate or a source of authority.
 
 ## Follow Up lineage
 
