@@ -48,6 +48,7 @@ import {
   getCandidateApprovalContract,
   getContextEvidenceContract,
   getExecutionTask,
+  getExecutionTaskEvidence,
   getExecutionTaskBoard,
   getExecutionTaskContract,
   getCandidateExecutionContract,
@@ -608,6 +609,13 @@ function handleExecutionTask(action, args) {
     const [taskId] = args;
     if (!taskId) throw new Error("usage: spruce task get <taskId>");
     printJson(getExecutionTask(store, taskId));
+    return;
+  }
+
+  if (action === "evidence") {
+    const [taskId] = args;
+    if (!taskId) throw new Error("usage: spruce task evidence <taskId>");
+    printJson(getExecutionTaskEvidence(store, taskId));
     return;
   }
 
