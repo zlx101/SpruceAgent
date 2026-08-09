@@ -41,6 +41,7 @@ Each record includes a bounded goal, optional scope and owner, next action, conc
 - `completed` and `cancelled` clear `nextAction`; terminal tasks cannot be claimed.
 - All create, claim, and update events are appended to the audit ledger.
 - The board orders unresolved attention as `waiting_for_human`, `blocked`, `in_progress`, then `open`.
+- The board also exposes `evidenceAttention` for unresolved tasks whose typed links are missing or unsupported; this is diagnostic state only and never changes task or execution authority.
 
 ## CLI
 
