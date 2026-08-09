@@ -63,7 +63,7 @@ import {
 } from "./task-router.js";
 import { approveTicket, getApprovalTicket, listApprovalTickets, rejectTicket } from "./approvals.js";
 import { getApprovalQueue, getApprovalQueueContract } from "./approval-queue.js";
-import { claimExecutionTask, createExecutionTask, createExecutionTaskFollowUp, getExecutionTask, getExecutionTaskBoard, getExecutionTaskClosure, getExecutionTaskContract, getExecutionTaskEvidence, listExecutionTasks, updateExecutionTask } from "./execution-tasks.js";
+import { claimExecutionTask, createExecutionTask, createExecutionTaskFollowUp, getExecutionTask, getExecutionTaskBoard, getExecutionTaskClosure, getExecutionTaskContract, getExecutionTaskEvidence, listExecutionTasks, resumeExecutionTask, updateExecutionTask } from "./execution-tasks.js";
 import { getArtifact, getArtifactContract, listArtifacts } from "./artifacts.js";
 import { assessWorkspaceIndexFreshness, buildWorkspaceIndex, readWorkspaceIndex, searchWorkspaceContext } from "./context.js";
 import { createContextEvidencePack, getContextEvidenceContract } from "./context-evidence.js";
@@ -301,6 +301,13 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/execution-tasks/:taskId/update",
       authRequired: true,
       description: "Update task control state; terminal tasks cannot reopen, human waiting and blocked states require concrete reasons, and first completion or cancellation requires a recorded outcome.",
+    },
+    {
+      id: "execution_tasks.resume",
+      method: "POST",
+      path: "/v1/execution-tasks/:taskId/resume",
+      authRequired: true,
+      description: "Resume a blocked or waiting task with a recorded reason and next action; does not execute work.",
     },
     {
       id: "artifacts.list",
@@ -1417,6 +1424,7 @@ async function routeRequest(store, request, url, body) {
   if (request.method === "POST" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "follow-up" && !pathParts[4]) return ok(createExecutionTaskFollowUp(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
   if (request.method === "GET" && pathParts[1] === "execution-tasks" && pathParts[2] && !pathParts[3]) return ok(getExecutionTask(store, pathParts[2]));
   if (request.method === "POST" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "claim" && !pathParts[4]) return ok(claimExecutionTask(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
+  if (request.method === "POST" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "resume" && !pathParts[4]) return ok(resumeExecutionTask(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
   if (request.method === "POST" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "update" && !pathParts[4]) return ok(updateExecutionTask(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
 
   if (request.method === "GET" && url.pathname === "/v1/artifacts") {

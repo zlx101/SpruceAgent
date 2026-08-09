@@ -225,6 +225,7 @@ export {
   listExecutionTasks,
   claimExecutionTask,
   updateExecutionTask,
+  resumeExecutionTask,
   EXECUTION_TASK_CONTRACT,
 } from "./execution-tasks.js";
 export { runAgent } from "./agent-runner.js";

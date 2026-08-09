@@ -183,6 +183,7 @@ import {
   updateWorkflow,
   updateExecutionTask,
   claimExecutionTask,
+  resumeExecutionTask,
   validateLlmProviderConfig,
   cancelFleetRun,
 } from "../packages/core/src/index.js";
@@ -251,6 +252,15 @@ test("execution tasks preserve ownership, gates, evidence, and operator attentio
   assert.throws(() => updateExecutionTask(store, task.id, { status: "blocked" }), /blocker is required/);
   const blocked = updateExecutionTask(store, task.id, { status: "blocked", blocker: "Awaiting repository access" });
   assert.equal(blocked.blocker, "Awaiting repository access");
+  assert.throws(() => updateExecutionTask(store, task.id, { status: "in_progress" }), /use resumeExecutionTask/);
+  assert.throws(() => resumeExecutionTask(store, task.id, { resumptionSummary: "Access granted" }), /nextAction is required/);
+  const resumed = resumeExecutionTask(store, task.id, {
+    resumptionSummary: "Repository access was granted",
+    nextAction: "Run the focused validation",
+  });
+  assert.equal(resumed.status, "in_progress");
+  assert.equal(resumed.blocker, null);
+  assert.equal(resumed.history.at(-1).type, "resumed");
   assert.throws(() => claimExecutionTask(store, task.id, { owner: "other-agent" }), /already claimed/);
   assert.throws(() => updateExecutionTask(store, task.id, { status: "completed" }), /completionSummary is required/);
   const completed = updateExecutionTask(store, task.id, {
@@ -1940,6 +1950,7 @@ test("gateway route contract exposes stable route ids", () => {
   assert.ok(routeIds.includes("execution_tasks.create"));
   assert.ok(routeIds.includes("execution_tasks.evidence"));
   assert.ok(routeIds.includes("execution_tasks.closure"));
+  assert.ok(routeIds.includes("execution_tasks.resume"));
   assert.ok(routeIds.includes("execution_tasks.update"));
   assert.ok(routeIds.includes("artifacts.list"));
   assert.ok(routeIds.includes("artifacts.get"));
@@ -2057,7 +2068,7 @@ test("gateway serves workbench static assets without API auth", async () => {
     assert.equal(mark.status, 200);
     assert.match(html.body, /System Overview|system-overview|Launch Run|Context Evidence|context-evidence-list|context-evidence-panel|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Agent Adapters|agent-adapter-list|agent-plan-panel|Agent Workspaces|agent-workspace-list|agent-workspace-panel|Agent Launches|agent-launch-list|agent-launch-panel|Launch Reviews|launch-review-list|launch-review-panel|Agent Routing|capability-probe-button|task-route-button|task-route-list|task-route-panel|Fleet Runs|fleet-run-list|fleet-run-panel|Execution Tasks|execution-task-create-button|execution-task-list|execution-task-panel|Workflow Versions|Workflow Runs|Decision Queue|decision-queue-list|Artifacts|artifact-list|artifact-panel|Run Detail/);
     assert.match(css.body, /Agent Workbench|summary-grid|overview-grid|overview-item|work-section|detail-panel|run-form|draft-step-list|draft-step-fields|source-map-list|evaluation-preview|artifact-preview|evidence-preview|fleet-run-preview|agent-plan-preview|agent-workspace-preview|agent-launch-preview/);
-    assert.match(js.body, /submitRun|searchContextEvidenceFromWorkbench|renderSystemOverview|renderContextEvidence|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|prepareAgentWorkspaceFromWorkbench|previewAgentLaunch|loadAgentWorkspace|loadAgentLaunch|createLaunchReviewFromWorkbench|loadLaunchReview|probeCapabilitiesFromWorkbench|routeTaskFromWorkbench|loadTaskRoute|renderAgentAdapters|renderAgentPlanPanel|renderAgentWorkspacePanel|renderAgentLaunches|renderAgentLaunchPanel|renderLaunchReviews|renderLaunchReviewPanel|renderCapabilityProbePanel|renderTaskRoutes|renderTaskRoutePanel|renderFleetRuns|renderFleetRunPanel|renderExecutionTasks|createExecutionTaskFromWorkbench|handleExecutionTaskAction|execution-task-links|execution-task-follow-up|execution-task-closure|execution-task-cancel|execution-task-block|completionSummary|cancellationSummary|blocker|loadExecutionTasks|fleetRunViewButton|loadFleetRun|taskRouteViewButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|agentWorkspaces|agentLaunches|launchReviews|capabilityProbes|taskRoutes|fleetRuns|executionTasks|resume|inbox|approval/i);
+    assert.match(js.body, /submitRun|searchContextEvidenceFromWorkbench|renderSystemOverview|renderContextEvidence|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|prepareAgentWorkspaceFromWorkbench|previewAgentLaunch|loadAgentWorkspace|loadAgentLaunch|createLaunchReviewFromWorkbench|loadLaunchReview|probeCapabilitiesFromWorkbench|routeTaskFromWorkbench|loadTaskRoute|renderAgentAdapters|renderAgentPlanPanel|renderAgentWorkspacePanel|renderAgentLaunches|renderAgentLaunchPanel|renderLaunchReviews|renderLaunchReviewPanel|renderCapabilityProbePanel|renderTaskRoutes|renderTaskRoutePanel|renderFleetRuns|renderFleetRunPanel|renderExecutionTasks|createExecutionTaskFromWorkbench|handleExecutionTaskAction|execution-task-links|execution-task-follow-up|execution-task-closure|execution-task-cancel|execution-task-block|execution-task-resume|completionSummary|cancellationSummary|resumptionSummary|blocker|loadExecutionTasks|fleetRunViewButton|loadFleetRun|taskRouteViewButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|agentWorkspaces|agentLaunches|launchReviews|capabilityProbes|taskRoutes|fleetRuns|executionTasks|resume|inbox|approval/i);
     assert.match(mark.body, /SpruceAgent mark/);
   } finally {
     await closeServer(gateway.server);
@@ -2232,6 +2243,12 @@ test("gateway client manages durable execution task control without execution", 
       blocker: "Gateway recorded the missing access decision",
     });
     assert.equal(blocked.blocker, "Gateway recorded the missing access decision");
+    const resumed = await client.resumeExecutionTask(blockedTask.id, {
+      resumptionSummary: "Gateway recorded the access decision",
+      nextAction: "Run the focused gateway validation",
+    });
+    assert.equal(resumed.status, "in_progress");
+    assert.equal(resumed.blocker, null);
   } finally {
     await closeServer(gateway.server);
   }

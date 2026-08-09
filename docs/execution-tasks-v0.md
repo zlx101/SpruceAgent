@@ -39,6 +39,7 @@ Each record includes a bounded goal, optional scope and owner, next action, conc
 - Claiming uses a durable owner mutex. A task already claimed by a different owner cannot be claimed again.
 - `waiting_for_human` requires a non-empty concrete `humanGate`.
 - `blocked` requires a non-empty concrete `blocker`; an unexplained blocked status is rejected.
+- Resuming a `blocked` or `waiting_for_human` task requires both a bounded `resumptionSummary` and an explicit `nextAction`; it clears the stale blocker or human gate and appends a dedicated `resumed` audit event.
 - `completed` and `cancelled` clear `nextAction`; terminal tasks cannot be claimed.
 - Terminal tasks cannot be reopened through an update. A regression or newly discovered scope must be represented by a new follow-up task, keeping the original task's outcome record intact.
 - A follow-up can only reference a terminal parent and persists `followUpOf` on the new task. It creates no execution, approval, or inherited ownership authority.
@@ -67,6 +68,9 @@ npm run spruce -- task update <taskId> \
 npm run spruce -- task update <taskId> \
   --status blocked \
   --blocker "Waiting for a repository-access decision"
+npm run spruce -- task resume <taskId> \
+  --resumptionSummary "Repository access was granted" \
+  --nextAction "Run the focused validation"
 npm run spruce -- task update <taskId> \
   --status completed \
   --completionSummary "Focused checks passed and release handoff was recorded"
@@ -99,9 +103,10 @@ All routes are local and require the existing Gateway Bearer token:
 | `GET` | `/v1/execution-tasks/:taskId/evidence` | Resolve typed local links as read-only evidence. |
 | `GET` | `/v1/execution-tasks/:taskId/closure` | Read a terminal task's completed or cancellation outcome and captured evidence snapshot. |
 | `POST` | `/v1/execution-tasks/:taskId/claim` | Claim with an owner mutex. |
+| `POST` | `/v1/execution-tasks/:taskId/resume` | Resume a blocked or waiting task with an explanation and next action. |
 | `POST` | `/v1/execution-tasks/:taskId/update` | Update state, evidence, or a concrete human gate. |
 
-`createGatewayClient()` provides matching high-level methods: `listExecutionTasks`, `executionTaskBoard`, `executionTaskContract`, `getExecutionTask`, `executionTaskEvidence`, `executionTaskClosure`, `createExecutionTask`, `createExecutionTaskFollowUp`, `claimExecutionTask`, and `updateExecutionTask`.
+`createGatewayClient()` provides matching high-level methods: `listExecutionTasks`, `executionTaskBoard`, `executionTaskContract`, `getExecutionTask`, `executionTaskEvidence`, `executionTaskClosure`, `createExecutionTask`, `createExecutionTaskFollowUp`, `claimExecutionTask`, `resumeExecutionTask`, and `updateExecutionTask`.
 
 ## Workbench
 
@@ -111,6 +116,7 @@ The local Workbench has an **Execution Tasks** section with summary count, task 
 - **Claim** records the fixed `workbench-user` owner through the normal Gateway route.
 - **Need Decision** prompts for the mandatory concrete human gate.
 - **Block** prompts for the mandatory concrete blocker; it is a coordination record only, not an escalation or an approval request.
+- **Resume** is available only for blocked or human-waiting tasks and requires a resumption explanation plus a next action. It records control state only; it does not run a tool or Agent.
 - **Complete** asks for browser confirmation plus a bounded completion summary, then only records control state and that audit statement.
 - **Cancel** asks for browser confirmation plus a bounded cancellation reason; it only records task control state and never stops a running Agent or revokes an approval.
 - **Closure** reads a terminal outcome statement and its preserved evidence snapshot.

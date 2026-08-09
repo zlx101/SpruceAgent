@@ -17,6 +17,7 @@ export const EXECUTION_TASK_CONTRACT = Object.freeze({
     "A task can name a next action and evidence references, but TrustKernel, ContextOS, readiness, and exact approvals remain the execution authorities.",
     "Waiting-for-human state requires a concrete decision gate instead of silently treating missing authority as a blocker.",
     "Blocked state requires a concrete blocker statement so the board remains actionable; recording it does not request or grant authority.",
+    "Resuming a blocked or waiting task requires a concrete resumption summary and next action; resumption does not execute any work.",
     "A follow-up links durable control state to a terminal task; it does not reopen, rerun, or authorize the prior task.",
     "Terminal evidence is captured as a read-only local snapshot for audit; it is not an approval, independent verification, or execution authority.",
   ],
@@ -110,9 +111,12 @@ export function updateExecutionTask(store, taskId, input = {}) {
   if (["completed", "cancelled"].includes(task.status) && status !== task.status) {
     throw new Error(`cannot reopen terminal execution task: ${taskId}; create a follow-up task instead`);
   }
+  if (["blocked", "waiting_for_human"].includes(task.status) && status === "in_progress") {
+    throw new Error(`use resumeExecutionTask to resume ${task.status} execution task: ${taskId}`);
+  }
   const humanGate = status === "waiting_for_human"
     ? requiredText(input.humanGate ?? task.humanGate, "humanGate", 500)
-    : input.humanGate === undefined ? task.humanGate : optionalText(input.humanGate, 500);
+    : null;
   const blocker = status === "blocked"
     ? requiredText(input.blocker ?? task.blocker, "blocker", 500)
     : null;
@@ -149,6 +153,26 @@ export function updateExecutionTask(store, taskId, input = {}) {
     evidenceRefs,
     links,
   }, "updated", input.actor, optionalText(input.note, 500) ?? `status ${task.status} -> ${status}`);
+}
+
+export function resumeExecutionTask(store, taskId, input = {}) {
+  const task = getExecutionTask(store, taskId);
+  if (!["blocked", "waiting_for_human"].includes(task.status)) {
+    throw new Error(`only blocked or waiting execution tasks can resume: ${taskId}`);
+  }
+  const nextAction = requiredText(input.nextAction, "nextAction", 500);
+  const resumptionSummary = requiredText(input.resumptionSummary, "resumptionSummary", 500);
+  return updateTask(store, task, {
+    status: "in_progress",
+    owner: input.owner === undefined ? task.owner : optionalText(input.owner, 160),
+    nextAction,
+    humanGate: null,
+    blocker: null,
+    completion: null,
+    cancellation: null,
+    evidenceRefs: task.evidenceRefs,
+    links: task.links,
+  }, "resumed", input.actor, resumptionSummary);
 }
 
 export function getExecutionTaskBoard(store) {
