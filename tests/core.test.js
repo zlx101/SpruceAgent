@@ -18,6 +18,7 @@ import {
   bindSquadHandoffReview,
   bindSquadMemberWorkspace,
   createContextEvidencePack,
+  createExecutionTask,
   createContextPack,
   createModelContextFromEvidence,
   createSourceMap,
@@ -71,6 +72,9 @@ import {
   getOutcomeEvaluationResult,
   getOutcomeFixture,
   getExternalCliLauncherContract,
+  getExecutionTask,
+  getExecutionTaskBoard,
+  getExecutionTaskContract,
   getAgentTrial,
   getAgentTrialContract,
   getAgentTrialAttestationContract,
@@ -130,6 +134,7 @@ import {
   listTaskRoutes,
   listTools,
   listEvaluations,
+  listExecutionTasks,
   listLlmProviderConfigs,
   listSkillEvaluations,
   listSkillPackageImports,
@@ -173,6 +178,8 @@ import {
   verifyGatewayToken,
   startTrace,
   updateWorkflow,
+  updateExecutionTask,
+  claimExecutionTask,
   validateLlmProviderConfig,
   cancelFleetRun,
 } from "../packages/core/src/index.js";
@@ -186,6 +193,7 @@ test("workspace store initializes core files", () => {
   assert.ok(fs.existsSync(path.join(store.root, "memory.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "trace-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "approval-index.jsonl")));
+  assert.ok(fs.existsSync(path.join(store.root, "execution-task-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "evaluation-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "skill-evaluation-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "outcome-fixture-index.jsonl")));
@@ -214,6 +222,29 @@ test("workspace store initializes core files", () => {
   assert.ok(fs.existsSync(path.join(store.root, "capability-probes")));
   assert.ok(fs.existsSync(path.join(store.root, "agent-routes")));
   assert.ok(fs.existsSync(path.join(store.root, "worktrees")));
+});
+
+test("execution tasks preserve ownership, gates, evidence, and operator attention", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const task = createExecutionTask(store, { goal: "Ship verified task control", nextAction: "Claim the implementation slice" });
+  const claimed = claimExecutionTask(store, task.id, { owner: "coding-agent" });
+  const waiting = updateExecutionTask(store, task.id, {
+    status: "waiting_for_human",
+    humanGate: "Choose whether production deployment is in scope",
+    nextAction: "Await scope decision",
+    evidenceRefs: ["trace_verified", "trace_verified"],
+  });
+  const board = getExecutionTaskBoard(store);
+
+  assert.equal(getExecutionTaskContract().interface, "spruceagent.execution-tasks");
+  assert.equal(claimed.status, "in_progress");
+  assert.equal(waiting.evidenceRefs.length, 1);
+  assert.equal(getExecutionTask(store, task.id).humanGate, "Choose whether production deployment is in scope");
+  assert.equal(listExecutionTasks(store).summary.byStatus.waiting_for_human, 1);
+  assert.equal(board.attention[0].id, task.id);
+  assert.throws(() => updateExecutionTask(store, task.id, { status: "waiting_for_human", humanGate: "" }), /humanGate is required/);
+  assert.throws(() => claimExecutionTask(store, task.id, { owner: "other-agent" }), /already claimed/);
 });
 
 test("doctor reports alpha readiness without failed checks", () => {

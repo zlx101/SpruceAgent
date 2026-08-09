@@ -54,7 +54,9 @@ export function getExecutionTask(store, taskId) {
 }
 
 export function listExecutionTasks(store, options = {}) {
-  const tasks = readJsonl(indexPath(store))
+  const latestById = new Map();
+  for (const item of readJsonl(indexPath(store))) latestById.set(item.id, item);
+  const tasks = [...latestById.values()]
     .map((item) => {
       try { return getExecutionTask(store, item.id); } catch { return item; }
     })
