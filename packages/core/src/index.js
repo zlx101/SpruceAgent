@@ -219,6 +219,7 @@ export {
   createExecutionTaskFollowUp,
   getExecutionTask,
   getExecutionTaskBoard,
+  getExecutionTaskClosure,
   getExecutionTaskEvidence,
   getExecutionTaskContract,
   listExecutionTasks,

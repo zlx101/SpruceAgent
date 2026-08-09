@@ -17,6 +17,7 @@ export const EXECUTION_TASK_CONTRACT = Object.freeze({
     "A task can name a next action and evidence references, but TrustKernel, ContextOS, readiness, and exact approvals remain the execution authorities.",
     "Waiting-for-human state requires a concrete decision gate instead of silently treating missing authority as a blocker.",
     "A follow-up links durable control state to a terminal task; it does not reopen, rerun, or authorize the prior task.",
+    "Completion evidence is captured as a read-only local snapshot for audit; it is not an approval, independent verification, or execution authority.",
   ],
 });
 
@@ -112,11 +113,15 @@ export function updateExecutionTask(store, taskId, input = {}) {
   if (status === "completed" && input.nextAction !== undefined && optionalText(input.nextAction, 500)) {
     throw new Error("completed execution task cannot retain a nextAction");
   }
+  const evidenceRefs = input.evidenceRefs === undefined ? task.evidenceRefs : normalizeRefs(input.evidenceRefs);
+  const links = input.links === undefined ? task.links : normalizeLinks(input.links);
+  const completionRecordedAt = nowIso();
   const completion = status === "completed"
     ? task.completion ?? {
       summary: requiredText(input.completionSummary, "completionSummary", 500),
-      recordedAt: nowIso(),
+      recordedAt: completionRecordedAt,
       recordedBy: optionalText(input.actor, 120) ?? "local-user",
+      evidenceSnapshot: captureEvidence(store, { ...task, evidenceRefs, links }, completionRecordedAt),
     }
     : null;
   return updateTask(store, task, {
@@ -125,8 +130,8 @@ export function updateExecutionTask(store, taskId, input = {}) {
     nextAction: status === "completed" || status === "cancelled" ? null : input.nextAction === undefined ? task.nextAction : optionalText(input.nextAction, 500),
     humanGate,
     completion,
-    evidenceRefs: input.evidenceRefs === undefined ? task.evidenceRefs : normalizeRefs(input.evidenceRefs),
-    links: input.links === undefined ? task.links : normalizeLinks(input.links),
+    evidenceRefs,
+    links,
   }, "updated", input.actor, optionalText(input.note, 500) ?? `status ${task.status} -> ${status}`);
 }
 
@@ -144,19 +149,57 @@ export function getExecutionTaskBoard(store) {
       const issues = evidence.links.filter((link) => ["missing", "unsupported"].includes(link.status));
       return issues.length ? { taskId: item.id, goal: item.goal, status: item.status, issues } : null;
     }).filter(Boolean),
+    closureAttention: listed.items.map((item) => completionDiagnostic(item)).filter(Boolean),
   };
 }
 
 export function getExecutionTaskEvidence(store, taskId) {
   const task = getExecutionTask(store, taskId);
+  return captureEvidence(store, task, nowIso());
+}
+
+export function getExecutionTaskClosure(store, taskId) {
+  const task = getExecutionTask(store, taskId);
+  const diagnostic = completionDiagnostic(task);
+  return {
+    version: EXECUTION_TASK_CONTRACT.version,
+    interface: "spruceagent.execution-task-closure",
+    taskId: task.id,
+    status: task.status,
+    completion: task.completion ?? null,
+    diagnostic: diagnostic?.diagnostic ?? null,
+    limits: EXECUTION_TASK_CONTRACT.safetyBoundary,
+  };
+}
+
+function captureEvidence(store, task, capturedAt) {
   return {
     version: EXECUTION_TASK_CONTRACT.version,
     interface: "spruceagent.execution-task-evidence",
     taskId: task.id,
+    capturedAt,
     links: task.links.map((link) => resolveLink(store, link)),
     evidenceRefs: task.evidenceRefs.map((ref) => ({ ref, status: "declared", authority: "reference_only" })),
     limits: EXECUTION_TASK_CONTRACT.safetyBoundary,
   };
+}
+
+function completionDiagnostic(task) {
+  if (task.status !== "completed") return null;
+  const snapshot = task.completion?.evidenceSnapshot;
+  if (!snapshot) return {
+    taskId: task.id,
+    goal: task.goal,
+    status: task.status,
+    diagnostic: { code: "completion_evidence_snapshot_missing", message: "This completed task predates completion evidence snapshots." },
+  };
+  const issues = snapshot.links.filter((link) => ["missing", "unsupported"].includes(link.status));
+  return issues.length ? {
+    taskId: task.id,
+    goal: task.goal,
+    status: task.status,
+    diagnostic: { code: "completion_evidence_snapshot_issues", issues },
+  } : null;
 }
 
 function updateTask(store, task, changes, type, actor, note) {

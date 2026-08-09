@@ -50,6 +50,7 @@ import {
   getContextEvidenceContract,
   getExecutionTask,
   getExecutionTaskEvidence,
+  getExecutionTaskClosure,
   getExecutionTaskBoard,
   getExecutionTaskContract,
   getCandidateExecutionContract,
@@ -622,6 +623,13 @@ function handleExecutionTask(action, args) {
     return;
   }
 
+  if (action === "closure") {
+    const [taskId] = args;
+    if (!taskId) throw new Error("usage: spruce task closure <taskId>");
+    printJson(getExecutionTaskClosure(store, taskId));
+    return;
+  }
+
   if (action === "create") {
     const flags = parseFlags(args);
     printJson(createExecutionTask(store, {
@@ -682,7 +690,7 @@ function handleExecutionTask(action, args) {
     return;
   }
 
-  throw new Error("usage: spruce task <list|board|contract|get|evidence|create|follow-up|claim|update>");
+  throw new Error("usage: spruce task <list|board|contract|get|evidence|closure|create|follow-up|claim|update>");
 }
 
 function handleArtifact(action, args) {
@@ -2102,6 +2110,7 @@ Usage:
   ${executable} task follow-up <terminalTaskId> --goal "Investigate the discovered regression"
   ${executable} task board
   ${executable} task evidence <taskId>
+  ${executable} task closure <taskId>
   ${executable} task contract
   ${executable} artifact list [--traceId <traceId>] [--kind tool_result]
   ${executable} artifact get <artifactId>

@@ -63,7 +63,7 @@ import {
 } from "./task-router.js";
 import { approveTicket, getApprovalTicket, listApprovalTickets, rejectTicket } from "./approvals.js";
 import { getApprovalQueue, getApprovalQueueContract } from "./approval-queue.js";
-import { claimExecutionTask, createExecutionTask, createExecutionTaskFollowUp, getExecutionTask, getExecutionTaskBoard, getExecutionTaskContract, getExecutionTaskEvidence, listExecutionTasks, updateExecutionTask } from "./execution-tasks.js";
+import { claimExecutionTask, createExecutionTask, createExecutionTaskFollowUp, getExecutionTask, getExecutionTaskBoard, getExecutionTaskClosure, getExecutionTaskContract, getExecutionTaskEvidence, listExecutionTasks, updateExecutionTask } from "./execution-tasks.js";
 import { getArtifact, getArtifactContract, listArtifacts } from "./artifacts.js";
 import { assessWorkspaceIndexFreshness, buildWorkspaceIndex, readWorkspaceIndex, searchWorkspaceContext } from "./context.js";
 import { createContextEvidencePack, getContextEvidenceContract } from "./context-evidence.js";
@@ -266,6 +266,13 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/execution-tasks/:taskId/evidence",
       authRequired: true,
       description: "Resolve typed local task links as read-only evidence without granting authority.",
+    },
+    {
+      id: "execution_tasks.closure",
+      method: "GET",
+      path: "/v1/execution-tasks/:taskId/closure",
+      authRequired: true,
+      description: "Read a completion outcome and its immutable evidence snapshot without granting authority.",
     },
     {
       id: "execution_tasks.create",
@@ -1405,6 +1412,7 @@ async function routeRequest(store, request, url, body) {
   if (request.method === "GET" && url.pathname === "/v1/execution-tasks/board") return ok(getExecutionTaskBoard(store));
   if (request.method === "GET" && url.pathname === "/v1/execution-tasks/contract") return ok(getExecutionTaskContract());
   if (request.method === "GET" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "evidence" && !pathParts[4]) return ok(getExecutionTaskEvidence(store, pathParts[2]));
+  if (request.method === "GET" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "closure" && !pathParts[4]) return ok(getExecutionTaskClosure(store, pathParts[2]));
   if (request.method === "POST" && url.pathname === "/v1/execution-tasks") return ok(createExecutionTask(store, { ...body, actor: body.actor ?? "gateway-user" }));
   if (request.method === "POST" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "follow-up" && !pathParts[4]) return ok(createExecutionTaskFollowUp(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
   if (request.method === "GET" && pathParts[1] === "execution-tasks" && pathParts[2] && !pathParts[3]) return ok(getExecutionTask(store, pathParts[2]));

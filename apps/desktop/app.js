@@ -620,6 +620,12 @@ async function handleExecutionTaskAction(button) {
       render();
       return;
     }
+    if (button.dataset.action === "execution-task-closure") {
+      task = await get(`/v1/execution-tasks/${encodeURIComponent(taskId)}/closure`);
+      state.executionTaskDetail = task;
+      render();
+      return;
+    }
     if (button.dataset.action === "execution-task-links") {
       const current = await get(`/v1/execution-tasks/${encodeURIComponent(taskId)}`);
       const links = window.prompt("Set comma-separated local links (for example agent_trial:<id>). Leave blank to clear all links:", (current.links || []).join(", "));
@@ -1311,6 +1317,7 @@ function render() {
     items: [],
     attention: [],
     evidenceAttention: [],
+    closureAttention: [],
   };
 
   nodes.systemState.textContent = state.status ? "Connected" : "Disconnected";
@@ -1345,7 +1352,7 @@ function render() {
     : "No capability probe";
   nodes.fleetRunState.textContent = `${fleetRuns.summary.total} total / ${fleetRuns.summary.activeCount} active / ${fleetRuns.summary.awaitingApprovalCount} awaiting approval`;
   nodes.squadState.textContent = `${squads.summary.total} total / ${squads.summary.plannedCount} planned`;
-  nodes.executionTaskState.textContent = `${executionTasks.summary.total} total / ${executionTasks.summary.attentionCount} needs attention / ${(executionTasks.evidenceAttention || []).length} evidence issues`;
+  nodes.executionTaskState.textContent = `${executionTasks.summary.total} total / ${executionTasks.summary.attentionCount} needs attention / ${(executionTasks.evidenceAttention || []).length} active evidence issues / ${(executionTasks.closureAttention || []).length} closure diagnostics`;
 
   renderSystemOverview(state.status, state.contextFreshness);
   renderContextEvidence(state.contextEvidence);
@@ -1843,6 +1850,7 @@ function renderExecutionTasks(items) {
     actions: [
       executionTaskButton("execution-task-view", item.id, "&#128065;", "View", "secondary"),
       executionTaskButton("execution-task-evidence", item.id, "&#128269;", "Evidence", "secondary"),
+      ... (item.status === "completed" ? [executionTaskButton("execution-task-closure", item.id, "&#128220;", "Closure", "secondary")] : []),
       executionTaskButton("execution-task-links", item.id, "&#128279;", "Update Links", "secondary"),
       ...(["completed", "cancelled"].includes(item.status) ? [executionTaskButton("execution-task-follow-up", item.id, "&#8618;", "Follow Up", "secondary")] : []),
       ...(item.status === "open" && !item.owner ? [executionTaskButton("execution-task-claim", item.id, "&#9998;", "Claim")] : []),
