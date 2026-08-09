@@ -184,6 +184,7 @@ import {
   updateWorkflow,
   updateExecutionTask,
   claimExecutionTask,
+  handoffExecutionTask,
   resumeExecutionTask,
   validateLlmProviderConfig,
   cancelFleetRun,
@@ -255,6 +256,11 @@ test("execution tasks preserve ownership, gates, evidence, and operator attentio
   assert.equal(blocked.blocker, "Awaiting repository access");
   assert.throws(() => updateExecutionTask(store, task.id, { status: "in_progress" }), /use resumeExecutionTask/);
   assert.throws(() => resumeExecutionTask(store, task.id, { resumptionSummary: "Access granted" }), /nextAction is required/);
+  assert.throws(() => resumeExecutionTask(store, task.id, {
+    owner: "other-agent",
+    resumptionSummary: "Repository access was granted",
+    nextAction: "Run the focused validation",
+  }), /use handoffExecutionTask/);
   const resumed = resumeExecutionTask(store, task.id, {
     resumptionSummary: "Repository access was granted",
     nextAction: "Run the focused validation",
@@ -262,6 +268,27 @@ test("execution tasks preserve ownership, gates, evidence, and operator attentio
   assert.equal(resumed.status, "in_progress");
   assert.equal(resumed.blocker, null);
   assert.equal(resumed.history.at(-1).type, "resumed");
+  assert.throws(() => updateExecutionTask(store, task.id, { owner: "other-agent" }), /use handoffExecutionTask/);
+  assert.throws(() => handoffExecutionTask(store, task.id, {
+    fromOwner: "other-agent",
+    owner: "reviewer",
+    handoffSummary: "Wrong current owner",
+    nextAction: "Review the focused diff",
+  }), /owned by coding-agent/);
+  assert.throws(() => handoffExecutionTask(store, task.id, {
+    fromOwner: "coding-agent",
+    owner: "coding-agent",
+    handoffSummary: "No actual owner change",
+    nextAction: "Review the focused diff",
+  }), /must differ/);
+  const handedOff = handoffExecutionTask(store, task.id, {
+    fromOwner: "coding-agent",
+    owner: "reviewer",
+    handoffSummary: "Implementation evidence is ready for independent review",
+    nextAction: "Review the focused diff",
+  });
+  assert.equal(handedOff.owner, "reviewer");
+  assert.equal(handedOff.history.at(-1).type, "handed_off");
   assert.throws(() => claimExecutionTask(store, task.id, { owner: "other-agent" }), /already claimed/);
   assert.throws(() => updateExecutionTask(store, task.id, { status: "completed" }), /completionSummary is required/);
   const completed = updateExecutionTask(store, task.id, {
@@ -278,6 +305,12 @@ test("execution tasks preserve ownership, gates, evidence, and operator attentio
   assert.equal(amendedTerminal.links[0], "artifact:added_after_completion");
   assert.equal(getExecutionTaskClosure(store, task.id).completion.evidenceSnapshot.links.length, 0);
   assert.throws(() => claimExecutionTask(store, task.id, { owner: "coding-agent" }), /cannot claim terminal/);
+  assert.throws(() => handoffExecutionTask(store, task.id, {
+    fromOwner: "reviewer",
+    owner: "other-agent",
+    handoffSummary: "Terminal tasks must remain immutable",
+    nextAction: "Do not run",
+  }), /cannot hand off terminal/);
   assert.throws(() => updateExecutionTask(store, task.id, { status: "in_progress" }), /cannot reopen terminal/);
   const followUp = createExecutionTaskFollowUp(store, task.id, { goal: "Investigate the follow-up regression" });
   assert.equal(followUp.followUpOf, task.id);
@@ -1954,6 +1987,7 @@ test("gateway route contract exposes stable route ids", () => {
   assert.ok(routeIds.includes("execution_tasks.evidence"));
   assert.ok(routeIds.includes("execution_tasks.closure"));
   assert.ok(routeIds.includes("execution_tasks.lineage"));
+  assert.ok(routeIds.includes("execution_tasks.handoff"));
   assert.ok(routeIds.includes("execution_tasks.resume"));
   assert.ok(routeIds.includes("execution_tasks.update"));
   assert.ok(routeIds.includes("artifacts.list"));
@@ -2072,7 +2106,7 @@ test("gateway serves workbench static assets without API auth", async () => {
     assert.equal(mark.status, 200);
     assert.match(html.body, /System Overview|system-overview|Launch Run|Context Evidence|context-evidence-list|context-evidence-panel|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Agent Adapters|agent-adapter-list|agent-plan-panel|Agent Workspaces|agent-workspace-list|agent-workspace-panel|Agent Launches|agent-launch-list|agent-launch-panel|Launch Reviews|launch-review-list|launch-review-panel|Agent Routing|capability-probe-button|task-route-button|task-route-list|task-route-panel|Fleet Runs|fleet-run-list|fleet-run-panel|Execution Tasks|execution-task-create-button|execution-task-list|execution-task-panel|Workflow Versions|Workflow Runs|Decision Queue|decision-queue-list|Artifacts|artifact-list|artifact-panel|Run Detail/);
     assert.match(css.body, /Agent Workbench|summary-grid|overview-grid|overview-item|work-section|detail-panel|run-form|draft-step-list|draft-step-fields|source-map-list|evaluation-preview|artifact-preview|evidence-preview|fleet-run-preview|agent-plan-preview|agent-workspace-preview|agent-launch-preview/);
-    assert.match(js.body, /submitRun|searchContextEvidenceFromWorkbench|renderSystemOverview|renderContextEvidence|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|prepareAgentWorkspaceFromWorkbench|previewAgentLaunch|loadAgentWorkspace|loadAgentLaunch|createLaunchReviewFromWorkbench|loadLaunchReview|probeCapabilitiesFromWorkbench|routeTaskFromWorkbench|loadTaskRoute|renderAgentAdapters|renderAgentPlanPanel|renderAgentWorkspacePanel|renderAgentLaunches|renderAgentLaunchPanel|renderLaunchReviews|renderLaunchReviewPanel|renderCapabilityProbePanel|renderTaskRoutes|renderTaskRoutePanel|renderFleetRuns|renderFleetRunPanel|renderExecutionTasks|createExecutionTaskFromWorkbench|handleExecutionTaskAction|execution-task-links|execution-task-follow-up|execution-task-closure|execution-task-lineage|execution-task-cancel|execution-task-block|execution-task-resume|completionSummary|cancellationSummary|resumptionSummary|blocker|loadExecutionTasks|fleetRunViewButton|loadFleetRun|taskRouteViewButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|agentWorkspaces|agentLaunches|launchReviews|capabilityProbes|taskRoutes|fleetRuns|executionTasks|resume|inbox|approval/i);
+    assert.match(js.body, /submitRun|searchContextEvidenceFromWorkbench|renderSystemOverview|renderContextEvidence|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|prepareAgentWorkspaceFromWorkbench|previewAgentLaunch|loadAgentWorkspace|loadAgentLaunch|createLaunchReviewFromWorkbench|loadLaunchReview|probeCapabilitiesFromWorkbench|routeTaskFromWorkbench|loadTaskRoute|renderAgentAdapters|renderAgentPlanPanel|renderAgentWorkspacePanel|renderAgentLaunches|renderAgentLaunchPanel|renderLaunchReviews|renderLaunchReviewPanel|renderCapabilityProbePanel|renderTaskRoutes|renderTaskRoutePanel|renderFleetRuns|renderFleetRunPanel|renderExecutionTasks|createExecutionTaskFromWorkbench|handleExecutionTaskAction|execution-task-links|execution-task-follow-up|execution-task-closure|execution-task-lineage|execution-task-handoff|execution-task-cancel|execution-task-block|execution-task-resume|completionSummary|cancellationSummary|resumptionSummary|handoffSummary|blocker|loadExecutionTasks|fleetRunViewButton|loadFleetRun|taskRouteViewButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|agentWorkspaces|agentLaunches|launchReviews|capabilityProbes|taskRoutes|fleetRuns|executionTasks|resume|inbox|approval/i);
     assert.match(mark.body, /SpruceAgent mark/);
   } finally {
     await closeServer(gateway.server);
@@ -2226,6 +2260,15 @@ test("gateway client manages durable execution task control without execution", 
     assert.equal(listed.summary.total, 1);
     assert.equal(board.attention[0].id, task.id);
     assert.equal(board.attention[0].status, "waiting_for_human");
+    await assert.rejects(() => client.updateExecutionTask(task.id, { owner: "release-reviewer" }), /use handoffExecutionTask/);
+    const handedOff = await client.handoffExecutionTask(task.id, {
+      fromOwner: "reviewer",
+      owner: "release-reviewer",
+      handoffSummary: "Release review now owns the verified evidence",
+      nextAction: "Review the release decision",
+    });
+    assert.equal(handedOff.owner, "release-reviewer");
+    assert.equal(handedOff.history.at(-1).type, "handed_off");
     const completed = await client.updateExecutionTask(task.id, {
       status: "completed",
       completionSummary: "Gateway completion payload retained for audit",

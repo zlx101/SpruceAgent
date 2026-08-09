@@ -658,6 +658,23 @@ async function handleExecutionTaskAction(button) {
         actor: "workbench-user",
       });
     }
+    if (button.dataset.action === "execution-task-handoff") {
+      const current = await get(`/v1/execution-tasks/${encodeURIComponent(taskId)}`);
+      if (!current.owner) throw new Error("Only a claimed task can be handed off");
+      const owner = window.prompt(`Hand off from ${current.owner} to:`);
+      if (!owner?.trim()) return;
+      const handoffSummary = window.prompt("Record the bounded handoff context for the audit ledger:");
+      if (!handoffSummary?.trim()) return;
+      const nextAction = window.prompt("State the next non-authorizing action for the new owner:", current.nextAction || "");
+      if (!nextAction?.trim()) return;
+      task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/handoff`, {
+        fromOwner: current.owner,
+        owner: owner.trim(),
+        handoffSummary: handoffSummary.trim(),
+        nextAction: nextAction.trim(),
+        actor: "workbench-user",
+      });
+    }
     if (button.dataset.action === "execution-task-wait") {
       const humanGate = window.prompt("State the concrete decision required from a human:");
       if (!humanGate?.trim()) return;
@@ -1891,6 +1908,7 @@ function renderExecutionTasks(items) {
       executionTaskButton("execution-task-links", item.id, "&#128279;", "Update Links", "secondary"),
       ...(["completed", "cancelled"].includes(item.status) ? [executionTaskButton("execution-task-follow-up", item.id, "&#8618;", "Follow Up", "secondary")] : []),
       ...(item.status === "open" && !item.owner ? [executionTaskButton("execution-task-claim", item.id, "&#9998;", "Claim")] : []),
+      ...(!["completed", "cancelled"].includes(item.status) && item.owner ? [executionTaskButton("execution-task-handoff", item.id, "&#8644;", "Handoff", "secondary")] : []),
       ...(!["completed", "cancelled", "waiting_for_human"].includes(item.status) ? [executionTaskButton("execution-task-wait", item.id, "&#9888;", "Need Decision", "secondary")] : []),
       ...(!["completed", "cancelled", "blocked"].includes(item.status) ? [executionTaskButton("execution-task-block", item.id, "&#128683;", "Block", "secondary")] : []),
       ...(["blocked", "waiting_for_human"].includes(item.status) ? [executionTaskButton("execution-task-resume", item.id, "&#9654;", "Resume", "secondary")] : []),

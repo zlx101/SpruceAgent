@@ -99,6 +99,7 @@ Workbench v0 supports:
 - inspect a Fleet Run detail through `GET /v1/fleet-runs/:fleetRunId`
 - inspect the prioritized durable task board through `GET /v1/execution-tasks/board`
 - create, claim, update, and inspect Execution Tasks through the existing authenticated Gateway routes
+- hand off a claimed non-terminal Execution Task only after recording its current owner, a distinct incoming owner, bounded handoff context, and the next action; this remains local task control state
 - replace an Execution Task's typed local links through an explicit Workbench prompt; this only updates task metadata and audit history
 - mark an Execution Task completed only after explicitly recording the bounded outcome or verification basis; this remains task audit state, not an execution approval
 - cancel an Execution Task only after explicitly recording the cancellation reason; this does not stop a running Agent or alter approvals

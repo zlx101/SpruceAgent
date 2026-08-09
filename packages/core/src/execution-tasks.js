@@ -19,6 +19,7 @@ export const EXECUTION_TASK_CONTRACT = Object.freeze({
     "Blocked state requires a concrete blocker statement so the board remains actionable; recording it does not request or grant authority.",
     "Resuming a blocked or waiting task requires a concrete resumption summary and next action; resumption does not execute any work.",
     "Task lineage is a read-only projection of follow-up records; diagnostics never repair links or change task authority.",
+    "Ownership changes require an explicit handoff with the current owner, a handoff summary, and a next action; generic updates cannot transfer ownership.",
     "A follow-up links durable control state to a terminal task; it does not reopen, rerun, or authorize the prior task.",
     "Terminal evidence is captured as a read-only local snapshot for audit; it is not an approval, independent verification, or execution authority.",
   ],
@@ -115,6 +116,8 @@ export function updateExecutionTask(store, taskId, input = {}) {
   if (["blocked", "waiting_for_human"].includes(task.status) && status === "in_progress") {
     throw new Error(`use resumeExecutionTask to resume ${task.status} execution task: ${taskId}`);
   }
+  const owner = input.owner === undefined ? task.owner : optionalText(input.owner, 160);
+  if (owner !== task.owner) throw new Error(`use handoffExecutionTask to change execution task owner: ${taskId}`);
   const humanGate = status === "waiting_for_human"
     ? requiredText(input.humanGate ?? task.humanGate, "humanGate", 500)
     : null;
@@ -145,7 +148,7 @@ export function updateExecutionTask(store, taskId, input = {}) {
     : null;
   return updateTask(store, task, {
     status,
-    owner: input.owner === undefined ? task.owner : optionalText(input.owner, 160),
+    owner,
     nextAction: status === "completed" || status === "cancelled" ? null : input.nextAction === undefined ? task.nextAction : optionalText(input.nextAction, 500),
     humanGate,
     blocker,
@@ -161,11 +164,15 @@ export function resumeExecutionTask(store, taskId, input = {}) {
   if (!["blocked", "waiting_for_human"].includes(task.status)) {
     throw new Error(`only blocked or waiting execution tasks can resume: ${taskId}`);
   }
+  const requestedOwner = input.owner === undefined ? task.owner : optionalText(input.owner, 160);
+  if (requestedOwner !== task.owner) {
+    throw new Error(`use handoffExecutionTask to change execution task owner: ${taskId}`);
+  }
   const nextAction = requiredText(input.nextAction, "nextAction", 500);
   const resumptionSummary = requiredText(input.resumptionSummary, "resumptionSummary", 500);
   return updateTask(store, task, {
     status: "in_progress",
-    owner: input.owner === undefined ? task.owner : optionalText(input.owner, 160),
+    owner: task.owner,
     nextAction,
     humanGate: null,
     blocker: null,
@@ -174,6 +181,29 @@ export function resumeExecutionTask(store, taskId, input = {}) {
     evidenceRefs: task.evidenceRefs,
     links: task.links,
   }, "resumed", input.actor, resumptionSummary);
+}
+
+export function handoffExecutionTask(store, taskId, input = {}) {
+  const task = getExecutionTask(store, taskId);
+  if (["completed", "cancelled"].includes(task.status)) throw new Error(`cannot hand off terminal execution task: ${taskId}`);
+  const fromOwner = requiredText(input.fromOwner, "fromOwner", 160);
+  if (!task.owner) throw new Error(`execution task has no owner to hand off: ${taskId}`);
+  if (task.owner !== fromOwner) throw new Error(`execution task is owned by ${task.owner}, not ${fromOwner}`);
+  const owner = requiredText(input.owner, "owner", 160);
+  if (owner === task.owner) throw new Error("handoff owner must differ from current owner");
+  const nextAction = requiredText(input.nextAction ?? task.nextAction, "nextAction", 500);
+  const handoffSummary = requiredText(input.handoffSummary, "handoffSummary", 500);
+  return updateTask(store, task, {
+    status: task.status,
+    owner,
+    nextAction,
+    humanGate: task.humanGate,
+    blocker: task.blocker,
+    completion: null,
+    cancellation: null,
+    evidenceRefs: task.evidenceRefs,
+    links: task.links,
+  }, "handed_off", input.actor, handoffSummary);
 }
 
 export function getExecutionTaskBoard(store) {

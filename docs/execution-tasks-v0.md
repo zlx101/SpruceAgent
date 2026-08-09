@@ -37,6 +37,7 @@ Each record includes a bounded goal, optional scope and owner, next action, conc
 ## Invariants
 
 - Claiming uses a durable owner mutex. A task already claimed by a different owner cannot be claimed again.
+- An owner cannot be changed through a generic update or resume. A non-terminal claimed task can only move to a distinct owner through an explicit handoff that names the current owner, records a bounded `handoffSummary`, and supplies the incoming owner's `nextAction`; the ledger appends a dedicated `handed_off` audit event.
 - `waiting_for_human` requires a non-empty concrete `humanGate`.
 - `blocked` requires a non-empty concrete `blocker`; an unexplained blocked status is rejected.
 - Resuming a `blocked` or `waiting_for_human` task requires both a bounded `resumptionSummary` and an explicit `nextAction`; it clears the stale blocker or human gate and appends a dedicated `resumed` audit event.
@@ -62,6 +63,11 @@ npm run spruce -- task create \
 
 npm run spruce -- task list --status open
 npm run spruce -- task claim <taskId> --owner "reviewer"
+npm run spruce -- task handoff <taskId> \
+  --fromOwner "reviewer" \
+  --owner "release-reviewer" \
+  --handoffSummary "Implementation evidence is ready for independent review" \
+  --nextAction "Review the focused diff and validation output"
 npm run spruce -- task update <taskId> \
   --status waiting_for_human \
   --humanGate "Approve the reviewed release decision"
@@ -104,10 +110,11 @@ All routes are local and require the existing Gateway Bearer token:
 | `GET` | `/v1/execution-tasks/:taskId/closure` | Read a terminal task's completed or cancellation outcome and captured evidence snapshot. |
 | `GET` | `/v1/execution-tasks/:taskId/lineage` | Read the task's parent and Follow Up descendants as a diagnostic-only projection. |
 | `POST` | `/v1/execution-tasks/:taskId/claim` | Claim with an owner mutex. |
+| `POST` | `/v1/execution-tasks/:taskId/handoff` | Transfer a claimed non-terminal task through an auditable current-owner handoff. |
 | `POST` | `/v1/execution-tasks/:taskId/resume` | Resume a blocked or waiting task with an explanation and next action. |
 | `POST` | `/v1/execution-tasks/:taskId/update` | Update state, evidence, or a concrete human gate. |
 
-`createGatewayClient()` provides matching high-level methods: `listExecutionTasks`, `executionTaskBoard`, `executionTaskContract`, `getExecutionTask`, `executionTaskEvidence`, `executionTaskClosure`, `executionTaskLineage`, `createExecutionTask`, `createExecutionTaskFollowUp`, `claimExecutionTask`, `resumeExecutionTask`, and `updateExecutionTask`.
+`createGatewayClient()` provides matching high-level methods: `listExecutionTasks`, `executionTaskBoard`, `executionTaskContract`, `getExecutionTask`, `executionTaskEvidence`, `executionTaskClosure`, `executionTaskLineage`, `createExecutionTask`, `createExecutionTaskFollowUp`, `claimExecutionTask`, `handoffExecutionTask`, `resumeExecutionTask`, and `updateExecutionTask`.
 
 ## Workbench
 
@@ -115,6 +122,7 @@ The local Workbench has an **Execution Tasks** section with summary count, task 
 
 - **Create Task** prompts for a bounded goal and optional next action.
 - **Claim** records the fixed `workbench-user` owner through the normal Gateway route.
+- **Handoff** appears only for a non-terminal claimed task. It records the matching current owner, a distinct incoming owner, bounded handoff context, and the new next action; it only updates the local control ledger.
 - **Need Decision** prompts for the mandatory concrete human gate.
 - **Block** prompts for the mandatory concrete blocker; it is a coordination record only, not an escalation or an approval request.
 - **Resume** is available only for blocked or human-waiting tasks and requires a resumption explanation plus a next action. It records control state only; it does not run a tool or Agent.
@@ -135,6 +143,7 @@ An Execution Task is metadata and audit state only. It never:
 - executes a tool or workflow;
 - grants, requests, consumes, or approves an approval ticket;
 - changes ContextOS freshness or execution readiness;
+- changes an Agent process owner, a workspace owner, or any approval authority merely because a task was handed off;
 - turns a linked route, trial, trace, or Fleet Run into authorization.
 
 Actual execution remains with the existing TrustKernel, ContextOS freshness checks, readiness evidence, exact approval tickets, Agent Launcher, and Fleet controls. This split is intentional: durable coordination makes work visible, while the existing execution boundaries continue to decide what may happen.

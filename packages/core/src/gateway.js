@@ -63,7 +63,7 @@ import {
 } from "./task-router.js";
 import { approveTicket, getApprovalTicket, listApprovalTickets, rejectTicket } from "./approvals.js";
 import { getApprovalQueue, getApprovalQueueContract } from "./approval-queue.js";
-import { claimExecutionTask, createExecutionTask, createExecutionTaskFollowUp, getExecutionTask, getExecutionTaskBoard, getExecutionTaskClosure, getExecutionTaskContract, getExecutionTaskEvidence, getExecutionTaskLineage, listExecutionTasks, resumeExecutionTask, updateExecutionTask } from "./execution-tasks.js";
+import { claimExecutionTask, createExecutionTask, createExecutionTaskFollowUp, getExecutionTask, getExecutionTaskBoard, getExecutionTaskClosure, getExecutionTaskContract, getExecutionTaskEvidence, getExecutionTaskLineage, handoffExecutionTask, listExecutionTasks, resumeExecutionTask, updateExecutionTask } from "./execution-tasks.js";
 import { getArtifact, getArtifactContract, listArtifacts } from "./artifacts.js";
 import { assessWorkspaceIndexFreshness, buildWorkspaceIndex, readWorkspaceIndex, searchWorkspaceContext } from "./context.js";
 import { createContextEvidencePack, getContextEvidenceContract } from "./context-evidence.js";
@@ -301,6 +301,13 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/execution-tasks/:taskId/claim",
       authRequired: true,
       description: "Claim a task through its durable owner mutex.",
+    },
+    {
+      id: "execution_tasks.handoff",
+      method: "POST",
+      path: "/v1/execution-tasks/:taskId/handoff",
+      authRequired: true,
+      description: "Transfer task ownership only with the current owner, a handoff summary, and next action.",
     },
     {
       id: "execution_tasks.update",
@@ -1432,6 +1439,7 @@ async function routeRequest(store, request, url, body) {
   if (request.method === "POST" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "follow-up" && !pathParts[4]) return ok(createExecutionTaskFollowUp(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
   if (request.method === "GET" && pathParts[1] === "execution-tasks" && pathParts[2] && !pathParts[3]) return ok(getExecutionTask(store, pathParts[2]));
   if (request.method === "POST" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "claim" && !pathParts[4]) return ok(claimExecutionTask(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
+  if (request.method === "POST" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "handoff" && !pathParts[4]) return ok(handoffExecutionTask(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
   if (request.method === "POST" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "resume" && !pathParts[4]) return ok(resumeExecutionTask(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
   if (request.method === "POST" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "update" && !pathParts[4]) return ok(updateExecutionTask(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
 

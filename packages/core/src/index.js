@@ -225,6 +225,7 @@ export {
   getExecutionTaskContract,
   listExecutionTasks,
   claimExecutionTask,
+  handoffExecutionTask,
   updateExecutionTask,
   resumeExecutionTask,
   EXECUTION_TASK_CONTRACT,

@@ -164,6 +164,7 @@ import {
   startGatewayServer,
   updateWorkflow,
   claimExecutionTask,
+  handoffExecutionTask,
   updateExecutionTask,
   resumeExecutionTask,
   validateLlmProviderConfig,
@@ -685,9 +686,22 @@ function handleExecutionTask(action, args) {
     if (!taskId) throw new Error("usage: spruce task resume <taskId> --nextAction <action> --resumptionSummary <summary>");
     const flags = parseFlags(flagArgs);
     printJson(resumeExecutionTask(store, taskId, {
-      owner: flags.owner,
       nextAction: flags.nextAction,
       resumptionSummary: flags.resumptionSummary,
+      actor: flags.by ?? "local-user",
+    }));
+    return;
+  }
+
+  if (action === "handoff") {
+    const [taskId, ...flagArgs] = args;
+    if (!taskId) throw new Error("usage: spruce task handoff <taskId> --fromOwner <owner> --owner <nextOwner> --handoffSummary <summary> --nextAction <action>");
+    const flags = parseFlags(flagArgs);
+    printJson(handoffExecutionTask(store, taskId, {
+      fromOwner: flags.fromOwner,
+      owner: flags.owner,
+      handoffSummary: flags.handoffSummary,
+      nextAction: flags.nextAction,
       actor: flags.by ?? "local-user",
     }));
     return;
@@ -699,7 +713,6 @@ function handleExecutionTask(action, args) {
     const flags = parseFlags(flagArgs);
     const input = {
       status: flags.status,
-      owner: flags.owner,
       nextAction: flags.nextAction,
       humanGate: flags.humanGate,
       blocker: flags.blocker,
@@ -714,7 +727,7 @@ function handleExecutionTask(action, args) {
     return;
   }
 
-  throw new Error("usage: spruce task <list|board|contract|get|evidence|closure|lineage|create|follow-up|claim|resume|update>");
+  throw new Error("usage: spruce task <list|board|contract|get|evidence|closure|lineage|create|follow-up|claim|handoff|resume|update>");
 }
 
 function handleArtifact(action, args) {
@@ -2134,6 +2147,7 @@ Usage:
   ${executable} task update <taskId> --status completed --completionSummary "Focused checks passed; release handoff recorded"
   ${executable} task update <taskId> --status cancelled --cancellationSummary "Scope removed from this release"
   ${executable} task follow-up <terminalTaskId> --goal "Investigate the discovered regression"
+  ${executable} task handoff <taskId> --fromOwner "coding-agent" --owner "reviewer" --handoffSummary "Implementation is ready for review" --nextAction "Review the focused diff"
   ${executable} task resume <taskId> --nextAction "Run the focused validation" --resumptionSummary "Repository access was granted"
   ${executable} task board
   ${executable} task evidence <taskId>
