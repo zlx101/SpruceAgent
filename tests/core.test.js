@@ -2244,6 +2244,21 @@ test("gateway client manages durable execution task control without execution", 
 
   try {
     const contract = await client.executionTaskContract();
+    for (const method of [
+      "listExecutionTasks",
+      "executionTaskBoard",
+      "executionTaskContract",
+      "getExecutionTask",
+      "executionTaskEvidence",
+      "executionTaskClosure",
+      "executionTaskLineage",
+      "createExecutionTask",
+      "createExecutionTaskFollowUp",
+      "claimExecutionTask",
+      "handoffExecutionTask",
+      "resumeExecutionTask",
+      "updateExecutionTask",
+    ]) assert.equal(typeof client[method], "function");
     const task = await client.createExecutionTask({
       goal: "Review a bounded implementation slice",
       nextAction: "Run the targeted test",

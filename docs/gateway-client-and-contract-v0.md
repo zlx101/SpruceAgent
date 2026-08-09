@@ -36,12 +36,18 @@ The client includes high-level methods:
 - `inbox(input)`
 - `inboxContract()`
 - `listExecutionTasks(input)`
-- `executionTaskBoard()`
-- `executionTaskContract()`
-- `getExecutionTask(taskId)`
-- `createExecutionTask(input)`
-- `claimExecutionTask(taskId, input)`
-- `updateExecutionTask(taskId, input)`
+  - `executionTaskBoard()`
+  - `executionTaskContract()`
+  - `getExecutionTask(taskId)`
+  - `executionTaskEvidence(taskId)`
+  - `executionTaskClosure(taskId)`
+  - `executionTaskLineage(taskId)`
+  - `createExecutionTask(input)`
+  - `createExecutionTaskFollowUp(taskId, input)`
+  - `claimExecutionTask(taskId, input)`
+  - `handoffExecutionTask(taskId, input)`
+  - `resumeExecutionTask(taskId, input)`
+  - `updateExecutionTask(taskId, input)`
 - `contract()`
 - `llmContract()`
 - `workflowBuilderContract()`
