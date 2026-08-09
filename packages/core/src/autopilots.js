@@ -165,13 +165,25 @@ export function runDueAutopilots(store, input = {}) {
   const now = parseTime(input.now, "now") ?? nowIso();
   const limit = boundedLimit(input.limit);
   const due = listDueAutopilots(store, { now }).items.slice(0, limit);
-  const results = due.map((item) => triggerAutopilot(store, item.id, { now, actor: input.actor }));
+  const results = due.map((item) => {
+    try {
+      return triggerAutopilot(store, item.id, { now, actor: input.actor });
+    } catch (error) {
+      return {
+        autopilotId: item.id,
+        outcome: "failed",
+        error: String(error?.message ?? error ?? "unknown autopilot trigger error").slice(0, 500),
+      };
+    }
+  });
+  const failed = results.filter((item) => item.outcome === "failed");
   return {
     version: AUTOPILOT_CONTRACT.version,
     interface: "spruceagent.autopilot-due-run",
     evaluatedAt: now,
     considered: due.length,
     results,
+    failedCount: failed.length,
     limits: AUTOPILOT_CONTRACT.safetyBoundary,
   };
 }

@@ -442,6 +442,36 @@ test("autopilot runner is opt-in, observable, and only ticks the safe due bounda
   assert.throws(() => createAutopilotRunner(store, { intervalMs: 999 }), /between 1000 and 3600000/);
 });
 
+test("autopilot due runs isolate a failed rule and expose partial runner health", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const valid = createAutopilot(store, {
+    name: "Valid recurring review",
+    goal: "Create one bounded review task",
+    intervalMinutes: 60,
+    firstDueAt: "2026-08-10T01:00:00.000Z",
+  });
+  const broken = createAutopilot(store, {
+    name: "Broken recurring review",
+    goal: "This payload will be corrupted for recovery testing",
+    intervalMinutes: 60,
+    firstDueAt: "2026-08-10T01:00:00.000Z",
+  });
+  const brokenRecord = getAutopilot(store, broken.id);
+  brokenRecord.action.goal = null;
+  fs.writeFileSync(path.join(store.root, "autopilots", `${broken.id}.json`), JSON.stringify(brokenRecord, null, 2), "utf8");
+
+  const runner = createAutopilotRunner(store, { actor: "isolation-test" });
+  const tick = await runner.tick({ now: "2026-08-10T01:00:00.000Z" });
+  assert.equal(tick.result.considered, 2);
+  assert.equal(tick.result.failedCount, 1);
+  assert.equal(tick.result.results.find((item) => item.autopilotId === valid.id).outcome, "execution_task_created");
+  assert.equal(tick.result.results.find((item) => item.autopilotId === broken.id).outcome, "failed");
+  assert.equal(listExecutionTasks(store).summary.total, 1);
+  assert.equal(runner.snapshot().lastResult.failedCount, 1);
+  assert.match(runner.snapshot().lastError, /1 of 2 due Autopilot rule/);
+});
+
 test("execution task evidence resolves typed local records without granting authority", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   const store = ensureStore(createStore(dir));

@@ -29,8 +29,12 @@ export function createAutopilotRunner(store, input = {}) {
     lastTickAt = nowIso();
     try {
       lastResult = runDueAutopilots(store, { now: options.now, limit: options.limit, actor });
-      lastSuccessAt = nowIso();
-      lastError = null;
+      if (lastResult.failedCount > 0) {
+        lastError = `${lastResult.failedCount} of ${lastResult.considered} due Autopilot rule(s) failed`;
+      } else {
+        lastSuccessAt = nowIso();
+        lastError = null;
+      }
       return { skipped: false, result: lastResult, health: snapshot() };
     } catch (error) {
       lastError = String(error?.message ?? error ?? "unknown runner error").slice(0, 500);
@@ -64,7 +68,7 @@ export function createAutopilotRunner(store, input = {}) {
       actor,
       lastTickAt,
       lastSuccessAt,
-      lastResult: lastResult ? { considered: lastResult.considered, resultCount: lastResult.results.length, evaluatedAt: lastResult.evaluatedAt } : null,
+      lastResult: lastResult ? { considered: lastResult.considered, resultCount: lastResult.results.length, failedCount: lastResult.failedCount ?? 0, evaluatedAt: lastResult.evaluatedAt } : null,
       lastError,
       limits: AUTOPILOT_RUNNER_CONTRACT.safetyBoundary,
     };
