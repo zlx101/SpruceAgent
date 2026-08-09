@@ -21,6 +21,7 @@ import {
   createApprovalTicket,
   createAgentAdapterRunPlan,
   createFleetRun,
+  createSquad,
   createOutcomeFixture,
   createLaunchReview,
   createTaskRoute,
@@ -58,7 +59,10 @@ import {
   getAgentLaunch,
   getAgentLauncherContract,
   getFleetRun,
+  getFleetRunProgress,
   getFleetRunContract,
+  getSquad,
+  getSquadContract,
   getOutcomeEvaluationContract,
   getOutcomeEvaluationResult,
   getOutcomeFixture,
@@ -112,6 +116,7 @@ import {
   listAgentAdapters,
   listAgentLaunches,
   listFleetRuns,
+  listSquads,
   listOutcomeEvaluationResults,
   listOutcomeFixtures,
   listAgentTrials,
@@ -2547,6 +2552,7 @@ test("gateway client creates and reads prepared Fleet Runs", async () => {
     });
     const list = await client.listFleetRuns({ routeId: route.id });
     const detail = await client.getFleetRun(fleet.id);
+    const progress = await client.getFleetRunProgress(fleet.id);
     const status = await client.status();
 
     assert.equal(contract.interface, "spruceagent.fleet-runs");
@@ -2555,6 +2561,9 @@ test("gateway client creates and reads prepared Fleet Runs", async () => {
     assert.equal(fleet.maxParallel, 1);
     assert.equal(list.summary.total, 1);
     assert.equal(detail.id, fleet.id);
+    assert.equal(progress.fleetRunId, fleet.id);
+    assert.equal(progress.progress.total, 2);
+    assert.ok(progress.events.some((event) => event.type === "fleet.run.prepared"));
     assert.equal(status.fleetRunCount, 1);
   } finally {
     await closeServer(gateway.server);
@@ -4009,6 +4018,25 @@ test("task router assigns roles separately and routes supported execute adapters
   assert.equal(listTaskRoutes(store).summary.total, 4);
   assert.equal(listTaskRoutes(store).summary.needsInputCount, 1);
 
+  const squadRoute = createTaskRoute(store, {
+    goal: "Implement the feature and review the diff",
+    roles: ["coding", "review"],
+    probeId: probe.id,
+    preferredAdapterIds: ["codex-cli"],
+    mode: "plan",
+  });
+  const squad = createSquad(store, { routeId: squadRoute.id, name: "Implementation Squad" });
+  assert.equal(getSquadContract().interface, "spruceagent.squads");
+  assert.equal(squad.status, "planned");
+  assert.equal(squad.members.length, 2);
+  assert.deepEqual(squad.handoffs.map((handoff) => [handoff.from, handoff.to]), [["coding", "review"]]);
+  assert.equal(getSquad(store, squad.id).id, squad.id);
+  assert.equal(listSquads(store).summary.plannedCount, 1);
+  assert.throws(
+    () => createSquad(store, { routeId: squadRoute.id, dependencies: [{ from: "coding", to: "review" }, { from: "review", to: "coding" }] }),
+    /acyclic/,
+  );
+
   fs.writeFileSync(path.join(store.root, "capability-probes", `${probe.id}.json`), `${JSON.stringify({
     ...probe,
     createdAt: "2020-01-01T00:00:00.000Z",
@@ -4662,6 +4690,14 @@ test("fleet run prepares comparable Codex candidates and builds a review matrix"
   assert.equal(completed.review.comparison.rows.length, 2);
   assert.equal(completed.review.comparison.automaticRecommendation, null);
   assert.equal(getFleetRun(store, fleet.id).status, "completed");
+  const progress = getFleetRunProgress(store, fleet.id);
+  assert.equal(progress.status, "completed");
+  assert.equal(progress.progress.completed, 2);
+  assert.equal(progress.progress.active, 0);
+  assert.equal(progress.units.every((unit) => unit.startedAt && unit.finishedAt), true);
+  assert.ok(progress.events.some((event) => event.type === "fleet.run.candidate_started"));
+  const incremental = getFleetRunProgress(store, fleet.id, { after: progress.cursor });
+  assert.equal(incremental.events.length, 0);
   assert.equal(listFleetRuns(store).summary.completedCount, 1);
 });
 

@@ -23,6 +23,7 @@ const state = {
   taskRouteDetail: null,
   fleetRuns: null,
   fleetRunDetail: null,
+  fleetRunProgress: null,
   workflows: [],
   workflowVersions: null,
   workflowDraft: null,
@@ -136,6 +137,7 @@ const nodes = {
   contextEvidencePanel: document.querySelector("#context-evidence-panel"),
   fleetRunState: document.querySelector("#fleet-run-state"),
   fleetRunList: document.querySelector("#fleet-run-list"),
+  fleetLivePanel: document.querySelector("#fleet-live-panel"),
   fleetRunPanel: document.querySelector("#fleet-run-panel"),
   workflowList: document.querySelector("#workflow-list"),
   workflowVersionList: document.querySelector("#workflow-version-list"),
@@ -1283,6 +1285,30 @@ function renderFleetRunPanel(fleetRun) {
   }, null, 2) : "{}";
 }
 
+function renderFleetLivePanel(progress) {
+  nodes.fleetLivePanel.replaceChildren();
+  if (!progress) return;
+  const header = document.createElement("div");
+  header.className = "fleet-live-header";
+  header.innerHTML = `<div><strong>Live operations</strong><span>${escapeHtml(progress.status.replace(/_/g, " "))}</span></div><div>${progress.progress.completed}/${progress.progress.total} completed · ${progress.progress.active} active</div>`;
+  const units = document.createElement("div");
+  units.className = "fleet-member-grid";
+  for (const unit of progress.units) {
+    const card = document.createElement("article");
+    card.className = `fleet-member ${statusClass(unit.status)} unit-${unit.status}`;
+    const detail = unit.error || unit.terminationReason || (unit.status === "running" ? "Working in isolated workspace" : unit.exitCode === 0 ? "Finished successfully" : "Awaiting next transition");
+    card.innerHTML = `<div class="fleet-member-title"><strong>Agent ${unit.ordinal}</strong><span class="tag ${statusClass(unit.status)}">${escapeHtml(unit.status.replace(/_/g, " "))}</span></div><p>${escapeHtml(detail)}</p>`;
+    units.appendChild(card);
+  }
+  const timeline = document.createElement("div");
+  timeline.className = "fleet-timeline";
+  const newest = progress.events.slice(-5).reverse();
+  timeline.innerHTML = newest.length
+    ? newest.map((event) => `<div><time>${escapeHtml(formatTime(event.createdAt))}</time><span>${escapeHtml(event.type.replace("fleet.run.", "").replaceAll("_", " "))}${event.unitId ? ` · Agent ${escapeHtml(event.unitId.split("_").at(-1))}` : ""}</span></div>`).join("")
+    : "<div><span>No fleet activity recorded yet.</span></div>";
+  nodes.fleetLivePanel.append(header, units, timeline);
+}
+
 function renderWorkflowSkillOptions(skills) {
   const selected = nodes.workflowSkill.value;
   const builderSelected = nodes.workflowBuilderSkill.value;
@@ -2110,11 +2136,34 @@ async function loadFleetRun(fleetRunId) {
   setStatus("Loading fleet run");
   try {
     state.fleetRunDetail = await get(`/v1/fleet-runs/${encodeURIComponent(fleetRunId)}`);
+    state.fleetRunProgress = await get(`/v1/fleet-runs/${encodeURIComponent(fleetRunId)}/progress`);
     renderFleetRunPanel(state.fleetRunDetail);
+    renderFleetLivePanel(state.fleetRunProgress);
     setStatus(`Loaded fleet run - ${shortId(fleetRunId)}`);
+    scheduleFleetProgressRefresh(fleetRunId);
   } catch (error) {
     setStatus(error.message, true);
   }
+}
+
+let fleetProgressRefreshTimer = null;
+
+function scheduleFleetProgressRefresh(fleetRunId) {
+  if (fleetProgressRefreshTimer) clearTimeout(fleetProgressRefreshTimer);
+  if (!state.fleetRunProgress?.isActive) return;
+  fleetProgressRefreshTimer = setTimeout(async () => {
+    try {
+      const after = state.fleetRunProgress?.cursor;
+      const suffix = after ? `?after=${encodeURIComponent(after)}` : "";
+      state.fleetRunProgress = await get(`/v1/fleet-runs/${encodeURIComponent(fleetRunId)}/progress${suffix}`);
+      state.fleetRunDetail = await get(`/v1/fleet-runs/${encodeURIComponent(fleetRunId)}`);
+      renderFleetRunPanel(state.fleetRunDetail);
+      renderFleetLivePanel(state.fleetRunProgress);
+      scheduleFleetProgressRefresh(fleetRunId);
+    } catch (error) {
+      setStatus(`Fleet live update failed: ${error.message}`, true);
+    }
+  }, 2000);
 }
 
 function renderDetail(detail) {

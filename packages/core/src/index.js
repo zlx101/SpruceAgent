@@ -144,10 +144,12 @@ export {
   executeFleetRun,
   FLEET_RUN_CONTRACT,
   getFleetRun,
+  getFleetRunProgress,
   getFleetRunContract,
   listFleetRuns,
   requestFleetRunApprovals,
 } from "./fleet-runs.js";
+export { createSquad, getSquad, getSquadContract, listSquads, SQUAD_CONTRACT } from "./squads.js";
 export {
   createLaunchReview,
   decideLaunchReview,

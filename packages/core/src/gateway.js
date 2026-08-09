@@ -28,10 +28,12 @@ import {
   createFleetRun,
   executeFleetRun,
   getFleetRun,
+  getFleetRunProgress,
   getFleetRunContract,
   listFleetRuns,
   requestFleetRunApprovals,
 } from "./fleet-runs.js";
+import { createSquad, getSquad, getSquadContract, listSquads } from "./squads.js";
 import {
   createLaunchReview,
   decideLaunchReview,
@@ -502,6 +504,13 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       description: "Read one Fleet Run orchestration record.",
     },
     {
+      id: "fleet_runs.progress",
+      method: "GET",
+      path: "/v1/fleet-runs/:fleetRunId/progress",
+      authRequired: true,
+      description: "Read compact Fleet member status and incremental audit events for a live operations view.",
+    },
+    {
       id: "fleet_runs.create",
       method: "POST",
       path: "/v1/fleet-runs",
@@ -542,6 +551,34 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/fleet-runs/contract",
       authRequired: true,
       description: "Read the Fleet Run Orchestrator contract.",
+    },
+    {
+      id: "squads.list",
+      method: "GET",
+      path: "/v1/squads",
+      authRequired: true,
+      description: "List reviewable cross-role Squad coordination plans.",
+    },
+    {
+      id: "squads.get",
+      method: "GET",
+      path: "/v1/squads/:squadId",
+      authRequired: true,
+      description: "Read one Squad coordination plan and its explicit handoffs.",
+    },
+    {
+      id: "squads.create",
+      method: "POST",
+      path: "/v1/squads",
+      authRequired: true,
+      description: "Create a non-executing Squad plan from a fully routed Task Route.",
+    },
+    {
+      id: "squads.contract",
+      method: "GET",
+      path: "/v1/squads/contract",
+      authRequired: true,
+      description: "Read the Squad v0 safety and coordination contract.",
     },
     {
       id: "tools.list",
@@ -1474,6 +1511,17 @@ async function routeRequest(store, request, url, body) {
 
   if (request.method === "GET" && url.pathname === "/v1/fleet-runs/contract") {
     return ok(getFleetRunContract());
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/squads") return ok(listSquads(store));
+  if (request.method === "GET" && url.pathname === "/v1/squads/contract") return ok(getSquadContract());
+  if (request.method === "GET" && pathParts[1] === "squads" && pathParts[2] && !pathParts[3]) return ok(getSquad(store, pathParts[2]));
+  if (request.method === "POST" && url.pathname === "/v1/squads") return ok(createSquad(store, { ...body, actor: body.actor ?? "gateway-user" }));
+
+  if (request.method === "GET" && pathParts[1] === "fleet-runs" && pathParts[2] && pathParts[3] === "progress" && !pathParts[4]) {
+    return ok(getFleetRunProgress(store, pathParts[2], {
+      after: url.searchParams.get("after") ?? undefined,
+    }));
   }
 
   if (request.method === "GET" && pathParts[1] === "fleet-runs" && pathParts[2] && !pathParts[3]) {

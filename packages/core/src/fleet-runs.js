@@ -13,7 +13,7 @@ import { createId, nowIso } from "./id.js";
 import { createLaunchReview } from "./launch-review.js";
 import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
 import { getTaskRoute } from "./task-router.js";
-import { appendTraceEvent, startTrace } from "./trace.js";
+import { appendTraceEvent, readTraceEvents, startTrace } from "./trace.js";
 
 export const FLEET_RUN_CONTRACT = Object.freeze({
   version: "0.1.0",
@@ -121,6 +121,8 @@ export function createFleetRun(store, input = {}) {
       approvalLaunchId: null,
       approvalId: null,
       launchId: null,
+      startedAt: null,
+      finishedAt: null,
       exitCode: null,
       terminationReason: null,
       error: null,
@@ -258,6 +260,7 @@ export async function executeFleetRun(store, fleetRunId, input = {}, runtime = {
       const controller = new AbortController();
       active.controllers.set(unit.id, controller);
       unit.status = "running";
+      unit.startedAt = nowIso();
       updateFleet(store, record, "fleet.run.candidate_started", { unitId: unit.id });
       try {
         const launch = await launchAgentWorkspace(store, {
@@ -283,6 +286,7 @@ export async function executeFleetRun(store, fleetRunId, input = {}, runtime = {
         unit.terminationReason = controller.signal.aborted ? "cancelled" : "launcher_error";
         unit.error = safeError(error);
       } finally {
+        unit.finishedAt = nowIso();
         active.controllers.delete(unit.id);
         updateFleet(store, record, "fleet.run.candidate_finished", { unitId: unit.id });
       }
@@ -346,6 +350,57 @@ export function getFleetRun(store, fleetRunId) {
   const filePath = fleetPath(store, fleetRunId);
   if (!fs.existsSync(filePath)) throw new Error(`fleet run not found: ${fleetRunId}`);
   return readJson(filePath);
+}
+
+/**
+ * Return a compact, polling-friendly view of a Fleet Run. This is deliberately
+ * derived from the audit trace rather than keeping a second mutable progress
+ * store, so operators see the same evidence that is available for review.
+ */
+export function getFleetRunProgress(store, fleetRunId, options = {}) {
+  const record = getFleetRun(store, fleetRunId);
+  const after = String(options.after ?? "").trim();
+  const fleetEvents = readTraceEvents(store, record.traceId)
+    .filter((event) => event.type.startsWith("fleet.run."));
+  const cursorIndex = after ? fleetEvents.findIndex((event) => event.id === after) : -1;
+  const events = (cursorIndex >= 0 ? fleetEvents.slice(cursorIndex + 1) : fleetEvents)
+    .map((event) => ({
+      id: event.id,
+      type: event.type,
+      createdAt: event.createdAt,
+      unitId: event.payload?.unitId ?? null,
+      status: event.payload?.status ?? null,
+    }));
+  const units = record.units.map((unit) => ({
+    id: unit.id,
+    ordinal: unit.ordinal,
+    status: unit.status,
+    startedAt: unit.startedAt ?? null,
+    finishedAt: unit.finishedAt ?? null,
+    exitCode: unit.exitCode ?? null,
+    terminationReason: unit.terminationReason ?? null,
+    error: unit.error ?? null,
+  }));
+  const active = units.filter((unit) => unit.status === "running");
+  const latestEvent = events.at(-1) ?? null;
+  return {
+    version: FLEET_RUN_CONTRACT.version,
+    fleetRunId: record.id,
+    status: record.status,
+    updatedAt: record.updatedAt,
+    isActive: new Set(["running", "cancelling"]).has(record.status),
+    progress: {
+      completed: record.summary.completedCount,
+      failed: record.summary.failedCount,
+      cancelled: record.summary.cancelledCount,
+      active: active.length,
+      pending: units.filter((unit) => ["prepared", "approved"].includes(unit.status)).length,
+      total: units.length,
+    },
+    units,
+    events,
+    cursor: (latestEvent?.id ?? after) || null,
+  };
 }
 
 export function listFleetRuns(store, options = {}) {
