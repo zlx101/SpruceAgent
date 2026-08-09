@@ -1476,7 +1476,7 @@ function renderSystemOverview(status, freshness) {
     ["SkillForge", `${status?.approvedSkillCount ?? 0} approved / ${status?.candidateSkillCount ?? 0} candidate`, "available"],
     ["Workflow", `${status?.workflowCount ?? 0} workflows`, "available"],
     ["Agent Mesh", `${status?.agentAdapterCount ?? 0} adapters / ${status?.taskRouteCount ?? 0} routes`, "available"],
-    ["Execution Tasks", `${status?.executionTaskCount ?? 0} tasks / ${status?.executionTaskEvidenceIssueCount ?? 0} evidence issues`, status?.executionTaskEvidenceIssueCount ? "blocked" : "available"],
+    ["Execution Tasks", `${status?.executionTaskCount ?? 0} tasks / ${status?.executionTaskEvidenceIssueCount ?? 0} evidence issues / ${status?.executionTaskClosureDiagnosticCount ?? 0} closure diagnostics`, (status?.executionTaskEvidenceIssueCount || status?.executionTaskClosureDiagnosticCount) ? "blocked" : "available"],
     ["Fleet", `${status?.fleetRunCount ?? 0} runs`, status?.fleetRunCount ? "available" : "empty"],
     ["Artifacts", `${status?.artifactCount ?? 0} artifacts`, "available"],
   ];

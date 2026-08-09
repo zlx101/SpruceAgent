@@ -2308,6 +2308,7 @@ test("gateway client reads status and route contract", async () => {
     assert.equal(status.agentLaunchCount, 0);
     assert.equal(status.executionTaskCount, 0);
     assert.equal(status.executionTaskEvidenceIssueCount, 0);
+    assert.equal(status.executionTaskClosureDiagnosticCount, 0);
     assert.equal(status.outcomeFixtureCount, 0);
     assert.equal(status.outcomeResultCount, 0);
     assert.equal(artifacts.status, "empty");
@@ -2403,6 +2404,22 @@ test("gateway client manages durable execution task control without execution", 
     });
     assert.equal(cancelled.cancellation.summary, "Gateway recorded the cancelled follow-up");
     assert.equal((await client.executionTaskClosure(followUp.id)).cancellation.evidenceSnapshot.interface, "spruceagent.execution-task-evidence");
+    const adverseTask = await client.createExecutionTask({ goal: "Gateway closure diagnostic task" });
+    fs.writeFileSync(path.join(store.root, "agent-launches", "gateway_declared_failure.json"), JSON.stringify({
+      id: "gateway_declared_failure",
+      status: "failed",
+      executionTaskId: adverseTask.id,
+    }), "utf8");
+    fs.writeFileSync(path.join(store.root, "agent-launch-index.jsonl"), `${JSON.stringify({
+      id: "gateway_declared_failure",
+      status: "failed",
+      executionTaskId: adverseTask.id,
+    })}\n`, "utf8");
+    await client.updateExecutionTask(adverseTask.id, {
+      status: "completed",
+      completionSummary: "Gateway preserved the declared failed launch for audit.",
+    });
+    assert.equal((await client.status()).executionTaskClosureDiagnosticCount, 1);
     const blockedTask = await client.createExecutionTask({ goal: "Gateway blocker task" });
     const blocked = await client.updateExecutionTask(blockedTask.id, {
       status: "blocked",
