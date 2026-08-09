@@ -630,6 +630,16 @@ async function handleExecutionTaskAction(button) {
         actor: "workbench-user",
       });
     }
+    if (button.dataset.action === "execution-task-follow-up") {
+      const goal = window.prompt("Describe the bounded follow-up goal. The original terminal task will remain unchanged:");
+      if (!goal?.trim()) return;
+      const nextAction = window.prompt("What is the next action for this follow-up? (optional)");
+      task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/follow-up`, {
+        goal: goal.trim(),
+        nextAction: nextAction?.trim() || undefined,
+        actor: "workbench-user",
+      });
+    }
     if (button.dataset.action === "execution-task-claim") {
       task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/claim`, {
         owner: "workbench-user",
@@ -1834,6 +1844,7 @@ function renderExecutionTasks(items) {
       executionTaskButton("execution-task-view", item.id, "&#128065;", "View", "secondary"),
       executionTaskButton("execution-task-evidence", item.id, "&#128269;", "Evidence", "secondary"),
       executionTaskButton("execution-task-links", item.id, "&#128279;", "Update Links", "secondary"),
+      ...(["completed", "cancelled"].includes(item.status) ? [executionTaskButton("execution-task-follow-up", item.id, "&#8618;", "Follow Up", "secondary")] : []),
       ...(item.status === "open" && !item.owner ? [executionTaskButton("execution-task-claim", item.id, "&#9998;", "Claim")] : []),
       ...(!["completed", "cancelled", "waiting_for_human"].includes(item.status) ? [executionTaskButton("execution-task-wait", item.id, "&#9888;", "Need Decision", "secondary")] : []),
       ...(!["completed", "cancelled"].includes(item.status) ? [executionTaskButton("execution-task-complete", item.id, "&#10003;", "Complete", "secondary")] : []),

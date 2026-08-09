@@ -40,6 +40,7 @@ Each record includes a bounded goal, optional scope and owner, next action, conc
 - `waiting_for_human` requires a non-empty concrete `humanGate`.
 - `completed` and `cancelled` clear `nextAction`; terminal tasks cannot be claimed.
 - Terminal tasks cannot be reopened through an update. A regression or newly discovered scope must be represented by a new follow-up task, keeping the original task's outcome record intact.
+- A follow-up can only reference a terminal parent and persists `followUpOf` on the new task. It creates no execution, approval, or inherited ownership authority.
 - The first transition to `completed` requires a bounded `completionSummary`, retained with its recorder and timestamp. It is an operator's auditable outcome statement, not an execution authorization or a claim that the linked evidence was independently verified.
 - All create, claim, and update events are appended to the audit ledger.
 - The board orders unresolved attention as `waiting_for_human`, `blocked`, `in_progress`, then `open`.
@@ -63,6 +64,8 @@ npm run spruce -- task update <taskId> \
 npm run spruce -- task update <taskId> \
   --status completed \
   --completionSummary "Focused checks passed and release handoff was recorded"
+npm run spruce -- task follow-up <terminalTaskId> \
+  --goal "Investigate the newly discovered regression"
 npm run spruce -- task board
 npm run spruce -- task contract
 ```
@@ -81,12 +84,13 @@ All routes are local and require the existing Gateway Bearer token:
 | `GET` | `/v1/execution-tasks/board` | Read the prioritized unresolved-task board. |
 | `GET` | `/v1/execution-tasks/contract` | Read the safety contract. |
 | `POST` | `/v1/execution-tasks` | Create local control state. |
+| `POST` | `/v1/execution-tasks/:taskId/follow-up` | Create a fresh, linked task for a terminal task without reopening it. |
 | `GET` | `/v1/execution-tasks/:taskId` | Read one record. |
 | `GET` | `/v1/execution-tasks/:taskId/evidence` | Resolve typed local links as read-only evidence. |
 | `POST` | `/v1/execution-tasks/:taskId/claim` | Claim with an owner mutex. |
 | `POST` | `/v1/execution-tasks/:taskId/update` | Update state, evidence, or a concrete human gate. |
 
-`createGatewayClient()` provides matching high-level methods: `listExecutionTasks`, `executionTaskBoard`, `executionTaskContract`, `getExecutionTask`, `executionTaskEvidence`, `createExecutionTask`, `claimExecutionTask`, and `updateExecutionTask`.
+`createGatewayClient()` provides matching high-level methods: `listExecutionTasks`, `executionTaskBoard`, `executionTaskContract`, `getExecutionTask`, `executionTaskEvidence`, `createExecutionTask`, `createExecutionTaskFollowUp`, `claimExecutionTask`, and `updateExecutionTask`.
 
 ## Workbench
 
@@ -96,6 +100,7 @@ The local Workbench has an **Execution Tasks** section with summary count, task 
 - **Claim** records the fixed `workbench-user` owner through the normal Gateway route.
 - **Need Decision** prompts for the mandatory concrete human gate.
 - **Complete** asks for browser confirmation plus a bounded completion summary, then only records control state and that audit statement.
+- **Follow Up** appears on a terminal task and creates a new, linked control-state record; it does not reopen or execute the original task.
 - **View** reads the stored ledger record.
 
 The UI has no action that launches an agent, runs a tool, creates an approval, approves a ticket, or starts Fleet execution.

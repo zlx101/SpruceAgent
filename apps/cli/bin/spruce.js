@@ -19,6 +19,7 @@ import {
   createContextPack,
   createContextEvidencePack,
   createExecutionTask,
+  createExecutionTaskFollowUp,
   configureLlmProvider,
   createSkillReplayFixture,
   createGatewayClient,
@@ -635,6 +636,22 @@ function handleExecutionTask(action, args) {
     return;
   }
 
+  if (action === "follow-up") {
+    const [taskId, ...flagArgs] = args;
+    if (!taskId) throw new Error("usage: spruce task follow-up <taskId> --goal <goal>");
+    const flags = parseFlags(flagArgs);
+    printJson(createExecutionTaskFollowUp(store, taskId, {
+      goal: flags.goal ?? flags._.join(" ").trim(),
+      scope: flags.scope,
+      owner: flags.owner,
+      nextAction: flags.nextAction,
+      evidenceRefs: splitCsv(flags.evidenceRefs),
+      links: splitCsv(flags.links),
+      actor: flags.by ?? "local-user",
+    }));
+    return;
+  }
+
   if (action === "claim") {
     const [taskId, ...flagArgs] = args;
     if (!taskId) throw new Error("usage: spruce task claim <taskId> --owner <owner>");
@@ -665,7 +682,7 @@ function handleExecutionTask(action, args) {
     return;
   }
 
-  throw new Error("usage: spruce task <list|board|contract|get|evidence|create|claim|update>");
+  throw new Error("usage: spruce task <list|board|contract|get|evidence|create|follow-up|claim|update>");
 }
 
 function handleArtifact(action, args) {
@@ -2082,6 +2099,7 @@ Usage:
   ${executable} task claim <taskId> --owner <owner>
   ${executable} task update <taskId> --status waiting_for_human --humanGate "Approve production release"
   ${executable} task update <taskId> --status completed --completionSummary "Focused checks passed; release handoff recorded"
+  ${executable} task follow-up <terminalTaskId> --goal "Investigate the discovered regression"
   ${executable} task board
   ${executable} task evidence <taskId>
   ${executable} task contract

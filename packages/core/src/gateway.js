@@ -63,7 +63,7 @@ import {
 } from "./task-router.js";
 import { approveTicket, getApprovalTicket, listApprovalTickets, rejectTicket } from "./approvals.js";
 import { getApprovalQueue, getApprovalQueueContract } from "./approval-queue.js";
-import { claimExecutionTask, createExecutionTask, getExecutionTask, getExecutionTaskBoard, getExecutionTaskContract, getExecutionTaskEvidence, listExecutionTasks, updateExecutionTask } from "./execution-tasks.js";
+import { claimExecutionTask, createExecutionTask, createExecutionTaskFollowUp, getExecutionTask, getExecutionTaskBoard, getExecutionTaskContract, getExecutionTaskEvidence, listExecutionTasks, updateExecutionTask } from "./execution-tasks.js";
 import { getArtifact, getArtifactContract, listArtifacts } from "./artifacts.js";
 import { assessWorkspaceIndexFreshness, buildWorkspaceIndex, readWorkspaceIndex, searchWorkspaceContext } from "./context.js";
 import { createContextEvidencePack, getContextEvidenceContract } from "./context-evidence.js";
@@ -273,6 +273,13 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/execution-tasks",
       authRequired: true,
       description: "Create local execution-control state; does not launch an agent or tool.",
+    },
+    {
+      id: "execution_tasks.follow_up",
+      method: "POST",
+      path: "/v1/execution-tasks/:taskId/follow-up",
+      authRequired: true,
+      description: "Create a new control-state follow-up for a terminal task without reopening it.",
     },
     {
       id: "execution_tasks.claim",
@@ -1399,6 +1406,7 @@ async function routeRequest(store, request, url, body) {
   if (request.method === "GET" && url.pathname === "/v1/execution-tasks/contract") return ok(getExecutionTaskContract());
   if (request.method === "GET" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "evidence" && !pathParts[4]) return ok(getExecutionTaskEvidence(store, pathParts[2]));
   if (request.method === "POST" && url.pathname === "/v1/execution-tasks") return ok(createExecutionTask(store, { ...body, actor: body.actor ?? "gateway-user" }));
+  if (request.method === "POST" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "follow-up" && !pathParts[4]) return ok(createExecutionTaskFollowUp(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
   if (request.method === "GET" && pathParts[1] === "execution-tasks" && pathParts[2] && !pathParts[3]) return ok(getExecutionTask(store, pathParts[2]));
   if (request.method === "POST" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "claim" && !pathParts[4]) return ok(claimExecutionTask(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
   if (request.method === "POST" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "update" && !pathParts[4]) return ok(updateExecutionTask(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));

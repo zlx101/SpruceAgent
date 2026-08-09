@@ -16,6 +16,7 @@ export const EXECUTION_TASK_CONTRACT = Object.freeze({
     "Execution Tasks v0 is a durable local control-state ledger; it never launches agents, executes tools, or grants approvals.",
     "A task can name a next action and evidence references, but TrustKernel, ContextOS, readiness, and exact approvals remain the execution authorities.",
     "Waiting-for-human state requires a concrete decision gate instead of silently treating missing authority as a blocker.",
+    "A follow-up links durable control state to a terminal task; it does not reopen, rerun, or authorize the prior task.",
   ],
 });
 
@@ -27,6 +28,11 @@ export function getExecutionTaskContract() {
 
 export function createExecutionTask(store, input = {}) {
   const goal = requiredText(input.goal, "goal", 500);
+  const followUpOf = input.followUpOf === undefined || input.followUpOf === null ? null : requiredTaskId(input.followUpOf, "followUpOf");
+  if (followUpOf) {
+    const parent = getExecutionTask(store, followUpOf);
+    if (!["completed", "cancelled"].includes(parent.status)) throw new Error(`follow-up requires a terminal execution task: ${followUpOf}`);
+  }
   const now = nowIso();
   const task = {
     version: EXECUTION_TASK_CONTRACT.version,
@@ -39,6 +45,7 @@ export function createExecutionTask(store, input = {}) {
     scope: optionalText(input.scope, 1000),
     status: "open",
     owner: optionalText(input.owner, 160) ?? null,
+    followUpOf,
     nextAction: optionalText(input.nextAction, 500),
     humanGate: null,
     completion: null,
@@ -49,8 +56,14 @@ export function createExecutionTask(store, input = {}) {
   };
   writeTask(store, task);
   appendJsonl(indexPath(store), taskSummary(task));
-  audit(store, task, "execution_task.created", { by: task.createdBy });
+  audit(store, task, "execution_task.created", { by: task.createdBy, followUpOf });
   return task;
+}
+
+export function createExecutionTaskFollowUp(store, taskId, input = {}) {
+  const parent = getExecutionTask(store, taskId);
+  if (!["completed", "cancelled"].includes(parent.status)) throw new Error(`follow-up requires a terminal execution task: ${taskId}`);
+  return createExecutionTask(store, { ...input, followUpOf: parent.id });
 }
 
 export function getExecutionTask(store, taskId) {
@@ -166,7 +179,7 @@ function summarizeTasks(tasks) {
 }
 
 function taskSummary(task) {
-  return { id: task.id, createdAt: task.createdAt, updatedAt: task.updatedAt, goal: task.goal, status: task.status, owner: task.owner, nextAction: task.nextAction, humanGate: task.humanGate, completion: task.completion ?? null, evidenceRefs: task.evidenceRefs, links: task.links };
+  return { id: task.id, createdAt: task.createdAt, updatedAt: task.updatedAt, goal: task.goal, status: task.status, owner: task.owner, followUpOf: task.followUpOf ?? null, nextAction: task.nextAction, humanGate: task.humanGate, completion: task.completion ?? null, evidenceRefs: task.evidenceRefs, links: task.links };
 }
 
 function normalizeStatus(value) {
@@ -196,7 +209,12 @@ function normalizeList(value, limit, name) {
 }
 function requiredText(value, name, limit) { const text = optionalText(value, limit); if (!text) throw new Error(`${name} is required`); return text; }
 function optionalText(value, limit) { const text = String(value ?? "").trim(); return text ? text.slice(0, limit) : null; }
-function taskPath(store, id) { return path.join(store.root, "execution-tasks", `${id}.json`); }
+function requiredTaskId(value, name = "taskId") {
+  const id = requiredText(value, name, 160);
+  if (!/^[A-Za-z0-9_-]{1,160}$/.test(id)) throw new Error(`${name} must be a single safe identifier`);
+  return id;
+}
+function taskPath(store, id) { return path.join(store.root, "execution-tasks", `${requiredTaskId(id)}.json`); }
 function indexPath(store) { return path.join(store.root, "execution-task-index.jsonl"); }
 function writeTask(store, task) { writeJson(taskPath(store, task.id), task); }
 function audit(store, task, type, extra) { appendJsonl(path.join(store.root, "audit.jsonl"), { type, taskId: task.id, status: task.status, createdAt: nowIso(), ...extra }); }

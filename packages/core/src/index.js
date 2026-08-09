@@ -216,6 +216,7 @@ export { assessRunRisk, runPreflight } from "./preflight.js";
 export { assessAgentExecutionReadiness, getAgentExecutionReadinessContract, AGENT_EXECUTION_READINESS_CONTRACT } from "./agent-execution-readiness.js";
 export {
   createExecutionTask,
+  createExecutionTaskFollowUp,
   getExecutionTask,
   getExecutionTaskBoard,
   getExecutionTaskEvidence,
