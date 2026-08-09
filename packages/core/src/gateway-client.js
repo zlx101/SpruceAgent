@@ -38,6 +38,7 @@ export function createGatewayClient(options = {}) {
     executionTaskBoard: () => request("GET", "/v1/execution-tasks/board"),
     executionTaskContract: () => request("GET", "/v1/execution-tasks/contract"),
     getExecutionTask: (taskId) => request("GET", `/v1/execution-tasks/${encodePathPart(taskId)}`),
+    executionTaskEvidence: (taskId) => request("GET", `/v1/execution-tasks/${encodePathPart(taskId)}/evidence`),
     createExecutionTask: (input = {}) => request("POST", "/v1/execution-tasks", input),
     claimExecutionTask: (taskId, input = {}) => request("POST", `/v1/execution-tasks/${encodePathPart(taskId)}/claim`, input),
     updateExecutionTask: (taskId, input = {}) => request("POST", `/v1/execution-tasks/${encodePathPart(taskId)}/update`, input),
