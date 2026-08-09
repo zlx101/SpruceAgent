@@ -400,6 +400,32 @@ test("execution task evidence resolves typed local records without granting auth
   assert.equal(getExecutionTaskBoard(store).evidenceAttention[0].issues.length, 3);
 });
 
+test("terminal task diagnostics surface adverse resolved execution evidence without changing authority", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(store.root, "agent-launches", "launch_failed.json"), JSON.stringify({
+    id: "launch_failed",
+    status: "failed",
+  }), "utf8");
+  fs.writeFileSync(path.join(store.root, "agent-launch-index.jsonl"), `${JSON.stringify({
+    id: "launch_failed",
+    status: "failed",
+  })}\n`, "utf8");
+  const task = createExecutionTask(store, {
+    goal: "Record the verified failure outcome",
+    links: ["agent_launch:launch_failed"],
+  });
+  updateExecutionTask(store, task.id, {
+    status: "completed",
+    completionSummary: "The failure was inspected and the follow-up was recorded.",
+  });
+
+  const closure = getExecutionTaskClosure(store, task.id);
+  assert.equal(closure.diagnostic.code, "terminal_evidence_adverse_status");
+  assert.equal(closure.diagnostic.links[0].recordStatus, "failed");
+  assert.equal(getExecutionTaskBoard(store).closureAttention[0].diagnostic.code, "terminal_evidence_adverse_status");
+});
+
 test("doctor reports alpha readiness without failed checks", () => {
   const report = runDoctor(path.resolve("."));
 

@@ -343,11 +343,22 @@ function terminalDiagnostic(task) {
     diagnostic: { code: "terminal_evidence_snapshot_missing", message: "This terminal task lacks an evidence snapshot." },
   };
   const issues = snapshot.links.filter((link) => ["missing", "unsupported"].includes(link.status));
-  return issues.length ? {
+  const adverse = snapshot.links.filter((link) => link.status === "resolved" && ["failed", "blocked", "cancelled", "requires_approval"].includes(link.recordStatus));
+  if (issues.length) return {
     taskId: task.id,
     goal: task.goal,
     status: task.status,
     diagnostic: { code: "terminal_evidence_snapshot_issues", issues },
+  };
+  return adverse.length ? {
+    taskId: task.id,
+    goal: task.goal,
+    status: task.status,
+    diagnostic: {
+      code: "terminal_evidence_adverse_status",
+      message: "A linked execution record had a non-success status when this task became terminal; this is diagnostic only.",
+      links: adverse,
+    },
   } : null;
 }
 
