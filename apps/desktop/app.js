@@ -620,6 +620,16 @@ async function handleExecutionTaskAction(button) {
       render();
       return;
     }
+    if (button.dataset.action === "execution-task-links") {
+      const current = await get(`/v1/execution-tasks/${encodeURIComponent(taskId)}`);
+      const links = window.prompt("Set comma-separated local links (for example agent_trial:<id>). Leave blank to clear all links:", (current.links || []).join(", "));
+      if (links === null) return;
+      task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/update`, {
+        links: links.split(",").map((item) => item.trim()).filter(Boolean),
+        note: "links updated from workbench",
+        actor: "workbench-user",
+      });
+    }
     if (button.dataset.action === "execution-task-claim") {
       task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/claim`, {
         owner: "workbench-user",
@@ -1820,6 +1830,7 @@ function renderExecutionTasks(items) {
     actions: [
       executionTaskButton("execution-task-view", item.id, "&#128065;", "View", "secondary"),
       executionTaskButton("execution-task-evidence", item.id, "&#128269;", "Evidence", "secondary"),
+      executionTaskButton("execution-task-links", item.id, "&#128279;", "Update Links", "secondary"),
       ...(item.status === "open" && !item.owner ? [executionTaskButton("execution-task-claim", item.id, "&#9998;", "Claim")] : []),
       ...(!["completed", "cancelled", "waiting_for_human"].includes(item.status) ? [executionTaskButton("execution-task-wait", item.id, "&#9888;", "Need Decision", "secondary")] : []),
       ...(!["completed", "cancelled"].includes(item.status) ? [executionTaskButton("execution-task-complete", item.id, "&#10003;", "Complete", "secondary")] : []),
