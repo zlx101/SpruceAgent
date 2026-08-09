@@ -111,6 +111,7 @@ Workbench v0 supports:
 - inspect a completed task's immutable completion statement and local evidence snapshot through the **Closure** action
 - surface a terminal task's read-only closure diagnostic directly in the task list, including adverse declared Fleet, Squad, or Agent Launch evidence
 - show a declared Execution Task reference on Fleet Run and Squad list records, without granting any additional control surface
+- open that linked Execution Task directly from a Fleet Run or Squad list record; this is a read-only navigation action
 - create Context Evidence packs through `POST /v1/context/evidence`
 
 ## Safety Boundary

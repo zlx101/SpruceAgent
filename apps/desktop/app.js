@@ -295,14 +295,17 @@ nodes.taskRouteList.addEventListener("click", async (event) => {
 });
 
 nodes.fleetRunList.addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-action='fleet-run-view']");
+  const button = event.target.closest("[data-action]");
   if (!button) return;
-  await loadFleetRun(button.dataset.fleetRunId);
+  if (button.dataset.action === "fleet-run-view") await loadFleetRun(button.dataset.fleetRunId);
+  if (button.dataset.action === "execution-task-reference-view") await loadExecutionTaskReference(button.dataset.taskId);
 });
 
 nodes.squadList.addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-action='squad-view']");
-  if (button) await loadSquad(button.dataset.squadId);
+  const button = event.target.closest("[data-action]");
+  if (!button) return;
+  if (button.dataset.action === "squad-view") await loadSquad(button.dataset.squadId);
+  if (button.dataset.action === "execution-task-reference-view") await loadExecutionTaskReference(button.dataset.taskId);
 });
 
 nodes.squadReadinessPanel.addEventListener("click", async (event) => {
@@ -746,6 +749,18 @@ async function handleExecutionTaskAction(button) {
 
 async function loadExecutionTasks() {
   state.executionTasks = await get("/v1/execution-tasks/board");
+}
+
+async function loadExecutionTaskReference(taskId) {
+  if (!taskId || state.busy) return;
+  setStatus("Loading linked execution task");
+  try {
+    state.executionTaskDetail = await get(`/v1/execution-tasks/${encodeURIComponent(taskId)}`);
+    renderExecutionTaskPanel(state.executionTaskDetail);
+    setStatus(`Loaded execution task - ${shortId(taskId)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
 }
 
 function decisionActionBody(action) {
@@ -1528,7 +1543,7 @@ function renderFleetRuns(items) {
       ...(item.executionTaskId ? [["task", shortId(item.executionTaskId)]] : []),
       ["updated", formatTime(item.updatedAt || item.createdAt)],
     ],
-    actions: [fleetRunViewButton(item.id)],
+    actions: [fleetRunViewButton(item.id), ...(item.executionTaskId ? [executionTaskReferenceButton(item.executionTaskId)] : [])],
   }));
 }
 
@@ -1556,7 +1571,7 @@ function renderSquads(items) {
   replaceList(nodes.squadList, items, (item) => itemNode({
     title: item.name || item.goal || item.id,
     meta: [[statusClass(item.status), item.status], ["members", `${item.memberCount} members`], ["handoffs", `${item.handoffCount} handoffs`], ...(item.executionTaskId ? [["task", shortId(item.executionTaskId)]] : []), ["updated", formatTime(item.updatedAt || item.createdAt)]],
-    actions: [squadViewButton(item.id)],
+    actions: [squadViewButton(item.id), ...(item.executionTaskId ? [executionTaskReferenceButton(item.executionTaskId)] : [])],
   }));
 }
 
@@ -3163,6 +3178,16 @@ function squadViewButton(squadId) {
   button.dataset.action = "squad-view";
   button.dataset.squadId = squadId;
   button.innerHTML = '<span aria-hidden="true">&#128065;</span><span>View</span>';
+  return button;
+}
+
+function executionTaskReferenceButton(taskId) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "execution-task-reference-view";
+  button.dataset.taskId = taskId;
+  button.innerHTML = '<span aria-hidden="true">&#128203;</span><span>View Task</span>';
   return button;
 }
 
