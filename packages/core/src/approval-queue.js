@@ -113,6 +113,7 @@ function actionsForQueueItem(ticket, status, resume) {
         body: {
           stepId: resume.stepId,
           approvalId: ticket.id,
+          ...(resume.body ?? {}),
         },
         label: "Resume",
       },
@@ -124,7 +125,17 @@ function actionsForQueueItem(ticket, status, resume) {
 
 function resolveResumeHint(ticket, trace, snapshot) {
   if (!trace || ticket.status !== "approved") {
-    return { canResume: false, path: null, stepId: null };
+    return { canResume: false, path: null, stepId: null, body: null };
+  }
+
+  if (ticket.metadata?.kind === "agent_trial_attestation") {
+    const launchId = String(ticket.metadata.launchId ?? "").trim();
+    return {
+      canResume: Boolean(launchId && ticket.toolName === "shell.execute" && ticket.input?.command),
+      path: "/v1/agent-trials/attest",
+      stepId: null,
+      body: { launchId },
+    };
   }
 
   if (trace.metadata?.kind === "agent.run" && ticket.metadata?.kind === "candidate_step") {
@@ -134,6 +145,7 @@ function resolveResumeHint(ticket, trace, snapshot) {
       canResume: Boolean(candidateStep && snapshot?.status !== "completed"),
       path: `/v1/runs/${ticket.traceId}/resume`,
       stepId: candidateStepId,
+      body: null,
     };
   }
 
@@ -148,10 +160,11 @@ function resolveResumeHint(ticket, trace, snapshot) {
       canResume: Boolean(result && snapshot?.status !== "completed"),
       path: `/v1/workflows/runs/${ticket.traceId}/resume`,
       stepId: result?.stepId ?? null,
+      body: null,
     };
   }
 
-  return { canResume: false, path: null, stepId: null };
+  return { canResume: false, path: null, stepId: null, body: null };
 }
 
 function snapshotForTrace(store, trace) {

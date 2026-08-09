@@ -5376,9 +5376,10 @@ test("agent trial attestation independently verifies a completed launch", async 
     acceptanceCommand,
   });
   approveTicket(store, pendingAttestation.approval.id, { reason: "independent acceptance test" });
+  const queue = getApprovalQueue(store, { status: "ready_to_resume" });
+  const resumeAction = queue.items.find((item) => item.approvalId === pendingAttestation.approval.id)?.actions[0];
   const completed = await attestAgentLaunchTrial(store, {
     launchId: launch.id,
-    acceptanceCommand,
     approvalId: pendingAttestation.approval.id,
   });
   const evidence = completed.trial.provenance.acceptanceEvidence;
@@ -5392,6 +5393,14 @@ test("agent trial attestation independently verifies a completed launch", async 
 
   assert.equal(getAgentTrialAttestationContract().interface, "spruceagent.agent-trial-attestation");
   assert.equal(pendingAttestation.status, "requires_approval");
+  assert.equal(queue.status, "ready_to_resume");
+  assert.equal(resumeAction.path, "/v1/agent-trials/attest");
+  assert.deepEqual(resumeAction.body, {
+    stepId: null,
+    approvalId: pendingAttestation.approval.id,
+    launchId: launch.id,
+  });
+  assert.equal(JSON.stringify(resumeAction).includes(acceptanceCommand), false);
   assert.equal(completed.status, "completed");
   assert.equal(completed.trial.status, "passed");
   assert.equal(completed.trial.provenance.attestedByLauncher, true);
@@ -5490,9 +5499,10 @@ test("gateway client records, attests, and lists agent trial evidence", async ()
     const acceptanceCommand = "node -e \"process.exit(require('fs').readFileSync('gateway-attested.txt','utf8')==='ok'?0:1)\"";
     const pendingAttestation = await client.attestAgentLaunchTrial({ launchId: launch.id, acceptanceCommand });
     approveTicket(store, pendingAttestation.approval.id);
+    const readyQueue = await client.approvalQueue({ status: "ready_to_resume" });
+    const resumeAction = readyQueue.items.find((item) => item.approvalId === pendingAttestation.approval.id)?.actions[0];
     const attested = await client.attestAgentLaunchTrial({
       launchId: launch.id,
-      acceptanceCommand,
       approvalId: pendingAttestation.approval.id,
     });
     const attestedList = await client.listAgentTrials({ attested: true });
@@ -5503,6 +5513,8 @@ test("gateway client records, attests, and lists agent trial evidence", async ()
     assert.equal(listed.summary.total, 1);
     assert.equal(loaded.id, trial.id);
     assert.equal(pendingAttestation.status, "requires_approval");
+    assert.equal(resumeAction.path, "/v1/agent-trials/attest");
+    assert.equal(JSON.stringify(resumeAction).includes(acceptanceCommand), false);
     assert.equal(attested.trial.status, "passed");
     assert.equal("stdout" in attested.trial.provenance.acceptanceEvidence, false);
     assert.equal(attestedList.summary.total, 1);

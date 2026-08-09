@@ -14,13 +14,14 @@ import { appendTraceEvent } from "./trace.js";
 const execAsync = promisify(exec);
 
 export const AGENT_TRIAL_ATTESTATION_CONTRACT = Object.freeze({
-  version: "0.1.0",
+  version: "0.2.0",
   interface: "spruceagent.agent-trial-attestation",
   sourceKind: "completed_agent_launch_and_independent_acceptance",
   outputKind: "launcher_attested_agent_trial",
   safetyBoundary: [
     "Attestation v0 accepts completed Agent Launch records from Git workspaces only.",
     "The acceptance command requires its own exact TrustKernel approval ticket.",
+    "An approved attestation may resume with its approval id and launch id; the acceptance command is recovered only from that exact server-side ticket.",
     "Git mutation commands are rejected before approval or execution.",
     "Acceptance output and command text are not stored in the Trial; only hashes, byte counts, exit status, and bounded timing are retained.",
     "The workspace fingerprint must remain stable during acceptance for the Trial to pass.",
@@ -59,7 +60,11 @@ export async function attestAgentLaunchTrial(store, input = {}) {
     throw new Error(`agent launch requires Git evidence before attestation: ${launchId}`);
   }
 
-  const command = String(input.acceptanceCommand ?? "").trim();
+  let ticket = input.approvalId ? getApprovalTicket(store, input.approvalId) : null;
+  // A queued continuation deliberately needs only the approval id. The exact
+  // command remains in the server-side capability ticket instead of being
+  // replayed through the Workbench after a refresh.
+  const command = String(input.acceptanceCommand ?? ticket?.input?.command ?? "").trim();
   if (!command) throw new Error("acceptanceCommand is required");
   assertAllowedAcceptanceCommand(command);
   const cwd = assertWorkspacePath(store, launch.workspacePath);
@@ -121,7 +126,7 @@ export async function attestAgentLaunchTrial(store, input = {}) {
     };
   }
 
-  const ticket = getApprovalTicket(store, input.approvalId);
+  ticket ??= getApprovalTicket(store, input.approvalId);
   assertApprovalMatchesAttestation(ticket, command, cwd, launchId);
   consumeApprovalTicket(store, ticket.id);
 
