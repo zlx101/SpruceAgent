@@ -321,9 +321,12 @@ nodes.squadReadinessPanel.addEventListener("click", async (event) => {
         : undefined;
       if (member?.adapterId === "local-shell-agent" && !command?.trim()) return;
       state.busy = true;
-      const result = await post(`/v1/squads/${encodeURIComponent(state.squadDetail.id)}/members/${encodeURIComponent(button.dataset.role)}/approval-request`, command ? { command: command.trim() } : {});
+      const result = await post(`/v1/squads/${encodeURIComponent(state.squadDetail.id)}/members/${encodeURIComponent(button.dataset.role)}/approval-request`, {
+        purpose: button.dataset.purpose ?? "execution",
+        ...(command ? { command: command.trim() } : {}),
+      });
       await loadSquad(state.squadDetail.id);
-      setStatus(`${result.reused ? "Existing" : "Created"} approval request - ${shortId(result.launch.approval.id)}`);
+      setStatus(`${result.reused ? "Existing" : "Created"} ${button.dataset.purpose ?? "execution"} approval request - ${shortId(result.launch.approval.id)}`);
     }
   } catch (error) {
     setStatus(error.message, true);
@@ -1374,13 +1377,19 @@ function renderSquadPanel(squad, readiness, executionReadiness = {}) {
       action.textContent = "Bind workspace";
       card.appendChild(action);
     }
-    if (member.status === "ready_for_approval") {
+    const approvalPurpose = execution?.canRequestExecutionApproval
+      ? "execution"
+      : execution?.canRequestTrialApproval
+        ? "trial"
+        : null;
+    if (member.status === "ready_for_approval" && approvalPurpose) {
       const action = document.createElement("button");
       action.className = "primary-action squad-action";
       action.type = "button";
       action.dataset.action = "squad-request-approval";
       action.dataset.role = member.role;
-      action.textContent = "Request execution approval";
+      action.dataset.purpose = approvalPurpose;
+      action.textContent = approvalPurpose === "trial" ? "Request controlled trial approval" : "Request execution approval";
       card.appendChild(action);
     }
     grid.appendChild(card);
@@ -1413,7 +1422,7 @@ function renderSquadPanel(squad, readiness, executionReadiness = {}) {
 }
 
 function squadReadinessExplanation(member) {
-  if (member.status === "ready_for_approval") return "Workspace and all required handoffs are verified.";
+  if (member.status === "ready_for_approval") return "Workspace and all required handoffs are verified; the execution gate determines whether a trial or normal execution can be approved.";
   if (member.status === "waiting_for_handoff") return `${member.acceptedHandoffs}/${member.incomingHandoffs} upstream handoffs accepted.`;
   if (member.status === "approval_pending") return `Approval ${shortId(member.launch?.approvalId)} is pending; no process has started.`;
   if (member.status === "execution_not_routed") return "This Squad was created from a planning route. Create a fresh execute-mode Task Route after capability validation.";
