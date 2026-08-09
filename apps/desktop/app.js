@@ -614,6 +614,12 @@ async function handleExecutionTaskAction(button) {
       render();
       return;
     }
+    if (button.dataset.action === "execution-task-evidence") {
+      task = await get(`/v1/execution-tasks/${encodeURIComponent(taskId)}/evidence`);
+      state.executionTaskDetail = task;
+      render();
+      return;
+    }
     if (button.dataset.action === "execution-task-claim") {
       task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/claim`, {
         owner: "workbench-user",
@@ -1811,6 +1817,7 @@ function renderExecutionTasks(items) {
     ],
     actions: [
       executionTaskButton("execution-task-view", item.id, "&#128065;", "View", "secondary"),
+      executionTaskButton("execution-task-evidence", item.id, "&#128269;", "Evidence", "secondary"),
       ...(item.status === "open" && !item.owner ? [executionTaskButton("execution-task-claim", item.id, "&#9998;", "Claim")] : []),
       ...(!["completed", "cancelled", "waiting_for_human"].includes(item.status) ? [executionTaskButton("execution-task-wait", item.id, "&#9888;", "Need Decision", "secondary")] : []),
       ...(!["completed", "cancelled"].includes(item.status) ? [executionTaskButton("execution-task-complete", item.id, "&#10003;", "Complete", "secondary")] : []),
