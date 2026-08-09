@@ -52,6 +52,7 @@ export function createGatewayClient(options = {}) {
     autopilotContract: () => request("GET", "/v1/autopilots/contract"),
     getAutopilot: (autopilotId) => request("GET", `/v1/autopilots/${encodePathPart(autopilotId)}`),
     listAutopilotTriggers: (autopilotId, input = {}) => request("GET", `/v1/autopilots/${encodePathPart(autopilotId)}/triggers${input.limit ? `?limit=${encodeURIComponent(input.limit)}` : ""}`),
+    listAutopilotFailures: (autopilotId, input = {}) => request("GET", `/v1/autopilots/${encodePathPart(autopilotId)}/failures${input.limit ? `?limit=${encodeURIComponent(input.limit)}` : ""}`),
     createAutopilot: (input = {}) => request("POST", "/v1/autopilots", input),
     runDueAutopilots: (input = {}) => request("POST", "/v1/autopilots/run-due", input),
     triggerAutopilot: (autopilotId, input = {}) => request("POST", `/v1/autopilots/${encodePathPart(autopilotId)}/trigger`, input),

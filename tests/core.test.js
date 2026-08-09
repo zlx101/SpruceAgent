@@ -2311,6 +2311,7 @@ test("gateway route contract exposes stable route ids", () => {
   assert.ok(routeIds.includes("autopilots.create"));
   assert.ok(routeIds.includes("autopilots.run_due"));
   assert.ok(routeIds.includes("autopilots.trigger"));
+  assert.ok(routeIds.includes("autopilots.failures"));
   assert.ok(routeIds.includes("autopilots.enable"));
   assert.ok(routeIds.includes("autopilots.disable"));
   assert.equal(contract.routes.find((route) => route.id === "health").authRequired, false);
@@ -2338,7 +2339,7 @@ test("gateway serves workbench static assets without API auth", async () => {
     assert.match(js.body, /submitRun|searchContextEvidenceFromWorkbench|renderSystemOverview|renderContextEvidence|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|prepareAgentWorkspaceFromWorkbench|previewAgentLaunch|loadAgentWorkspace|loadAgentLaunch|createLaunchReviewFromWorkbench|loadLaunchReview|probeCapabilitiesFromWorkbench|routeTaskFromWorkbench|loadTaskRoute|renderAgentAdapters|renderAgentPlanPanel|renderAgentWorkspacePanel|renderAgentLaunches|renderAgentLaunchPanel|renderLaunchReviews|renderLaunchReviewPanel|renderCapabilityProbePanel|renderTaskRoutes|renderTaskRoutePanel|renderFleetRuns|renderFleetRunPanel|renderExecutionTasks|renderAutopilots|renderAutopilotPanel|runDueAutopilotsFromWorkbench|loadAutopilotTriggers|createExecutionTaskFromWorkbench|handleExecutionTaskAction|execution-task-links|execution-task-follow-up|execution-task-closure|execution-task-lineage|execution-task-handoff|execution-task-cancel|execution-task-block|execution-task-resume|execution-task-reference-view|loadExecutionTaskReference|completionSummary|cancellationSummary|resumptionSummary|handoffSummary|ifUpdatedAt|blocker|loadExecutionTasks|fleetRunViewButton|loadFleetRun|taskRouteViewButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|agentWorkspaces|agentLaunches|launchReviews|capabilityProbes|taskRoutes|fleetRuns|executionTasks|autopilots|resume|inbox|approval/i);
     assert.match(js.body, /setAutopilotEnabledFromWorkbench|autopilot-enable|autopilot-disable|ifUpdatedAt/);
     assert.match(js.body, /Autopilot Runner/);
-    assert.match(js.body, /execution-task-origin|autopilot-last-task|Autopilot Origin|Last Task/);
+    assert.match(js.body, /execution-task-origin|autopilot-last-task|Autopilot Origin|Last Task|autopilot-failures|Failures/);
     assert.match(js.body, /createAutopilotFromWorkbench|autopilot-create-button|intervalMinutes/);
     assert.match(mark.body, /SpruceAgent mark/);
   } finally {
@@ -2584,7 +2585,7 @@ test("gateway client manages due Autopilot task creation without executing an ag
   const client = createGatewayClient({ baseUrl: `http://${gateway.host}:${gateway.port}`, token: gateway.token });
 
   try {
-    for (const method of ["listAutopilots", "listDueAutopilots", "autopilotContract", "getAutopilot", "listAutopilotTriggers", "createAutopilot", "runDueAutopilots", "triggerAutopilot", "enableAutopilot", "disableAutopilot"]) {
+    for (const method of ["listAutopilots", "listDueAutopilots", "autopilotContract", "getAutopilot", "listAutopilotTriggers", "listAutopilotFailures", "createAutopilot", "runDueAutopilots", "triggerAutopilot", "enableAutopilot", "disableAutopilot"]) {
       assert.equal(typeof client[method], "function");
     }
     const contract = await client.autopilotContract();
@@ -2596,6 +2597,7 @@ test("gateway client manages due Autopilot task creation without executing an ag
     });
     assert.equal(contract.interface, "spruceagent.autopilots");
     assert.equal((await client.listAutopilots()).items[0].id, rule.id);
+    assert.equal((await client.listAutopilotFailures(rule.id)).items.length, 0);
     assert.equal((await client.status()).autopilotCount, 1);
     assert.equal((await client.status()).autopilotDueCount, 0);
     const disabled = await client.disableAutopilot(rule.id, { ifUpdatedAt: rule.updatedAt });

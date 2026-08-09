@@ -123,6 +123,7 @@ import {
   listArtifacts,
   listEvaluations,
   listExecutionTasks,
+  listAutopilotFailures,
   listAutopilots,
   listAutopilotTriggers,
   listDueAutopilots,
@@ -778,6 +779,13 @@ async function handleAutopilot(action, args) {
     printJson(listAutopilotTriggers(store, autopilotId, { limit: flags.limit }));
     return;
   }
+  if (action === "failures") {
+    const [autopilotId, ...flagArgs] = args;
+    if (!autopilotId) throw new Error("usage: spruce autopilot failures <autopilotId> [--limit 50]");
+    const flags = parseFlags(flagArgs);
+    printJson(listAutopilotFailures(store, autopilotId, { limit: flags.limit }));
+    return;
+  }
   if (action === "create") {
     const flags = parseFlags(args);
     printJson(createAutopilot(store, {
@@ -828,7 +836,7 @@ async function handleAutopilot(action, args) {
     printJson(setAutopilotEnabled(store, autopilotId, { enabled: action === "enable", ifUpdatedAt: flags.ifUpdatedAt, actor: flags.by ?? "local-user" }));
     return;
   }
-  throw new Error("usage: spruce autopilot <list|contract|due|get|detail|triggers|create|trigger|run-due|runner|enable|disable>");
+  throw new Error("usage: spruce autopilot <list|contract|due|get|detail|triggers|failures|create|trigger|run-due|runner|enable|disable>");
 }
 
 function handleArtifact(action, args) {

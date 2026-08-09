@@ -369,6 +369,7 @@ nodes.autopilotList.addEventListener("click", async (event) => {
   if (!button || state.busy) return;
   if (button.dataset.action === "autopilot-view") await loadAutopilot(button.dataset.autopilotId);
   if (button.dataset.action === "autopilot-triggers") await loadAutopilotTriggers(button.dataset.autopilotId);
+  if (button.dataset.action === "autopilot-failures") await loadAutopilotFailures(button.dataset.autopilotId);
   if (button.dataset.action === "autopilot-last-task") await loadExecutionTaskReference(button.dataset.taskId);
   if (button.dataset.action === "autopilot-enable") await setAutopilotEnabledFromWorkbench(button, true);
   if (button.dataset.action === "autopilot-disable") await setAutopilotEnabledFromWorkbench(button, false);
@@ -860,6 +861,22 @@ async function loadAutopilotTriggers(autopilotId) {
     state.autopilotDetail = { autopilot, triggers: triggers.items };
     renderAutopilotPanel(state.autopilotDetail);
     setStatus(`Loaded trigger ledger - ${shortId(autopilotId)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+async function loadAutopilotFailures(autopilotId) {
+  if (!autopilotId || state.busy) return;
+  setStatus("Loading Autopilot failure ledger");
+  try {
+    const [autopilot, failures] = await Promise.all([
+      get(`/v1/autopilots/${encodeURIComponent(autopilotId)}`),
+      get(`/v1/autopilots/${encodeURIComponent(autopilotId)}/failures`),
+    ]);
+    state.autopilotDetail = { autopilot, failures: failures.items };
+    renderAutopilotPanel(state.autopilotDetail);
+    setStatus(`Loaded failure ledger - ${shortId(autopilotId)}`);
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -2130,6 +2147,7 @@ function renderAutopilots(items, dueItems = []) {
     actions: [
       autopilotButton("autopilot-view", item.id, "&#128065;", "View"),
       autopilotButton("autopilot-triggers", item.id, "&#128221;", "Triggers", "secondary"),
+      autopilotButton("autopilot-failures", item.id, "&#9888;", "Failures", "secondary"),
       ...(item.lastTaskId ? [autopilotLastTaskButton(item.lastTaskId)] : []),
       autopilotButton(item.enabled ? "autopilot-disable" : "autopilot-enable", item.id, item.enabled ? "&#9208;" : "&#9654;", item.enabled ? "Disable" : "Enable", "secondary", item.updatedAt),
     ],

@@ -235,6 +235,7 @@ export {
   createAutopilot,
   getAutopilot,
   getAutopilotContract,
+  listAutopilotFailures,
   listAutopilotTriggers,
   listAutopilots,
   listDueAutopilots,

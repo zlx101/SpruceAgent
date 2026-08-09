@@ -14,6 +14,7 @@ The persisted files are:
 .spruceagent/autopilots/<autopilotId>.json
 .spruceagent/autopilot-index.jsonl
 .spruceagent/autopilot-trigger-index.jsonl
+.spruceagent/autopilot-failure-index.jsonl
 .spruceagent/audit.jsonl
 ```
 
@@ -82,6 +83,8 @@ All endpoints are local and require the existing Gateway Bearer token.
 | `POST` | `/v1/autopilots/:autopilotId/disable` | Explicitly disable a rule without deleting history or cancelling tasks. |
 
 `createGatewayClient()` exposes matching methods: `listAutopilots`, `listDueAutopilots`, `autopilotContract`, `getAutopilot`, `listAutopilotTriggers`, `createAutopilot`, `runDueAutopilots`, `triggerAutopilot`, `enableAutopilot`, and `disableAutopilot`.
+
+`GET /v1/autopilots/:autopilotId/failures` (and `spruce autopilot failures <autopilotId>`) reads the durable failed-trigger ledger. A failed rule does not block other due rules in the same scan. Failure records are read-only diagnostics; operators must correct the rule or its local storage explicitly before a future due tick can succeed.
 
 ## Operational boundary
 

@@ -69,6 +69,7 @@ export function ensureStore(store) {
   touch(path.join(store.root, "execution-task-index.jsonl"));
   touch(path.join(store.root, "autopilot-index.jsonl"));
   touch(path.join(store.root, "autopilot-trigger-index.jsonl"));
+  touch(path.join(store.root, "autopilot-failure-index.jsonl"));
   touch(path.join(store.root, "audit.jsonl"));
   return store;
 }

@@ -169,11 +169,22 @@ export function runDueAutopilots(store, input = {}) {
     try {
       return triggerAutopilot(store, item.id, { now, actor: input.actor });
     } catch (error) {
-      return {
+      const failure = {
+        id: createId("autopilot_failure"),
         autopilotId: item.id,
         outcome: "failed",
+        failedAt: now,
         error: String(error?.message ?? error ?? "unknown autopilot trigger error").slice(0, 500),
       };
+      appendJsonl(autopilotFailureIndexPath(store), failure);
+      appendJsonl(path.join(store.root, "audit.jsonl"), {
+        type: "autopilot.trigger_failed",
+        autopilotId: item.id,
+        failureId: failure.id,
+        error: failure.error,
+        createdAt: now,
+      });
+      return failure;
     }
   });
   const failed = results.filter((item) => item.outcome === "failed");
@@ -196,6 +207,18 @@ export function listAutopilotTriggers(store, autopilotId, options = {}) {
     interface: "spruceagent.autopilot-triggers",
     autopilotId: id,
     items: listTriggers(store, id).sort((a, b) => String(b.triggeredAt).localeCompare(String(a.triggeredAt))).slice(0, limit),
+    limits: AUTOPILOT_CONTRACT.safetyBoundary,
+  };
+}
+
+export function listAutopilotFailures(store, autopilotId, options = {}) {
+  const id = requiredId(autopilotId, "autopilotId");
+  const limit = boundedLimit(options.limit);
+  return {
+    version: AUTOPILOT_CONTRACT.version,
+    interface: "spruceagent.autopilot-failures",
+    autopilotId: id,
+    items: readJsonl(autopilotFailureIndexPath(store)).filter((item) => item.autopilotId === id).sort((a, b) => String(b.failedAt).localeCompare(String(a.failedAt))).slice(0, limit),
     limits: AUTOPILOT_CONTRACT.safetyBoundary,
   };
 }
@@ -241,6 +264,7 @@ function audit(store, type, record, details) {
 function autopilotPath(store, id) { return path.join(store.root, "autopilots", `${id}.json`); }
 function autopilotIndexPath(store) { return path.join(store.root, "autopilot-index.jsonl"); }
 function autopilotTriggerIndexPath(store) { return path.join(store.root, "autopilot-trigger-index.jsonl"); }
+function autopilotFailureIndexPath(store) { return path.join(store.root, "autopilot-failure-index.jsonl"); }
 function addMinutes(at, minutes) { return new Date(new Date(at).getTime() + minutes * 60000).toISOString(); }
 function nextDueAt(previousDueAt, intervalMinutes, now) {
   let due = previousDueAt;
