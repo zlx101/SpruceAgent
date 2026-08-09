@@ -59,6 +59,7 @@ Start here:
 - [Run Risk Preflight v0](docs/run-risk-preflight-v0.md)
 - [Approval Queue v0](docs/approval-queue-v0.md)
 - [Execution Tasks v0](docs/execution-tasks-v0.md)
+- [Autopilot v0](docs/autopilot-v0.md)
 - [Run Artifact Store v0](docs/run-artifact-store-v0.md)
 - [ContextOS Source Map v0](docs/contextos-source-map-v0.md)
 - [Context Evidence Contract v1](docs/context-evidence-contract-v1.md)
@@ -136,6 +137,11 @@ npm run spruce -- task list --status open
 npm run spruce -- task claim <taskId> --owner reviewer
 npm run spruce -- task update <taskId> --status waiting_for_human --humanGate "Approve release decision"
 npm run spruce -- task board
+npm run spruce -- autopilot create --name "Daily evidence review" --goal "Review prior development evidence" --intervalMinutes 1440
+npm run spruce -- autopilot due
+npm run spruce -- autopilot run-due
+npm run spruce -- autopilot failures <autopilotId>
+npm run spruce -- autopilot update <autopilotId> --ifUpdatedAt <ISO> --goal "Corrected bounded review goal"
 DEEPSEEK_API_KEY=<token> npm run spruce -- run "Draft with DeepSeek" --context "TrustKernel" --llm deepseek --llmModel deepseek-v4-flash --dryRun
 npm run spruce -- skill extract <traceId>
 npm run spruce -- skill evaluate <skillId>
@@ -183,6 +189,8 @@ npm run spruce -- candidate continuation-contract
 npm run spruce -- gateway token
 npm run spruce -- gateway contract
 npm run spruce -- gateway serve
+# explicit, opt-in local polling host; it only creates open Execution Tasks
+npm run spruce -- gateway serve --autopilotPollMs 60000
 # then open http://127.0.0.1:7357/workbench
 # public showcase: http://127.0.0.1:7357/showcase
 npm run spruce -- tool run shell.execute --command "echo spruce" --approved

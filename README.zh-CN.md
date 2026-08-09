@@ -109,6 +109,8 @@ npm run spruce -- run "Read TrustKernel context safely" --context "TrustKernel" 
 ```bash
 npm run spruce -- gateway token
 npm run spruce -- gateway serve --port 7357
+# 显式启用本地 Autopilot 轮询；它只创建开放的本地 Execution Task
+npm run spruce -- gateway serve --port 7357 --autopilotPollMs 60000
 ```
 
 打开：

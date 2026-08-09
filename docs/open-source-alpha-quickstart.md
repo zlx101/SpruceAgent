@@ -67,10 +67,24 @@ Create a local Gateway token:
 npm run spruce -- gateway token
 ```
 
-Start the Gateway:
+For a bounded recurring control task, create and inspect an Autopilot rule manually first. It only creates open local Execution Tasks; it never starts an Agent or runs tools:
+
+```bash
+npm run spruce -- autopilot create --name "Daily evidence review" --goal "Review the prior development evidence" --intervalMinutes 1440
+npm run spruce -- autopilot due
+npm run spruce -- autopilot run-due
+```
+
+Start the Gateway normally with no scheduler:
 
 ```bash
 npm run spruce -- gateway serve
+```
+
+Or, instead, attach the opt-in foreground poller to the local Gateway process with `--autopilotPollMs`:
+
+```bash
+npm run spruce -- gateway serve --autopilotPollMs 60000
 ```
 
 Open:
