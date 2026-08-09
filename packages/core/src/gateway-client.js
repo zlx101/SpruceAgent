@@ -41,6 +41,7 @@ export function createGatewayClient(options = {}) {
     traceReportContract: () => request("GET", "/v1/reports/contract"),
     listAgentAdapters: (input = {}) => request("GET", `/v1/agent-adapters${agentAdapterParams(input)}`),
     getAgentAdapter: (adapterId) => request("GET", `/v1/agent-adapters/${encodePathPart(adapterId)}`),
+    getAgentExecutionReadiness: (adapterId, input = {}) => request("GET", `/v1/agent-adapters/${encodePathPart(adapterId)}/readiness${input.maxChanges ? `?maxChanges=${encodeURIComponent(input.maxChanges)}` : ""}`),
     agentAdapterContract: () => request("GET", "/v1/agent-adapters/contract"),
     planAgentAdapterRun: (adapterId, input = {}) => request("POST", `/v1/agent-adapters/${encodePathPart(adapterId)}/plan`, input),
     listAgentWorkspaces: (input = {}) => request("GET", `/v1/agent-workspaces${agentWorkspaceParams(input)}`),

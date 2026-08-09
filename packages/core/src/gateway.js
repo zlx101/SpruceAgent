@@ -54,6 +54,7 @@ import {
   recordAgentTrial,
 } from "./agent-trials.js";
 import { attestAgentLaunchTrial, getAgentTrialAttestationContract } from "./agent-trial-attestation.js";
+import { assessAgentExecutionReadiness, getAgentExecutionReadinessContract } from "./agent-execution-readiness.js";
 import {
   createTaskRoute,
   getTaskRoute,
@@ -432,6 +433,13 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/agent-trials/attestation-contract",
       authRequired: true,
       description: "Read the Agent Trial attestation contract.",
+    },
+    {
+      id: "agent_adapters.readiness",
+      method: "GET",
+      path: "/v1/agent-adapters/:adapterId/readiness",
+      authRequired: true,
+      description: "Read-only execution readiness projection; it never prepares, approves, or launches an agent.",
     },
     {
       id: "capability_probes.list",
@@ -1369,7 +1377,11 @@ async function routeRequest(store, request, url, body) {
     return ok(getAgentAdapterContract());
   }
 
-  if (request.method === "GET" && pathParts[1] === "agent-adapters" && pathParts[2]) {
+  if (request.method === "GET" && pathParts[1] === "agent-adapters" && pathParts[2] && pathParts[3] === "readiness" && !pathParts[4]) {
+    return ok(assessAgentExecutionReadiness(store, { adapterId: pathParts[2], maxChanges: url.searchParams.get("maxChanges") ?? undefined }));
+  }
+
+  if (request.method === "GET" && pathParts[1] === "agent-adapters" && pathParts[2] && !pathParts[3]) {
     return ok(getAgentAdapter(pathParts[2]));
   }
 

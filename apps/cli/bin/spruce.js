@@ -6,6 +6,7 @@ import {
   attestAgentLaunchTrial,
   archiveWorkflow,
   assessWorkspaceIndexFreshness,
+  assessAgentExecutionReadiness,
   approveSkill,
   approveFleetRun,
   appendTraceEvent,
@@ -1716,6 +1717,14 @@ async function handleAgent(action, args = []) {
       versionTimeoutMs: flags.timeoutMs,
       actor: flags.actor ?? "local-user",
     }));
+    return;
+  }
+
+  if (action === "readiness") {
+    const [adapterId, ...flagArgs] = args;
+    if (!adapterId) throw new Error("usage: spruce agent readiness <adapterId>");
+    const flags = parseFlags(flagArgs);
+    printJson(assessAgentExecutionReadiness(store, { adapterId, maxChanges: flags.maxChanges }));
     return;
   }
 

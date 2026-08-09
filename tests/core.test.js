@@ -8,6 +8,7 @@ import {
   addMemory,
   attestAgentLaunchTrial,
   archiveWorkflow,
+  assessAgentExecutionReadiness,
   assessRunRisk,
   assessWorkspaceIndexFreshness,
   approveSkill,
@@ -2468,6 +2469,7 @@ test("gateway client reads and plans gated agent adapters without starting execu
     const contract = await client.agentAdapterContract();
     const adapters = await client.listAgentAdapters();
     const adapter = await client.getAgentAdapter("codex-cli");
+    const readiness = await client.getAgentExecutionReadiness("codex-cli");
     const plan = await client.planAgentAdapterRun("codex-cli", {
       goal: "Plan adapter gateway run",
       contextQuery: "adapter",
@@ -2476,6 +2478,9 @@ test("gateway client reads and plans gated agent adapters without starting execu
     assert.equal(contract.interface, "spruceagent.agent-adapters");
     assert.equal(adapters.summary.total >= 5, true);
     assert.equal(adapter.id, "codex-cli");
+    assert.equal(readiness.status, "blocked");
+    assert.equal(readiness.canRequestExecutionApproval, false);
+    assert.ok(readiness.blockers.some((item) => item.id === "capability_probe_missing"));
     assert.equal(adapter.capabilities.directExecution, true);
     assert.equal(plan.status, "planned");
     assert.equal(plan.executionMode, "preview_only");
@@ -3960,6 +3965,21 @@ test("capability probe records allowlisted local evidence without provider secre
   assert.equal(probe.llmProviders.every((item) => item.evidence.every((value) => !value.includes("sk-"))), true);
   assert.equal(getCapabilityProbe(store, probe.id).id, probe.id);
   assert.equal(listCapabilityProbes(store).summary.latestProbeId, probe.id);
+});
+
+test("agent execution readiness requires fresh context and an attested passing trial", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, "README.md"), "Readiness must not infer execution success.", "utf8");
+  buildWorkspaceIndex(store);
+  probeAgentCapabilities(store, { adapterIds: ["local-shell-agent"] });
+
+  const readiness = assessAgentExecutionReadiness(store, { adapterId: "local-shell-agent" });
+
+  assert.equal(readiness.interface, "spruceagent.agent-execution-readiness");
+  assert.equal(readiness.status, "needs_trial");
+  assert.equal(readiness.canRequestExecutionApproval, false);
+  assert.ok(readiness.blockers.some((item) => item.id === "attested_trial_required"));
 });
 
 test("task router assigns roles separately and routes supported execute adapters", async () => {

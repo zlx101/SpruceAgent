@@ -27,6 +27,7 @@ const state = {
   squads: null,
   squadDetail: null,
   squadReadiness: null,
+  squadExecutionReadiness: {},
   workflows: [],
   workflowVersions: null,
   workflowDraft: null,
@@ -1347,7 +1348,7 @@ function renderSquads(items) {
   }));
 }
 
-function renderSquadPanel(squad, readiness) {
+function renderSquadPanel(squad, readiness, executionReadiness = {}) {
   nodes.squadPanel.textContent = squad ? JSON.stringify(squad, null, 2) : "{}";
   nodes.squadReadinessPanel.replaceChildren();
   if (!readiness) return;
@@ -1360,7 +1361,9 @@ function renderSquadPanel(squad, readiness) {
     const card = document.createElement("article");
     card.className = `fleet-member unit-${member.status}`;
     const explanation = squadReadinessExplanation(member);
-    card.innerHTML = `<div class="fleet-member-title"><strong>${escapeHtml(member.role)}</strong><span class="tag">${escapeHtml(member.status.replaceAll("_", " "))}</span></div><p>${escapeHtml(explanation)}</p>`;
+    const execution = executionReadiness[member.adapterId];
+    const executionNote = execution ? `Execution gate: ${execution.status}${execution.blockers?.length ? ` — ${execution.blockers.map((item) => item.id).join(", ")}` : ""}` : "Execution gate not loaded.";
+    card.innerHTML = `<div class="fleet-member-title"><strong>${escapeHtml(member.role)}</strong><span class="tag">${escapeHtml(member.status.replaceAll("_", " "))}</span></div><p>${escapeHtml(explanation)}</p><p>${escapeHtml(executionNote)}</p>`;
     if (member.status === "needs_workspace") {
       const action = document.createElement("button");
       action.className = "secondary-action squad-action";
@@ -2290,7 +2293,10 @@ async function loadSquad(squadId) {
       get(`/v1/squads/${encodeURIComponent(squadId)}`),
       get(`/v1/squads/${encodeURIComponent(squadId)}/readiness`),
     ]);
-    renderSquadPanel(state.squadDetail, state.squadReadiness);
+    const adapterIds = [...new Set(state.squadReadiness.members.map((member) => member.adapterId))];
+    const readinessItems = await Promise.all(adapterIds.map(async (adapterId) => [adapterId, await get(`/v1/agent-adapters/${encodeURIComponent(adapterId)}/readiness`)]));
+    state.squadExecutionReadiness = Object.fromEntries(readinessItems);
+    renderSquadPanel(state.squadDetail, state.squadReadiness, state.squadExecutionReadiness);
     setStatus(`Loaded Squad - ${shortId(squadId)}`);
   } catch (error) {
     setStatus(error.message, true);

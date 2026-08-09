@@ -213,6 +213,7 @@ export {
   getContextEvidenceContract,
 } from "./context-evidence.js";
 export { assessRunRisk, runPreflight } from "./preflight.js";
+export { assessAgentExecutionReadiness, getAgentExecutionReadinessContract, AGENT_EXECUTION_READINESS_CONTRACT } from "./agent-execution-readiness.js";
 export { runAgent } from "./agent-runner.js";
 export { getPlannerPromotionContract, promoteLlmDraftToCandidatePlan } from "./planner.js";
 export { executeCandidatePlan, getCandidateExecutionContract } from "./candidate-executor.js";
