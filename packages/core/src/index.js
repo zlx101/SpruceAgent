@@ -242,6 +242,7 @@ export {
   setAutopilotEnabled,
   triggerAutopilot,
 } from "./autopilots.js";
+export { AUTOPILOT_RUNNER_CONTRACT, createAutopilotRunner } from "./autopilot-runner.js";
 export { runAgent } from "./agent-runner.js";
 export { getPlannerPromotionContract, promoteLlmDraftToCandidatePlan } from "./planner.js";
 export { executeCandidatePlan, getCandidateExecutionContract } from "./candidate-executor.js";

@@ -21,6 +21,7 @@ import {
   createExecutionTask,
   createExecutionTaskFollowUp,
   createAutopilot,
+  createAutopilotRunner,
   createContextPack,
   createModelContextFromEvidence,
   createSourceMap,
@@ -406,6 +407,31 @@ test("autopilots persist due scheduling and idempotently create only local execu
   assert.equal(listExecutionTasks(store).summary.total, 2);
   assert.equal(listDueAutopilots(store, { now: "2026-08-10T02:00:00.000Z" }).items.length, 0);
   assert.throws(() => createAutopilot(store, { name: "Unsafe", goal: "No", intervalMinutes: 1 }), /between 5 and 10080/);
+});
+
+test("autopilot runner is opt-in, observable, and only ticks the safe due boundary", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const rule = createAutopilot(store, {
+    name: "Runner review",
+    goal: "Review runner-generated control state",
+    intervalMinutes: 60,
+    now: "2026-08-10T00:00:00.000Z",
+    firstDueAt: "2026-08-10T01:00:00.000Z",
+  });
+  const runner = createAutopilotRunner(store, { intervalMs: 1000, actor: "runner-test" });
+  assert.equal(runner.snapshot().running, false);
+  const tick = await runner.tick({ now: "2026-08-10T01:00:00.000Z" });
+  assert.equal(tick.result.results.length, 1);
+  assert.equal(getExecutionTask(store, tick.result.results[0].taskId).status, "open");
+  assert.equal(runner.snapshot().lastResult.resultCount, 1);
+  const disabled = setAutopilotEnabled(store, rule.id, { enabled: false });
+  assert.equal(disabled.enabled, false);
+  const disabledTick = await runner.tick({ now: "2026-08-10T02:00:00.000Z" });
+  assert.equal(disabledTick.result.results.length, 0);
+  assert.equal(runner.start().running, true);
+  assert.equal(runner.stop().running, false);
+  assert.throws(() => createAutopilotRunner(store, { intervalMs: 999 }), /between 1000 and 3600000/);
 });
 
 test("execution task evidence resolves typed local records without granting authority", () => {
