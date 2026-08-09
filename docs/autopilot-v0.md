@@ -44,6 +44,8 @@ npm run spruce -- autopilot due
 npm run spruce -- autopilot run-due
 npm run spruce -- autopilot get <autopilotId>
 npm run spruce -- autopilot triggers <autopilotId>
+npm run spruce -- autopilot disable <autopilotId> --ifUpdatedAt "2026-08-10T03:00:00.000Z"
+npm run spruce -- autopilot enable <autopilotId> --ifUpdatedAt "2026-08-10T03:01:00.000Z"
 
 # A direct trigger still requires that the rule is due, unless the supplied key
 # already records an earlier result, in which case it safely returns that result.
@@ -51,6 +53,14 @@ npm run spruce -- autopilot trigger <autopilotId>
 ```
 
 For deterministic operational testing, `--firstDueAt` and `--now` accept ISO timestamps. `--evidenceRefs` and `--links` use the same comma-separated static strings as Execution Tasks. They are copied into the created task as references only.
+
+## Rule lifecycle and concurrent operators
+
+Rules are enabled when created. An explicit disable preserves the complete rule, its due time, trigger ledger, audit history, and every task it has already created; it merely removes the rule from future due scans and prevents new direct triggers. It does not cancel, claim, change, or execute any existing Execution Task.
+
+An explicit enable resumes normal due eligibility at the persisted `nextDueAt`; it does not run the rule by itself. Both operations are written to `.spruceagent/audit.jsonl` as `autopilot.enabled` or `autopilot.disabled`.
+
+All mutation callers may pass the exact last-read `updatedAt` value as `ifUpdatedAt`. A mismatch is rejected as an Autopilot revision conflict, so an older CLI, Gateway, or Workbench view cannot silently undo a more recent operator lifecycle decision.
 
 ## Gateway and SDK
 
@@ -66,9 +76,13 @@ All endpoints are local and require the existing Gateway Bearer token.
 | `GET` | `/v1/autopilots/:autopilotId` | Read a rule. |
 | `GET` | `/v1/autopilots/:autopilotId/triggers` | Read its durable trigger ledger. |
 | `POST` | `/v1/autopilots/:autopilotId/trigger` | Trigger one due rule with a stable key. |
+| `POST` | `/v1/autopilots/:autopilotId/enable` | Explicitly enable a rule without triggering it. |
+| `POST` | `/v1/autopilots/:autopilotId/disable` | Explicitly disable a rule without deleting history or cancelling tasks. |
 
-`createGatewayClient()` exposes matching methods: `listAutopilots`, `listDueAutopilots`, `autopilotContract`, `getAutopilot`, `listAutopilotTriggers`, `createAutopilot`, `runDueAutopilots`, and `triggerAutopilot`.
+`createGatewayClient()` exposes matching methods: `listAutopilots`, `listDueAutopilots`, `autopilotContract`, `getAutopilot`, `listAutopilotTriggers`, `createAutopilot`, `runDueAutopilots`, `triggerAutopilot`, `enableAutopilot`, and `disableAutopilot`.
 
 ## Operational boundary
 
 Autopilot is a scheduler for **control state**, not a scheduler for execution. Creating a task gives no actor ownership, no execution permission, and no evidence conclusion. Operators should inspect the generated task, claim it explicitly, and use the existing approved execution paths only when their own readiness and authority requirements are satisfied.
+
+The Workbench exposes the same lifecycle actions with an explicit confirmation and the last-read rule revision. A stale Workbench action is rejected rather than overwriting a newer enable or disable decision.
