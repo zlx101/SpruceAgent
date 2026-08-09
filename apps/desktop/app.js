@@ -15,6 +15,7 @@ const state = {
   agentWorkspaceDetail: null,
   agentLaunches: null,
   agentLaunchDetail: null,
+  pendingTrialAttestations: {},
   launchReviews: null,
   launchReviewDetail: null,
   capabilityProbes: null,
@@ -269,6 +270,7 @@ nodes.agentLaunchList.addEventListener("click", async (event) => {
   if (!button) return;
   if (button.dataset.action === "agent-launch-view") await loadAgentLaunch(button.dataset.launchId);
   if (button.dataset.action === "launch-review-create") await createLaunchReviewFromWorkbench(button.dataset.launchId);
+  if (button.dataset.action === "agent-trial-attest") await attestAgentLaunchFromWorkbench(button.dataset.launchId);
 });
 
 nodes.launchReviewList.addEventListener("click", async (event) => {
@@ -1641,6 +1643,7 @@ function renderAgentLaunches(items) {
     actions: [
       agentLaunchViewButton(item.id),
       launchReviewCreateButton(item.id),
+      ...(item.status === "completed" && item.exitCode === 0 ? [agentTrialAttestationButton(item.id)] : []),
     ],
   }));
 }
@@ -2214,6 +2217,45 @@ async function createLaunchReviewFromWorkbench(launchId) {
     setStatus(`Created launch review - ${shortId(state.launchReviewDetail.id)}`);
   } catch (error) {
     setStatus(error.message, true);
+  }
+}
+
+async function attestAgentLaunchFromWorkbench(launchId) {
+  if (!launchId || state.busy) return;
+  const pending = state.pendingTrialAttestations[launchId];
+  const acceptanceCommand = pending?.acceptanceCommand
+    ?? window.prompt("Enter a read-only independent acceptance command. It will be bound exactly to a separate approval before it can run:");
+  if (!acceptanceCommand?.trim()) return;
+  state.busy = true;
+  setStatus(pending ? "Completing approved independent acceptance" : "Requesting independent acceptance approval");
+  try {
+    const result = await post("/v1/agent-trials/attest", {
+      launchId,
+      acceptanceCommand: acceptanceCommand.trim(),
+      ...(pending?.approvalId ? { approvalId: pending.approvalId } : {}),
+    });
+    if (result.status === "requires_approval") {
+      state.pendingTrialAttestations[launchId] = {
+        acceptanceCommand: acceptanceCommand.trim(),
+        approvalId: result.approval.id,
+      };
+      await refreshAfterRunControlAction();
+      setStatus(`Independent acceptance needs approval - ${shortId(result.approval.id)}. Approve it, then select Complete acceptance.`);
+      return;
+    }
+    delete state.pendingTrialAttestations[launchId];
+    const [launches, detail] = await Promise.all([
+      get("/v1/agent-launches"),
+      get(`/v1/agent-launches/${encodeURIComponent(launchId)}`),
+    ]);
+    state.agentLaunches = launches;
+    state.agentLaunchDetail = detail;
+    render();
+    setStatus(`Independent acceptance recorded - ${shortId(result.trial.id)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
   }
 }
 
@@ -2816,6 +2858,19 @@ function launchReviewCreateButton(launchId) {
   button.dataset.action = "launch-review-create";
   button.dataset.launchId = launchId;
   button.innerHTML = '<span aria-hidden="true">&#9878;</span><span>Review</span>';
+  return button;
+}
+
+function agentTrialAttestationButton(launchId) {
+  const pending = state.pendingTrialAttestations[launchId];
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "agent-trial-attest";
+  button.dataset.launchId = launchId;
+  button.innerHTML = pending
+    ? '<span aria-hidden="true">&#10003;</span><span>Complete acceptance</span>'
+    : '<span aria-hidden="true">&#9878;</span><span>Independent acceptance</span>';
   return button;
 }
 
