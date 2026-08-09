@@ -151,6 +151,7 @@ import {
   promoteLlmDraftToCandidatePlan,
   requestCandidateApprovals,
   requestFleetRunApprovals,
+  requestSquadMemberApproval,
   readTraceEvents,
   rejectTicket,
   removeLlmProviderConfig,
@@ -3961,7 +3962,7 @@ test("capability probe records allowlisted local evidence without provider secre
   assert.equal(listCapabilityProbes(store).summary.latestProbeId, probe.id);
 });
 
-test("task router assigns roles separately and routes supported execute adapters", () => {
+test("task router assigns roles separately and routes supported execute adapters", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   const binDir = path.join(dir, "bin");
   fs.mkdirSync(binDir);
@@ -4000,7 +4001,7 @@ test("task router assigns roles separately and routes supported execute adapters
     roles: ["review"],
     probeId: probe.id,
     preferredAdapterIds: ["codex-cli"],
-    mode: "plan",
+    mode: "execute",
   });
 
   assert.equal(getTaskRouterContract().interface, "spruceagent.task-router");
@@ -4026,7 +4027,7 @@ test("task router assigns roles separately and routes supported execute adapters
     roles: ["coding", "review"],
     probeId: probe.id,
     preferredAdapterIds: ["codex-cli"],
-    mode: "plan",
+    mode: "execute",
   });
   const squad = createSquad(store, { routeId: squadRoute.id, name: "Implementation Squad" });
   assert.equal(getSquadContract().interface, "spruceagent.squads");
@@ -4041,6 +4042,12 @@ test("task router assigns roles separately and routes supported execute adapters
   fs.writeFileSync(path.join(store.root, "agent-workspaces", `${reviewWorkspaceId}.json`), JSON.stringify({ id: reviewWorkspaceId, status: "prepared", adapter: { id: "codex-cli" } }), "utf8");
   bindSquadMemberWorkspace(store, squad.id, { role: "coding", workspaceId: codingWorkspaceId });
   bindSquadMemberWorkspace(store, squad.id, { role: "review", workspaceId: reviewWorkspaceId });
+  const planningOnlySquad = createSquad(store, { routeId: planned.id, name: "Planning-only squad" });
+  bindSquadMemberWorkspace(store, planningOnlySquad.id, { role: "coding", workspaceId: codingWorkspaceId });
+  assert.equal(
+    getSquadReadiness(store, planningOnlySquad.id).members.find((member) => member.role === "coding").status,
+    "execution_not_routed",
+  );
   assert.equal(getSquadReadiness(store, squad.id).members.find((member) => member.role === "coding").status, "ready_for_approval");
   assert.equal(getSquadReadiness(store, squad.id).members.find((member) => member.role === "review").status, "waiting_for_handoff");
   const reviewId = "launch_review_squad_coding";
@@ -4052,6 +4059,31 @@ test("task router assigns roles separately and routes supported execute adapters
   }), "utf8");
   bindSquadHandoffReview(store, squad.id, { from: "coding", to: "review", reviewId });
   assert.equal(getSquadReadiness(store, squad.id).members.find((member) => member.role === "review").status, "ready_for_approval");
+  const localSquadRoute = createTaskRoute(store, {
+    goal: "Run the deterministic acceptance check",
+    roles: ["deterministic_automation"],
+    probeId: probe.id,
+    mode: "execute",
+  });
+  const localSquad = createSquad(store, { routeId: localSquadRoute.id, dependencies: [] });
+  const localWorkspace = prepareAgentWorkspace(store, {
+    adapterId: "local-shell-agent",
+    goal: "Run the deterministic acceptance check",
+  });
+  bindSquadMemberWorkspace(store, localSquad.id, { role: "deterministic_automation", workspaceId: localWorkspace.id });
+  const approvalRequest = await requestSquadMemberApproval(store, localSquad.id, {
+    role: "deterministic_automation",
+    command: "node -e \"process.exit(0)\"",
+  });
+  const reusedApprovalRequest = await requestSquadMemberApproval(store, localSquad.id, {
+    role: "deterministic_automation",
+    command: "node -e \"process.exit(1)\"",
+  });
+  assert.equal(approvalRequest.launch.status, "requires_approval");
+  assert.equal(approvalRequest.reused, false);
+  assert.equal(reusedApprovalRequest.reused, true);
+  assert.equal(reusedApprovalRequest.launch.id, approvalRequest.launch.id);
+  assert.equal(getSquadReadiness(store, localSquad.id).members[0].status, "approval_pending");
   assert.throws(
     () => createSquad(store, { routeId: squadRoute.id, dependencies: [{ from: "coding", to: "review" }, { from: "review", to: "coding" }] }),
     /acyclic/,

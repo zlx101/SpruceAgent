@@ -85,6 +85,7 @@ export function createGatewayClient(options = {}) {
     getSquadReadiness: (squadId) => request("GET", `/v1/squads/${encodePathPart(squadId)}/readiness`),
     bindSquadMemberWorkspace: (squadId, role, input = {}) => request("POST", `/v1/squads/${encodePathPart(squadId)}/members/${encodePathPart(role)}/workspace`, input),
     acceptSquadHandoff: (squadId, from, to, input = {}) => request("POST", `/v1/squads/${encodePathPart(squadId)}/handoffs/${encodePathPart(from)}/${encodePathPart(to)}/review`, input),
+    requestSquadMemberApproval: (squadId, role, input = {}) => request("POST", `/v1/squads/${encodePathPart(squadId)}/members/${encodePathPart(role)}/approval-request`, input),
     squadContract: () => request("GET", "/v1/squads/contract"),
     createSquad: (input = {}) => request("POST", "/v1/squads", input),
     contract: () => request("GET", "/v1/contract"),

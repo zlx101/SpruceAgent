@@ -5,6 +5,7 @@ import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
 import { getTaskRoute } from "./task-router.js";
 import { getAgentWorkspace } from "./agent-workspaces.js";
 import { getLaunchReview } from "./launch-review.js";
+import { getAgentLaunch, launchAgentWorkspace } from "./agent-launcher.js";
 
 export const SQUAD_CONTRACT = Object.freeze({
   version: "0.1.0",
@@ -12,7 +13,7 @@ export const SQUAD_CONTRACT = Object.freeze({
   sourceKind: "routed_multi_role_task_route",
   outputKind: "reviewable_cross_role_coordination_plan",
   safetyBoundary: [
-    "Squad v0 creates and records a coordination plan only; it never launches an agent.",
+    "Squad v0 can request an exact Agent Launcher approval for a ready member, but never starts an agent process itself.",
     "A member inherits its adapter assignment from a Task Route and cannot silently substitute another adapter.",
     "Dependencies are explicit, acyclic role handoffs; a downstream role must not start until its declared predecessors have reviewable output.",
     "Squad v0 does not auto-approve, merge, select a winner, or invoke a Fleet Run.",
@@ -110,17 +111,57 @@ export function bindSquadHandoffReview(store, squadId, input = {}) {
 
 export function getSquadReadiness(store, squadId) {
   const squad = getSquad(store, squadId);
+  const route = getTaskRoute(store, squad.routeId);
   const members = squad.members.map((member) => {
     const incoming = squad.handoffs.filter((handoff) => handoff.to === member.role);
     const accepted = incoming.filter((handoff) => handoff.status === "accepted");
-    const status = !member.workspace?.id
+    const outgoing = squad.handoffs.filter((handoff) => handoff.from === member.role);
+    const launch = member.launch?.id ? safeGetLaunch(store, member.launch.id) : null;
+    let status = !member.workspace?.id
       ? "needs_workspace"
       : accepted.length !== incoming.length
         ? "waiting_for_handoff"
         : "ready_for_approval";
-    return { role: member.role, adapterId: member.adapterId, workspaceId: member.workspace?.id ?? null, status, incomingHandoffs: incoming.length, acceptedHandoffs: accepted.length };
+    if (launch?.status === "requires_approval") status = "approval_pending";
+    if (launch?.status === "running") status = "executing";
+    if (launch?.status === "completed") {
+      status = outgoing.length && outgoing.every((handoff) => handoff.status === "accepted") ? "handoff_complete" : "awaiting_review";
+    }
+    if (["failed", "blocked", "cancelled"].includes(launch?.status)) status = "execution_attention_required";
+    const assignment = route.assignments?.find((item) => item.role === member.role);
+    const executionEligible = route.mode === "execute" && assignment?.status === "routed" && assignment.selectedAdapterId === member.adapterId;
+    if (status === "ready_for_approval" && !executionEligible) status = "execution_not_routed";
+    return { role: member.role, adapterId: member.adapterId, workspaceId: member.workspace?.id ?? null, status, incomingHandoffs: incoming.length, acceptedHandoffs: accepted.length, executionEligible, executionBlocker: executionEligible ? null : route.mode !== "execute" ? "route_mode_plan" : "role_not_execute_routed", launch: launch ? { id: launch.id, status: launch.status, approvalId: launch.approval?.id ?? member.launch?.approvalId ?? null } : null };
   });
   return { squadId: squad.id, status: squad.status, members, readyCount: members.filter((member) => member.status === "ready_for_approval").length, limits: SQUAD_CONTRACT.safetyBoundary };
+}
+
+export async function requestSquadMemberApproval(store, squadId, input = {}, runtime = {}) {
+  const squad = getSquad(store, squadId);
+  const role = String(input.role ?? "").trim();
+  const readiness = getSquadReadiness(store, squadId).members.find((member) => member.role === role);
+  const member = squad.members.find((item) => item.role === role);
+  if (!member || !readiness) throw new Error("role is not a Squad member");
+  if (!readiness.executionEligible) throw new Error("Squad member requires an execute-mode routed Task Route before an execution approval can be requested");
+  if (member.launch?.id) {
+    const existingLaunch = safeGetLaunch(store, member.launch.id);
+    if (existingLaunch?.status === "requires_approval") return { squad, launch: existingLaunch, reused: true };
+  }
+  if (readiness.status !== "ready_for_approval") throw new Error("Squad member is not ready for an execution approval request");
+  const launch = await launchAgentWorkspace(store, {
+    workspaceId: member.workspace.id,
+    execute: true,
+    trustMode: "approve",
+    actor: input.actor ?? "local-user",
+    channel: "squad",
+    command: input.command,
+  }, runtime);
+  if (launch.status !== "requires_approval" || !launch.approval?.id) {
+    throw new Error(`expected an approval-gated launch, received: ${launch.status}`);
+  }
+  member.launch = { id: launch.id, status: launch.status, approvalId: launch.approval.id, requestedAt: nowIso(), requestedBy: input.actor ?? "local-user" };
+  persistUpdatedSquad(store, squad, "squad.member.approval_requested", { role, launchId: launch.id, approvalId: launch.approval.id });
+  return { squad, launch, reused: false };
 }
 
 export function listSquads(store, options = {}) {
@@ -186,6 +227,14 @@ function persistUpdatedSquad(store, squad, eventType, details) {
   writeJson(squadPath(store, squad.id), squad);
   appendJsonl(path.join(store.root, "audit.jsonl"), { type: eventType, squadId: squad.id, createdAt: squad.updatedAt, ...details });
   return squad;
+}
+
+function safeGetLaunch(store, launchId) {
+  try {
+    return getAgentLaunch(store, launchId);
+  } catch {
+    return null;
+  }
 }
 
 function squadPath(store, squadId) { return path.join(store.root, "squads", `${squadId}.json`); }

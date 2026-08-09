@@ -313,6 +313,17 @@ nodes.squadReadinessPanel.addEventListener("click", async (event) => {
       await post(`/v1/squads/${encodeURIComponent(state.squadDetail.id)}/handoffs/${encodeURIComponent(button.dataset.from)}/${encodeURIComponent(button.dataset.to)}/review`, { reviewId: reviewId.trim() });
       await loadSquad(state.squadDetail.id);
     }
+    if (button.dataset.action === "squad-request-approval") {
+      const member = state.squadReadiness?.members.find((item) => item.role === button.dataset.role);
+      const command = member?.adapterId === "local-shell-agent"
+        ? window.prompt("Enter the local-shell command to approve. It will be bound exactly to this approval request:")
+        : undefined;
+      if (member?.adapterId === "local-shell-agent" && !command?.trim()) return;
+      state.busy = true;
+      const result = await post(`/v1/squads/${encodeURIComponent(state.squadDetail.id)}/members/${encodeURIComponent(button.dataset.role)}/approval-request`, command ? { command: command.trim() } : {});
+      await loadSquad(state.squadDetail.id);
+      setStatus(`${result.reused ? "Existing" : "Created"} approval request - ${shortId(result.launch.approval.id)}`);
+    }
   } catch (error) {
     setStatus(error.message, true);
   } finally {
@@ -1348,7 +1359,7 @@ function renderSquadPanel(squad, readiness) {
   for (const member of readiness.members) {
     const card = document.createElement("article");
     card.className = `fleet-member unit-${member.status}`;
-    const explanation = member.status === "ready_for_approval" ? "Workspace and all required handoffs are verified." : member.status === "waiting_for_handoff" ? `${member.acceptedHandoffs}/${member.incomingHandoffs} upstream handoffs accepted.` : "Bind a matching prepared workspace first.";
+    const explanation = squadReadinessExplanation(member);
     card.innerHTML = `<div class="fleet-member-title"><strong>${escapeHtml(member.role)}</strong><span class="tag">${escapeHtml(member.status.replaceAll("_", " "))}</span></div><p>${escapeHtml(explanation)}</p>`;
     if (member.status === "needs_workspace") {
       const action = document.createElement("button");
@@ -1358,6 +1369,15 @@ function renderSquadPanel(squad, readiness) {
       action.dataset.role = member.role;
       action.dataset.adapterId = member.adapterId;
       action.textContent = "Bind workspace";
+      card.appendChild(action);
+    }
+    if (member.status === "ready_for_approval") {
+      const action = document.createElement("button");
+      action.className = "primary-action squad-action";
+      action.type = "button";
+      action.dataset.action = "squad-request-approval";
+      action.dataset.role = member.role;
+      action.textContent = "Request execution approval";
       card.appendChild(action);
     }
     grid.appendChild(card);
@@ -1387,6 +1407,18 @@ function renderSquadPanel(squad, readiness) {
     handoffs.appendChild(line);
   }
   nodes.squadReadinessPanel.append(header, grid, handoffs);
+}
+
+function squadReadinessExplanation(member) {
+  if (member.status === "ready_for_approval") return "Workspace and all required handoffs are verified.";
+  if (member.status === "waiting_for_handoff") return `${member.acceptedHandoffs}/${member.incomingHandoffs} upstream handoffs accepted.`;
+  if (member.status === "approval_pending") return `Approval ${shortId(member.launch?.approvalId)} is pending; no process has started.`;
+  if (member.status === "execution_not_routed") return "This Squad was created from a planning route. Create a fresh execute-mode Task Route after capability validation.";
+  if (member.status === "executing") return "The approved Agent Launcher invocation is currently running.";
+  if (member.status === "awaiting_review") return "Execution completed; create and decide a Launch Review before handing work downstream.";
+  if (member.status === "handoff_complete") return "Execution and required downstream handoffs are complete.";
+  if (member.status === "execution_attention_required") return `Launch status: ${member.launch?.status ?? "unknown"}. Review evidence before retrying.`;
+  return "Bind a matching prepared workspace first.";
 }
 
 function renderFleetLivePanel(progress) {

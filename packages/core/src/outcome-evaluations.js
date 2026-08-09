@@ -523,12 +523,24 @@ function normalizeWorkspaceRelativePath(store, value, label) {
 }
 
 function resolveWorkspaceFile(store, relativePath) {
-  const filePath = path.join(store.cwd, relativePath);
-  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return { ok: false, path: filePath };
-  const workspaceRoot = fs.realpathSync(store.cwd);
-  const resolvedFile = fs.realpathSync(filePath);
-  const insideWorkspace = resolvedFile !== workspaceRoot && resolvedFile.startsWith(`${workspaceRoot}${path.sep}`);
-  return insideWorkspace ? { ok: true, path: resolvedFile } : { ok: false, path: filePath };
+  const workspaceRoot = path.resolve(store.cwd);
+  const filePath = path.resolve(workspaceRoot, relativePath);
+  if (filePath === workspaceRoot || !filePath.startsWith(`${workspaceRoot}${path.sep}`)) return { ok: false, path: filePath };
+  try {
+    if (fs.lstatSync(workspaceRoot).isSymbolicLink()) return { ok: false, path: filePath };
+    const segments = relativePath.split(/[\\/]+/).filter(Boolean);
+    let current = workspaceRoot;
+    for (let index = 0; index < segments.length; index += 1) {
+      current = path.join(current, segments[index]);
+      const entry = fs.lstatSync(current);
+      if (entry.isSymbolicLink()) return { ok: false, path: filePath };
+      if (index < segments.length - 1 && !entry.isDirectory()) return { ok: false, path: filePath };
+      if (index === segments.length - 1 && !entry.isFile()) return { ok: false, path: filePath };
+    }
+    return { ok: true, path: filePath };
+  } catch {
+    return { ok: false, path: filePath };
+  }
 }
 
 function bounds(validator) {

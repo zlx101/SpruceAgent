@@ -33,7 +33,7 @@ import {
   listFleetRuns,
   requestFleetRunApprovals,
 } from "./fleet-runs.js";
-import { bindSquadHandoffReview, bindSquadMemberWorkspace, createSquad, getSquad, getSquadContract, getSquadReadiness, listSquads } from "./squads.js";
+import { bindSquadHandoffReview, bindSquadMemberWorkspace, createSquad, getSquad, getSquadContract, getSquadReadiness, listSquads, requestSquadMemberApproval } from "./squads.js";
 import {
   createLaunchReview,
   decideLaunchReview,
@@ -600,6 +600,13 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/squads/:squadId/handoffs/:from/:to/review",
       authRequired: true,
       description: "Accept a Squad handoff only with an approved review tied to the source workspace.",
+    },
+    {
+      id: "squads.request_approval",
+      method: "POST",
+      path: "/v1/squads/:squadId/members/:role/approval-request",
+      authRequired: true,
+      description: "Create an exact existing Agent Launcher approval ticket only for a ready Squad member; it does not execute the agent.",
     },
     {
       id: "tools.list",
@@ -1539,6 +1546,7 @@ async function routeRequest(store, request, url, body) {
   if (request.method === "GET" && pathParts[1] === "squads" && pathParts[2] && pathParts[3] === "readiness" && !pathParts[4]) return ok(getSquadReadiness(store, pathParts[2]));
   if (request.method === "POST" && pathParts[1] === "squads" && pathParts[2] && pathParts[3] === "members" && pathParts[4] && pathParts[5] === "workspace" && !pathParts[6]) return ok(bindSquadMemberWorkspace(store, pathParts[2], { ...body, role: pathParts[4], actor: body.actor ?? "gateway-user" }));
   if (request.method === "POST" && pathParts[1] === "squads" && pathParts[2] && pathParts[3] === "handoffs" && pathParts[4] && pathParts[5] && pathParts[6] === "review" && !pathParts[7]) return ok(bindSquadHandoffReview(store, pathParts[2], { ...body, from: pathParts[4], to: pathParts[5], actor: body.actor ?? "gateway-user" }));
+  if (request.method === "POST" && pathParts[1] === "squads" && pathParts[2] && pathParts[3] === "members" && pathParts[4] && pathParts[5] === "approval-request" && !pathParts[6]) return ok(await requestSquadMemberApproval(store, pathParts[2], { ...body, role: pathParts[4], actor: body.actor ?? "gateway-user" }));
   if (request.method === "GET" && pathParts[1] === "squads" && pathParts[2] && !pathParts[3]) return ok(getSquad(store, pathParts[2]));
   if (request.method === "POST" && url.pathname === "/v1/squads") return ok(createSquad(store, { ...body, actor: body.actor ?? "gateway-user" }));
 
