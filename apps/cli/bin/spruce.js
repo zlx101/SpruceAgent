@@ -680,6 +680,7 @@ function handleExecutionTask(action, args) {
       owner: flags.owner,
       nextAction: flags.nextAction,
       humanGate: flags.humanGate,
+      blocker: flags.blocker,
       completionSummary: flags.completionSummary,
       cancellationSummary: flags.cancellationSummary,
       note: flags.note,
@@ -2107,6 +2108,7 @@ Usage:
   ${executable} task list [--status open] [--owner <owner>]
   ${executable} task claim <taskId> --owner <owner>
   ${executable} task update <taskId> --status waiting_for_human --humanGate "Approve production release"
+  ${executable} task update <taskId> --status blocked --blocker "Waiting for the repository access decision"
   ${executable} task update <taskId> --status completed --completionSummary "Focused checks passed; release handoff recorded"
   ${executable} task update <taskId> --status cancelled --cancellationSummary "Scope removed from this release"
   ${executable} task follow-up <terminalTaskId> --goal "Investigate the discovered regression"

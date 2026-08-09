@@ -661,6 +661,15 @@ async function handleExecutionTaskAction(button) {
         actor: "workbench-user",
       });
     }
+    if (button.dataset.action === "execution-task-block") {
+      const blocker = window.prompt("State the concrete blocker that prevents the next action:");
+      if (!blocker?.trim()) return;
+      task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/update`, {
+        status: "blocked",
+        blocker: blocker.trim(),
+        actor: "workbench-user",
+      });
+    }
     if (button.dataset.action === "execution-task-complete") {
       if (!window.confirm("Mark this control task completed? This does not approve or execute anything.")) return;
       const completionSummary = window.prompt("Record the completed outcome or verification basis for the audit ledger:");
@@ -1865,6 +1874,7 @@ function renderExecutionTasks(items) {
       ...(["completed", "cancelled"].includes(item.status) ? [executionTaskButton("execution-task-follow-up", item.id, "&#8618;", "Follow Up", "secondary")] : []),
       ...(item.status === "open" && !item.owner ? [executionTaskButton("execution-task-claim", item.id, "&#9998;", "Claim")] : []),
       ...(!["completed", "cancelled", "waiting_for_human"].includes(item.status) ? [executionTaskButton("execution-task-wait", item.id, "&#9888;", "Need Decision", "secondary")] : []),
+      ...(!["completed", "cancelled", "blocked"].includes(item.status) ? [executionTaskButton("execution-task-block", item.id, "&#128683;", "Block", "secondary")] : []),
       ...(!["completed", "cancelled"].includes(item.status) ? [executionTaskButton("execution-task-complete", item.id, "&#10003;", "Complete", "secondary")] : []),
       ...(!["completed", "cancelled"].includes(item.status) ? [executionTaskButton("execution-task-cancel", item.id, "&#10005;", "Cancel", "secondary")] : []),
     ],

@@ -16,6 +16,7 @@ export const EXECUTION_TASK_CONTRACT = Object.freeze({
     "Execution Tasks v0 is a durable local control-state ledger; it never launches agents, executes tools, or grants approvals.",
     "A task can name a next action and evidence references, but TrustKernel, ContextOS, readiness, and exact approvals remain the execution authorities.",
     "Waiting-for-human state requires a concrete decision gate instead of silently treating missing authority as a blocker.",
+    "Blocked state requires a concrete blocker statement so the board remains actionable; recording it does not request or grant authority.",
     "A follow-up links durable control state to a terminal task; it does not reopen, rerun, or authorize the prior task.",
     "Terminal evidence is captured as a read-only local snapshot for audit; it is not an approval, independent verification, or execution authority.",
   ],
@@ -49,6 +50,7 @@ export function createExecutionTask(store, input = {}) {
     followUpOf,
     nextAction: optionalText(input.nextAction, 500),
     humanGate: null,
+    blocker: null,
     completion: null,
     cancellation: null,
     evidenceRefs: normalizeRefs(input.evidenceRefs),
@@ -111,6 +113,9 @@ export function updateExecutionTask(store, taskId, input = {}) {
   const humanGate = status === "waiting_for_human"
     ? requiredText(input.humanGate ?? task.humanGate, "humanGate", 500)
     : input.humanGate === undefined ? task.humanGate : optionalText(input.humanGate, 500);
+  const blocker = status === "blocked"
+    ? requiredText(input.blocker ?? task.blocker, "blocker", 500)
+    : null;
   if (status === "completed" && input.nextAction !== undefined && optionalText(input.nextAction, 500)) {
     throw new Error("completed execution task cannot retain a nextAction");
   }
@@ -138,6 +143,7 @@ export function updateExecutionTask(store, taskId, input = {}) {
     owner: input.owner === undefined ? task.owner : optionalText(input.owner, 160),
     nextAction: status === "completed" || status === "cancelled" ? null : input.nextAction === undefined ? task.nextAction : optionalText(input.nextAction, 500),
     humanGate,
+    blocker,
     completion,
     cancellation,
     evidenceRefs,
@@ -234,7 +240,7 @@ function summarizeTasks(tasks) {
 }
 
 function taskSummary(task) {
-  return { id: task.id, createdAt: task.createdAt, updatedAt: task.updatedAt, goal: task.goal, status: task.status, owner: task.owner, followUpOf: task.followUpOf ?? null, nextAction: task.nextAction, humanGate: task.humanGate, completion: task.completion ?? null, cancellation: task.cancellation ?? null, evidenceRefs: task.evidenceRefs, links: task.links };
+  return { id: task.id, createdAt: task.createdAt, updatedAt: task.updatedAt, goal: task.goal, status: task.status, owner: task.owner, followUpOf: task.followUpOf ?? null, nextAction: task.nextAction, humanGate: task.humanGate, blocker: task.blocker ?? null, completion: task.completion ?? null, cancellation: task.cancellation ?? null, evidenceRefs: task.evidenceRefs, links: task.links };
 }
 
 function normalizeStatus(value) {

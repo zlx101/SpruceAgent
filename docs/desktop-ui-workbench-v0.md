@@ -102,6 +102,7 @@ Workbench v0 supports:
 - replace an Execution Task's typed local links through an explicit Workbench prompt; this only updates task metadata and audit history
 - mark an Execution Task completed only after explicitly recording the bounded outcome or verification basis; this remains task audit state, not an execution approval
 - cancel an Execution Task only after explicitly recording the cancellation reason; this does not stop a running Agent or alter approvals
+- mark a task blocked only after recording the concrete blocker that prevents its next action
 - create a fresh follow-up task from a completed or cancelled task, preserving the terminal record rather than reopening it
 - inspect a completed task's immutable completion statement and local evidence snapshot through the **Closure** action
 - create Context Evidence packs through `POST /v1/context/evidence`

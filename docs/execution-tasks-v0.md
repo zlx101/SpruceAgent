@@ -38,6 +38,7 @@ Each record includes a bounded goal, optional scope and owner, next action, conc
 
 - Claiming uses a durable owner mutex. A task already claimed by a different owner cannot be claimed again.
 - `waiting_for_human` requires a non-empty concrete `humanGate`.
+- `blocked` requires a non-empty concrete `blocker`; an unexplained blocked status is rejected.
 - `completed` and `cancelled` clear `nextAction`; terminal tasks cannot be claimed.
 - Terminal tasks cannot be reopened through an update. A regression or newly discovered scope must be represented by a new follow-up task, keeping the original task's outcome record intact.
 - A follow-up can only reference a terminal parent and persists `followUpOf` on the new task. It creates no execution, approval, or inherited ownership authority.
@@ -63,6 +64,9 @@ npm run spruce -- task claim <taskId> --owner "reviewer"
 npm run spruce -- task update <taskId> \
   --status waiting_for_human \
   --humanGate "Approve the reviewed release decision"
+npm run spruce -- task update <taskId> \
+  --status blocked \
+  --blocker "Waiting for a repository-access decision"
 npm run spruce -- task update <taskId> \
   --status completed \
   --completionSummary "Focused checks passed and release handoff was recorded"
@@ -106,6 +110,7 @@ The local Workbench has an **Execution Tasks** section with summary count, task 
 - **Create Task** prompts for a bounded goal and optional next action.
 - **Claim** records the fixed `workbench-user` owner through the normal Gateway route.
 - **Need Decision** prompts for the mandatory concrete human gate.
+- **Block** prompts for the mandatory concrete blocker; it is a coordination record only, not an escalation or an approval request.
 - **Complete** asks for browser confirmation plus a bounded completion summary, then only records control state and that audit statement.
 - **Cancel** asks for browser confirmation plus a bounded cancellation reason; it only records task control state and never stops a running Agent or revokes an approval.
 - **Closure** reads a terminal outcome statement and its preserved evidence snapshot.
