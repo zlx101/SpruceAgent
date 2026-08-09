@@ -63,6 +63,8 @@ npm run spruce -- task contract
 
 `--evidenceRefs` and `--links` accept comma-separated values. A caller can use IDs from existing routes, traces, artifacts, launch reviews, or trials, but the ledger does not reinterpret those values as authority.
 
+For a resolvable local link, use `kind:<id>` where `<id>` is a single safe identifier (`A-Z`, `a-z`, `0-9`, `_`, or `-`, at most 160 characters). Paths, URLs, and IDs containing separators are reported as unsupported and are never passed to a local record reader.
+
 ## Gateway and client
 
 All routes are local and require the existing Gateway Bearer token:

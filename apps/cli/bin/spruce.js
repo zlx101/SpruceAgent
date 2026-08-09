@@ -2079,6 +2079,7 @@ Usage:
   ${executable} task claim <taskId> --owner <owner>
   ${executable} task update <taskId> --status waiting_for_human --humanGate "Approve production release"
   ${executable} task board
+  ${executable} task evidence <taskId>
   ${executable} task contract
   ${executable} artifact list [--traceId <traceId>] [--kind tool_result]
   ${executable} artifact get <artifactId>
