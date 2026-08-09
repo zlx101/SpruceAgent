@@ -1873,6 +1873,9 @@ test("gateway route contract exposes stable route ids", () => {
   assert.ok(routeIds.includes("inbox.contract"));
   assert.ok(routeIds.includes("approval_queue"));
   assert.ok(routeIds.includes("approval_queue.contract"));
+  assert.ok(routeIds.includes("execution_tasks.list"));
+  assert.ok(routeIds.includes("execution_tasks.create"));
+  assert.ok(routeIds.includes("execution_tasks.update"));
   assert.ok(routeIds.includes("artifacts.list"));
   assert.ok(routeIds.includes("artifacts.get"));
   assert.ok(routeIds.includes("artifacts.contract"));
@@ -2100,6 +2103,45 @@ test("gateway client reads status and route contract", async () => {
     assert.equal(workflowInboxContract.interface, "spruceagent.workflow-inbox");
     assert.equal(workflowDetailContract.interface, "spruceagent.workflow-detail");
     assert.equal(workflowContinuationContract.interface, "spruceagent.workflow-continuation");
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
+
+test("gateway client manages durable execution task control without execution", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const client = createGatewayClient({
+    baseUrl: `http://${gateway.host}:${gateway.port}`,
+    token: gateway.token,
+  });
+
+  try {
+    const contract = await client.executionTaskContract();
+    const task = await client.createExecutionTask({
+      goal: "Review a bounded implementation slice",
+      nextAction: "Run the targeted test",
+      evidenceRefs: ["tests/core.test.js"],
+    });
+    const claimed = await client.claimExecutionTask(task.id, { owner: "reviewer" });
+    const waiting = await client.updateExecutionTask(task.id, {
+      status: "waiting_for_human",
+      humanGate: "Approve the release decision",
+      note: "test evidence is ready",
+    });
+    const loaded = await client.getExecutionTask(task.id);
+    const listed = await client.listExecutionTasks({ owner: "reviewer" });
+    const board = await client.executionTaskBoard();
+
+    assert.equal(contract.interface, "spruceagent.execution-tasks");
+    assert.equal(task.status, "open");
+    assert.equal(claimed.status, "in_progress");
+    assert.equal(waiting.humanGate, "Approve the release decision");
+    assert.equal(loaded.id, task.id);
+    assert.equal(listed.summary.total, 1);
+    assert.equal(board.attention[0].id, task.id);
+    assert.equal(board.attention[0].status, "waiting_for_human");
   } finally {
     await closeServer(gateway.server);
   }

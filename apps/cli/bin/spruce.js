@@ -18,6 +18,7 @@ import {
   createTaskRoute,
   createContextPack,
   createContextEvidencePack,
+  createExecutionTask,
   configureLlmProvider,
   createSkillReplayFixture,
   createGatewayClient,
@@ -46,6 +47,9 @@ import {
   getOutcomeFixture,
   getCandidateApprovalContract,
   getContextEvidenceContract,
+  getExecutionTask,
+  getExecutionTaskBoard,
+  getExecutionTaskContract,
   getCandidateExecutionContract,
   getGatewayAuthStatus,
   getGatewayRouteContract,
@@ -110,6 +114,7 @@ import {
   listTaskRoutes,
   listArtifacts,
   listEvaluations,
+  listExecutionTasks,
   listFleetRuns,
   listOutcomeEvaluationResults,
   listOutcomeFixtures,
@@ -154,6 +159,8 @@ import {
   startTrace,
   startGatewayServer,
   updateWorkflow,
+  claimExecutionTask,
+  updateExecutionTask,
   validateLlmProviderConfig,
   requestFleetRunApprovals,
   cancelFleetRun,
@@ -271,6 +278,11 @@ async function main() {
 
   if (command === "approval") {
     handleApproval(subcommand, rest);
+    return;
+  }
+
+  if (command === "task" || command === "tasks") {
+    handleExecutionTask(subcommand, rest);
     return;
   }
 
@@ -573,6 +585,76 @@ function handleApproval(action, args) {
   }
 
   throw new Error("usage: spruce approval <queue|queue-contract|list|get|approve|reject>");
+}
+
+function handleExecutionTask(action, args) {
+  if (!action || action === "list") {
+    const flags = parseFlags(args);
+    printJson(listExecutionTasks(store, { status: flags.status, owner: flags.owner }));
+    return;
+  }
+
+  if (action === "board") {
+    printJson(getExecutionTaskBoard(store));
+    return;
+  }
+
+  if (action === "contract") {
+    printJson(getExecutionTaskContract());
+    return;
+  }
+
+  if (action === "get") {
+    const [taskId] = args;
+    if (!taskId) throw new Error("usage: spruce task get <taskId>");
+    printJson(getExecutionTask(store, taskId));
+    return;
+  }
+
+  if (action === "create") {
+    const flags = parseFlags(args);
+    printJson(createExecutionTask(store, {
+      goal: flags.goal ?? flags._.join(" ").trim(),
+      scope: flags.scope,
+      owner: flags.owner,
+      nextAction: flags.nextAction,
+      evidenceRefs: splitCsv(flags.evidenceRefs),
+      links: splitCsv(flags.links),
+      actor: flags.by ?? "local-user",
+    }));
+    return;
+  }
+
+  if (action === "claim") {
+    const [taskId, ...flagArgs] = args;
+    if (!taskId) throw new Error("usage: spruce task claim <taskId> --owner <owner>");
+    const flags = parseFlags(flagArgs);
+    printJson(claimExecutionTask(store, taskId, {
+      owner: flags.owner,
+      actor: flags.by ?? "local-user",
+    }));
+    return;
+  }
+
+  if (action === "update") {
+    const [taskId, ...flagArgs] = args;
+    if (!taskId) throw new Error("usage: spruce task update <taskId> [--status <status>] [--nextAction <action>]");
+    const flags = parseFlags(flagArgs);
+    const input = {
+      status: flags.status,
+      owner: flags.owner,
+      nextAction: flags.nextAction,
+      humanGate: flags.humanGate,
+      note: flags.note,
+      actor: flags.by ?? "local-user",
+    };
+    if (flags.evidenceRefs !== undefined) input.evidenceRefs = splitCsv(flags.evidenceRefs);
+    if (flags.links !== undefined) input.links = splitCsv(flags.links);
+    printJson(updateExecutionTask(store, taskId, input));
+    return;
+  }
+
+  throw new Error("usage: spruce task <list|board|contract|get|create|claim|update>");
 }
 
 function handleArtifact(action, args) {
@@ -1984,6 +2066,12 @@ Usage:
   ${executable} approval list [--status pending]
   ${executable} approval queue [--traceKind agent.run|workflow.run]
   ${executable} approval approve <approvalId>
+  ${executable} task create --goal "Ship a reviewed change" --nextAction "Run the focused test"
+  ${executable} task list [--status open] [--owner <owner>]
+  ${executable} task claim <taskId> --owner <owner>
+  ${executable} task update <taskId> --status waiting_for_human --humanGate "Approve production release"
+  ${executable} task board
+  ${executable} task contract
   ${executable} artifact list [--traceId <traceId>] [--kind tool_result]
   ${executable} artifact get <artifactId>
   ${executable} artifact contract
