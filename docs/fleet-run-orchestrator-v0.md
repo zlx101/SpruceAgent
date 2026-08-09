@@ -59,7 +59,7 @@ Cancellation preserves worktrees, launch records, terminal evidence, traces, and
 
 ```powershell
 spruce agent route --goal "Implement the task" --roles coding --mode execute --refreshCapabilities
-spruce fleet create <routeId> --role coding --candidates 2 --parallel 2 --context "relevant code"
+spruce fleet create <routeId> --role coding --candidates 2 --parallel 2 --context "relevant code" --executionTaskId <taskId>
 spruce fleet approvals <fleetRunId> --timeoutMs 600000
 spruce fleet approve <fleetRunId> --confirm approve_all_invocations --reason "Reviewed exact invocations"
 spruce fleet execute <fleetRunId>
@@ -88,6 +88,10 @@ POST /v1/fleet-runs/:fleetRunId/cancel
 ```
 
 All routes require the local Gateway bearer token.
+
+## Execution-task reference
+
+`executionTaskId` is optional, safe-identifier metadata that can be supplied when a Fleet Run is created. SpruceAgent records it on the Fleet Run, its trace and audit events, and every approval or execution Agent Launch created for the fleet. This lets an Execution Task's evidence view collect the whole candidate set through declared launch references. The value is deliberately reference-only: it does not validate the task, change task state, grant approval, or authorize Fleet execution.
 
 ## Evidence Level
 

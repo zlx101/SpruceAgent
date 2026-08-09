@@ -191,6 +191,7 @@ export async function launchAgentWorkspace(store, input = {}, runtime = {}) {
       executionMode: "approval_required",
       workspace,
       traceId: trace.id,
+      executionTaskId,
       command,
       invocation: externalInvocation ? publicExternalCliInvocation(externalInvocation) : null,
       policyDecision: decision,

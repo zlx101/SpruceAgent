@@ -57,6 +57,7 @@ export function getFleetRunContract() {
 export function createFleetRun(store, input = {}) {
   const routeId = String(input.routeId ?? "").trim();
   if (!routeId) throw new Error("routeId is required");
+  const executionTaskId = normalizeExecutionTaskId(input.executionTaskId);
   const route = getTaskRoute(store, routeId);
   if (route.mode !== "execute" || route.status !== "routed") {
     throw new Error("fleet run requires a routed execute-mode Task Route");
@@ -90,6 +91,7 @@ export function createFleetRun(store, input = {}) {
       kind: "fleet.run",
       fleetRunId,
       routeId,
+      executionTaskId,
       role,
       adapterId: assignment.selectedAdapterId,
     },
@@ -99,6 +101,7 @@ export function createFleetRun(store, input = {}) {
     interface: FLEET_RUN_CONTRACT.interface,
     id: fleetRunId,
     routeId,
+    executionTaskId,
     traceId: trace.id,
     createdAt,
     updatedAt: createdAt,
@@ -181,6 +184,7 @@ export async function requestFleetRunApprovals(store, fleetRunId, input = {}, ru
     try {
       const launch = await launchAgentWorkspace(store, {
         workspaceId: unit.workspaceId,
+        executionTaskId: record.executionTaskId,
         execute: true,
         trustMode: input.trustMode ?? "approve",
         actor: input.actor ?? record.createdBy,
@@ -265,6 +269,7 @@ export async function executeFleetRun(store, fleetRunId, input = {}, runtime = {
       try {
         const launch = await launchAgentWorkspace(store, {
           workspaceId: unit.workspaceId,
+          executionTaskId: record.executionTaskId,
           execute: true,
           approvalId: unit.approvalId,
           trustMode: input.trustMode ?? "approve",
@@ -478,6 +483,7 @@ function persistNewFleet(store, record) {
   appendJsonl(fleetIndexPath(store), {
     id: record.id,
     routeId: record.routeId,
+    executionTaskId: record.executionTaskId ?? null,
     traceId: record.traceId,
     createdAt: record.createdAt,
     role: record.role,
@@ -502,6 +508,7 @@ function appendAudit(store, type, record, details = {}) {
     type,
     fleetRunId: record.id,
     routeId: record.routeId,
+    executionTaskId: record.executionTaskId ?? null,
     status: record.status,
     summary: record.summary,
     details,
@@ -540,6 +547,7 @@ function fleetListItem(record) {
   return {
     id: record.id,
     routeId: record.routeId,
+    executionTaskId: record.executionTaskId ?? null,
     traceId: record.traceId,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -572,4 +580,11 @@ function boundedInteger(value, fallback, minimum, maximum, name) {
     throw new Error(`${name} must be an integer between ${minimum} and ${maximum}`);
   }
   return number;
+}
+
+function normalizeExecutionTaskId(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const id = String(value).trim();
+  if (!/^[A-Za-z0-9_-]{1,160}$/.test(id)) throw new Error("executionTaskId must be a single safe identifier");
+  return id;
 }

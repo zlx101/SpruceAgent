@@ -1574,7 +1574,7 @@ async function handleFleet(action, args = []) {
 
   if (action === "create") {
     const [routeId, ...flagArgs] = args;
-    if (!routeId) throw new Error("usage: spruce fleet create <routeId> [--role coding] [--candidates 2] [--parallel 2] [--context <query>]");
+    if (!routeId) throw new Error("usage: spruce fleet create <routeId> [--role coding] [--candidates 2] [--parallel 2] [--context <query>] [--executionTaskId <taskId>]");
     const flags = parseFlags(flagArgs);
     printJson(createFleetRun(store, {
       routeId,
@@ -1582,6 +1582,7 @@ async function handleFleet(action, args = []) {
       candidateCount: flags.candidates ?? flags.candidateCount,
       maxParallel: flags.parallel ?? flags.maxParallel,
       contextQuery: flags.context,
+      executionTaskId: flags.executionTaskId,
     }));
     return;
   }
@@ -2253,7 +2254,7 @@ Usage:
   ${executable} agent route-detail <routeId>
   ${executable} agent probe-contract
   ${executable} agent router-contract
-  ${executable} fleet create <routeId> --role coding --candidates 2 --parallel 2 [--context "query"]
+  ${executable} fleet create <routeId> --role coding --candidates 2 --parallel 2 [--context "query"] [--executionTaskId <taskId>]
   ${executable} fleet approvals <fleetRunId> [--timeoutMs 600000]
   ${executable} fleet approve <fleetRunId> --confirm approve_all_invocations --reason "reviewed exact invocations"
   ${executable} fleet execute <fleetRunId>

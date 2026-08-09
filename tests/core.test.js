@@ -5029,8 +5029,10 @@ test("fleet run prepares comparable Codex candidates and builds a review matrix"
   const store = ensureStore(createStore(dir));
   buildWorkspaceIndex(store);
   const { route, executable } = createCodexExecuteRoute(store, dir, "Implement the same fleet task");
+  const task = createExecutionTask(store, { goal: "Review the fleet candidate evidence" });
   const fleet = createFleetRun(store, {
     routeId: route.id,
+    executionTaskId: task.id,
     role: "coding",
     candidateCount: 2,
     maxParallel: 2,
@@ -5086,6 +5088,13 @@ test("fleet run prepares comparable Codex candidates and builds a review matrix"
   assert.equal(completed.review.comparison.rows.length, 2);
   assert.equal(completed.review.comparison.automaticRecommendation, null);
   assert.equal(getFleetRun(store, fleet.id).status, "completed");
+  assert.equal(getFleetRun(store, fleet.id).executionTaskId, task.id);
+  assert.equal(listFleetRuns(store).items[0].executionTaskId, task.id);
+  assert.equal(listAgentLaunches(store).items.every((launch) => launch.executionTaskId === task.id), true);
+  updateExecutionTask(store, task.id, { links: [`fleet_run:${fleet.id}`] });
+  const evidence = getExecutionTaskEvidence(store, task.id);
+  assert.equal(evidence.linkedLaunches.length, 4);
+  assert.equal(evidence.linkedLaunches.every((launch) => launch.authority === "declared_reference"), true);
   const progress = getFleetRunProgress(store, fleet.id);
   assert.equal(progress.status, "completed");
   assert.equal(progress.progress.completed, 2);
