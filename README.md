@@ -58,6 +58,7 @@ Start here:
 - [Run Preflight / Auto-Reindex v0](docs/run-preflight-auto-reindex-v0.md)
 - [Run Risk Preflight v0](docs/run-risk-preflight-v0.md)
 - [Approval Queue v0](docs/approval-queue-v0.md)
+- [Execution Tasks v0](docs/execution-tasks-v0.md)
 - [Run Artifact Store v0](docs/run-artifact-store-v0.md)
 - [ContextOS Source Map v0](docs/contextos-source-map-v0.md)
 - [Context Evidence Contract v1](docs/context-evidence-contract-v1.md)
@@ -130,6 +131,11 @@ npm run spruce -- run detail <traceId>
 npm run spruce -- run detail-contract
 npm run spruce -- inbox
 npm run spruce -- inbox contract
+npm run spruce -- task create --goal "Validate a bounded change" --nextAction "Run focused tests"
+npm run spruce -- task list --status open
+npm run spruce -- task claim <taskId> --owner reviewer
+npm run spruce -- task update <taskId> --status waiting_for_human --humanGate "Approve release decision"
+npm run spruce -- task board
 DEEPSEEK_API_KEY=<token> npm run spruce -- run "Draft with DeepSeek" --context "TrustKernel" --llm deepseek --llmModel deepseek-v4-flash --dryRun
 npm run spruce -- skill extract <traceId>
 npm run spruce -- skill evaluate <skillId>
@@ -183,7 +189,7 @@ npm run spruce -- tool run shell.execute --command "echo spruce" --approved
 npm run spruce -- policy check --tool shell.execute --command "git status"
 ```
 
-The current core creates a local `.spruceagent/` store with ContextOS indexing, memory, traces, audit logs, approval tickets, policy-governed tools, LLM Provider Registry, Agent Run, typed and evaluated skills, versioned workflows, GatewayMesh, Workbench, isolated agent workspaces, capability evidence, task routing, bounded Fleet Runs, launch review, Agent Trial attestation, and a shell-free, approval-bound Codex CLI execution path.
+The current core creates a local `.spruceagent/` store with ContextOS indexing, memory, traces, audit logs, approval tickets, policy-governed tools, LLM Provider Registry, Agent Run, typed and evaluated skills, versioned workflows, GatewayMesh, Workbench, isolated agent workspaces, capability evidence, durable Execution Tasks, task routing, bounded Fleet Runs, launch review, Agent Trial attestation, and a shell-free, approval-bound Codex CLI execution path.
 
 ## Language
 

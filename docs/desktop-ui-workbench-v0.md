@@ -97,6 +97,8 @@ Workbench v0 supports:
 - create and inspect explainable task route drafts through `/v1/agent-routes`
 - inspect Fleet Run orchestration records through `GET /v1/fleet-runs`
 - inspect a Fleet Run detail through `GET /v1/fleet-runs/:fleetRunId`
+- inspect the prioritized durable task board through `GET /v1/execution-tasks/board`
+- create, claim, update, and inspect Execution Tasks through the existing authenticated Gateway routes
 - create Context Evidence packs through `POST /v1/context/evidence`
 
 ## Safety Boundary
@@ -130,6 +132,7 @@ Workbench v0 does not bypass TrustKernel.
 - agent launch preview calls do not execute commands from the browser UI
 - Agent Launcher v0 external coding CLI execution remains disabled; only explicit `local-shell-agent` execution through CLI or Gateway payloads can run after TrustKernel policy checks
 - Fleet Run views are read-only; fleet creation, approvals, execution, and cancellation still require explicit Gateway or CLI calls
+- Execution Task controls only write durable local coordination state; they cannot launch Agents, execute tools, or grant approvals
 - tool execution still flows through TrustKernel
 
 ## Files
@@ -146,7 +149,7 @@ Run Inbox v0 made the product state visible. Workbench v0 makes it actionable an
 This is the first real operating surface for SpruceAgent:
 
 ```text
-System Overview -> Evidence -> Draft Workflow -> Review Steps -> Save Workflow -> Version / Archive / Restore -> Evaluate Skill -> Plan Agent Adapter -> Prepare Workspace -> Route Task -> Fleet Review -> Launch Preview -> Launch / Skill / Workflow -> Inspect -> Approve / Reject -> Resume -> Artifact -> Report -> Audit
+System Overview -> Evidence -> Create / Claim Execution Task -> Draft Workflow -> Review Steps -> Save Workflow -> Version / Archive / Restore -> Evaluate Skill -> Plan Agent Adapter -> Prepare Workspace -> Route Task -> Fleet Review -> Launch Preview -> Launch / Skill / Workflow -> Inspect -> Human Gate -> Approve / Reject -> Resume -> Artifact -> Report -> Audit
 ```
 
 It is still local-first, conservative, and auditable.
