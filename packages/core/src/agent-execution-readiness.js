@@ -30,6 +30,7 @@ export function assessAgentExecutionReadiness(store, input = {}) {
   if (context.status !== "fresh") blockers.push({ id: "context_not_fresh", reason: "Refresh ContextOS before external execution.", status: context.status });
   const empirical = capability?.empiricalValidation;
   if (empirical?.status !== "attested" || empirical.effectiveOutcome !== "passed") blockers.push({ id: "attested_trial_required", reason: "A latest Launcher-attested passing trial is required; reported or failed trials do not unlock execution." });
+  const trialBlockers = blockers.filter((item) => item.id !== "attested_trial_required");
   const status = blockers.some((item) => item.id === "launcher_unavailable" || item.id === "capability_probe_missing")
     ? "blocked"
     : blockers.length ? "needs_trial"
@@ -39,6 +40,7 @@ export function assessAgentExecutionReadiness(store, input = {}) {
     interface: AGENT_EXECUTION_READINESS_CONTRACT.interface,
     checkedAt: nowIso(),
     status,
+    canRequestTrialApproval: trialBlockers.length === 0,
     canRequestExecutionApproval: status === "ready",
     adapter: { id: adapter.id, name: adapter.name, kind: adapter.kind },
     probe: probe ? { id: probe.id, createdAt: probe.createdAt, adapter: capability ? { status: capability.status, launcherExecutionSupported: capability.launcherExecutionSupported, empiricalValidation: capability.empiricalValidation } : null } : null,

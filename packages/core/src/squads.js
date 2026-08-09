@@ -6,6 +6,7 @@ import { getTaskRoute } from "./task-router.js";
 import { getAgentWorkspace } from "./agent-workspaces.js";
 import { getLaunchReview } from "./launch-review.js";
 import { getAgentLaunch, launchAgentWorkspace } from "./agent-launcher.js";
+import { assessAgentExecutionReadiness } from "./agent-execution-readiness.js";
 
 export const SQUAD_CONTRACT = Object.freeze({
   version: "0.1.0",
@@ -143,6 +144,15 @@ export async function requestSquadMemberApproval(store, squadId, input = {}, run
   const member = squad.members.find((item) => item.role === role);
   if (!member || !readiness) throw new Error("role is not a Squad member");
   if (!readiness.executionEligible) throw new Error("Squad member requires an execute-mode routed Task Route before an execution approval can be requested");
+  const purpose = input.purpose === "trial" ? "trial" : "execution";
+  const executionReadiness = assessAgentExecutionReadiness(store, { adapterId: member.adapterId });
+  const approvalAllowed = purpose === "trial"
+    ? executionReadiness.canRequestTrialApproval
+    : executionReadiness.canRequestExecutionApproval;
+  if (!approvalAllowed) {
+    const blockers = executionReadiness.blockers.map((item) => item.id).join(", ");
+    throw new Error(`Squad member is not eligible for ${purpose} approval: ${blockers || executionReadiness.status}`);
+  }
   if (member.launch?.id) {
     const existingLaunch = safeGetLaunch(store, member.launch.id);
     if (existingLaunch?.status === "requires_approval") return { squad, launch: existingLaunch, reused: true };
@@ -159,8 +169,8 @@ export async function requestSquadMemberApproval(store, squadId, input = {}, run
   if (launch.status !== "requires_approval" || !launch.approval?.id) {
     throw new Error(`expected an approval-gated launch, received: ${launch.status}`);
   }
-  member.launch = { id: launch.id, status: launch.status, approvalId: launch.approval.id, requestedAt: nowIso(), requestedBy: input.actor ?? "local-user" };
-  persistUpdatedSquad(store, squad, "squad.member.approval_requested", { role, launchId: launch.id, approvalId: launch.approval.id });
+  member.launch = { id: launch.id, status: launch.status, approvalId: launch.approval.id, purpose, requestedAt: nowIso(), requestedBy: input.actor ?? "local-user" };
+  persistUpdatedSquad(store, squad, "squad.member.approval_requested", { role, purpose, launchId: launch.id, approvalId: launch.approval.id });
   return { squad, launch, reused: false };
 }
 

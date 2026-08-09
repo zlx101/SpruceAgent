@@ -3946,6 +3946,7 @@ test("capability probe records allowlisted local evidence without provider secre
   fs.writeFileSync(commandPath, process.platform === "win32" ? "@echo off\r\necho fake-codex\r\n" : "#!/bin/sh\necho fake-codex\n", "utf8");
   if (process.platform !== "win32") fs.chmodSync(commandPath, 0o755);
   const store = ensureStore(createStore(dir));
+  buildWorkspaceIndex(store);
   const probe = probeAgentCapabilities(store, {
     adapterIds: ["codex-cli", "local-shell-agent"],
     versionCheck: false,
@@ -4091,13 +4092,16 @@ test("task router assigns roles separately and routes supported execute adapters
     goal: "Run the deterministic acceptance check",
   });
   bindSquadMemberWorkspace(store, localSquad.id, { role: "deterministic_automation", workspaceId: localWorkspace.id });
+  buildWorkspaceIndex(store);
   const approvalRequest = await requestSquadMemberApproval(store, localSquad.id, {
     role: "deterministic_automation",
     command: "node -e \"process.exit(0)\"",
+    purpose: "trial",
   });
   const reusedApprovalRequest = await requestSquadMemberApproval(store, localSquad.id, {
     role: "deterministic_automation",
     command: "node -e \"process.exit(1)\"",
+    purpose: "trial",
   });
   assert.equal(approvalRequest.launch.status, "requires_approval");
   assert.equal(approvalRequest.reused, false);
