@@ -671,6 +671,16 @@ async function handleExecutionTaskAction(button) {
         actor: "workbench-user",
       });
     }
+    if (button.dataset.action === "execution-task-cancel") {
+      if (!window.confirm("Cancel this control task? This does not stop an agent or revoke an approval; use the relevant execution control for that.")) return;
+      const cancellationSummary = window.prompt("Record why this task is being cancelled for the audit ledger:");
+      if (!cancellationSummary?.trim()) return;
+      task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/update`, {
+        status: "cancelled",
+        cancellationSummary: cancellationSummary.trim(),
+        actor: "workbench-user",
+      });
+    }
     if (!task) return;
     await loadExecutionTasks();
     state.executionTaskDetail = task;
@@ -1850,12 +1860,13 @@ function renderExecutionTasks(items) {
     actions: [
       executionTaskButton("execution-task-view", item.id, "&#128065;", "View", "secondary"),
       executionTaskButton("execution-task-evidence", item.id, "&#128269;", "Evidence", "secondary"),
-      ... (item.status === "completed" ? [executionTaskButton("execution-task-closure", item.id, "&#128220;", "Closure", "secondary")] : []),
+      ... (["completed", "cancelled"].includes(item.status) ? [executionTaskButton("execution-task-closure", item.id, "&#128220;", "Closure", "secondary")] : []),
       executionTaskButton("execution-task-links", item.id, "&#128279;", "Update Links", "secondary"),
       ...(["completed", "cancelled"].includes(item.status) ? [executionTaskButton("execution-task-follow-up", item.id, "&#8618;", "Follow Up", "secondary")] : []),
       ...(item.status === "open" && !item.owner ? [executionTaskButton("execution-task-claim", item.id, "&#9998;", "Claim")] : []),
       ...(!["completed", "cancelled", "waiting_for_human"].includes(item.status) ? [executionTaskButton("execution-task-wait", item.id, "&#9888;", "Need Decision", "secondary")] : []),
       ...(!["completed", "cancelled"].includes(item.status) ? [executionTaskButton("execution-task-complete", item.id, "&#10003;", "Complete", "secondary")] : []),
+      ...(!["completed", "cancelled"].includes(item.status) ? [executionTaskButton("execution-task-cancel", item.id, "&#10005;", "Cancel", "secondary")] : []),
     ],
   }));
 }

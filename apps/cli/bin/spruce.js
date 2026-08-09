@@ -681,6 +681,7 @@ function handleExecutionTask(action, args) {
       nextAction: flags.nextAction,
       humanGate: flags.humanGate,
       completionSummary: flags.completionSummary,
+      cancellationSummary: flags.cancellationSummary,
       note: flags.note,
       actor: flags.by ?? "local-user",
     };
@@ -2107,6 +2108,7 @@ Usage:
   ${executable} task claim <taskId> --owner <owner>
   ${executable} task update <taskId> --status waiting_for_human --humanGate "Approve production release"
   ${executable} task update <taskId> --status completed --completionSummary "Focused checks passed; release handoff recorded"
+  ${executable} task update <taskId> --status cancelled --cancellationSummary "Scope removed from this release"
   ${executable} task follow-up <terminalTaskId> --goal "Investigate the discovered regression"
   ${executable} task board
   ${executable} task evidence <taskId>

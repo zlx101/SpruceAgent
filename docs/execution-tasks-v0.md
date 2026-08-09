@@ -41,8 +41,9 @@ Each record includes a bounded goal, optional scope and owner, next action, conc
 - `completed` and `cancelled` clear `nextAction`; terminal tasks cannot be claimed.
 - Terminal tasks cannot be reopened through an update. A regression or newly discovered scope must be represented by a new follow-up task, keeping the original task's outcome record intact.
 - A follow-up can only reference a terminal parent and persists `followUpOf` on the new task. It creates no execution, approval, or inherited ownership authority.
-- On first completion, the ledger captures a read-only snapshot of its typed local links and declared evidence references. Later record changes cannot rewrite the original completion snapshot.
+- On first completion or cancellation, the ledger captures a read-only snapshot of its typed local links and declared evidence references. Later record changes cannot rewrite the original terminal snapshot.
 - The first transition to `completed` requires a bounded `completionSummary`, retained with its recorder and timestamp. It is an operator's auditable outcome statement, not an execution authorization or a claim that the linked evidence was independently verified.
+- The first transition to `cancelled` likewise requires a bounded `cancellationSummary`, so a cancelled task is not an unexplained disappearance from the control ledger.
 - All create, claim, and update events are appended to the audit ledger.
 - The board orders unresolved attention as `waiting_for_human`, `blocked`, `in_progress`, then `open`.
 - The board also exposes `evidenceAttention` for unresolved tasks whose typed links are missing or unsupported; this is diagnostic state only and never changes task or execution authority.
@@ -65,6 +66,9 @@ npm run spruce -- task update <taskId> \
 npm run spruce -- task update <taskId> \
   --status completed \
   --completionSummary "Focused checks passed and release handoff was recorded"
+npm run spruce -- task update <taskId> \
+  --status cancelled \
+  --cancellationSummary "Scope was removed from this release"
 npm run spruce -- task follow-up <terminalTaskId> \
   --goal "Investigate the newly discovered regression"
 npm run spruce -- task closure <completedTaskId>
@@ -89,7 +93,7 @@ All routes are local and require the existing Gateway Bearer token:
 | `POST` | `/v1/execution-tasks/:taskId/follow-up` | Create a fresh, linked task for a terminal task without reopening it. |
 | `GET` | `/v1/execution-tasks/:taskId` | Read one record. |
 | `GET` | `/v1/execution-tasks/:taskId/evidence` | Resolve typed local links as read-only evidence. |
-| `GET` | `/v1/execution-tasks/:taskId/closure` | Read a completed task's outcome and captured evidence snapshot. |
+| `GET` | `/v1/execution-tasks/:taskId/closure` | Read a terminal task's completed or cancellation outcome and captured evidence snapshot. |
 | `POST` | `/v1/execution-tasks/:taskId/claim` | Claim with an owner mutex. |
 | `POST` | `/v1/execution-tasks/:taskId/update` | Update state, evidence, or a concrete human gate. |
 
@@ -103,7 +107,8 @@ The local Workbench has an **Execution Tasks** section with summary count, task 
 - **Claim** records the fixed `workbench-user` owner through the normal Gateway route.
 - **Need Decision** prompts for the mandatory concrete human gate.
 - **Complete** asks for browser confirmation plus a bounded completion summary, then only records control state and that audit statement.
-- **Closure** reads the completion statement and its preserved evidence snapshot for a completed task.
+- **Cancel** asks for browser confirmation plus a bounded cancellation reason; it only records task control state and never stops a running Agent or revokes an approval.
+- **Closure** reads a terminal outcome statement and its preserved evidence snapshot.
 - **Follow Up** appears on a terminal task and creates a new, linked control-state record; it does not reopen or execute the original task.
 - **View** reads the stored ledger record.
 
@@ -121,6 +126,6 @@ An Execution Task is metadata and audit state only. It never:
 
 Actual execution remains with the existing TrustKernel, ContextOS freshness checks, readiness evidence, exact approval tickets, Agent Launcher, and Fleet controls. This split is intentional: durable coordination makes work visible, while the existing execution boundaries continue to decide what may happen.
 
-## Completion snapshots and diagnostics
+## Terminal snapshots and diagnostics
 
-The snapshot records what the local typed-link resolver reported at the exact moment an operator completed a task. It does **not** prove the external work, re-validate a tool result, or authorize a later action. The task board exposes `closureAttention` only when a completed legacy record lacks a snapshot or a captured typed link was already missing or unsupported. It is a migration/audit diagnostic, never an execution gate.
+The snapshot records what the local typed-link resolver reported at the exact moment an operator completed or cancelled a task. It does **not** prove the external work, re-validate a tool result, stop a running Agent, revoke an approval, or authorize a later action. The task board exposes `closureAttention` only when a terminal record lacks a snapshot or a captured typed link was already missing or unsupported. It is a migration/audit diagnostic, never an execution gate.

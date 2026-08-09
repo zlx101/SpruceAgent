@@ -268,6 +268,13 @@ test("execution tasks preserve ownership, gates, evidence, and operator attentio
   const followUp = createExecutionTaskFollowUp(store, task.id, { goal: "Investigate the follow-up regression" });
   assert.equal(followUp.followUpOf, task.id);
   assert.throws(() => createExecutionTaskFollowUp(store, followUp.id, { goal: "Too early" }), /requires a terminal/);
+  assert.throws(() => updateExecutionTask(store, followUp.id, { status: "cancelled" }), /cancellationSummary is required/);
+  const cancelled = updateExecutionTask(store, followUp.id, {
+    status: "cancelled",
+    cancellationSummary: "Follow-up scope moved to another release",
+  });
+  assert.equal(cancelled.cancellation.summary, "Follow-up scope moved to another release");
+  assert.equal(getExecutionTaskClosure(store, followUp.id).cancellation.evidenceSnapshot.interface, "spruceagent.execution-task-evidence");
 });
 
 test("execution task evidence resolves typed local records without granting authority", () => {
@@ -2047,7 +2054,7 @@ test("gateway serves workbench static assets without API auth", async () => {
     assert.equal(mark.status, 200);
     assert.match(html.body, /System Overview|system-overview|Launch Run|Context Evidence|context-evidence-list|context-evidence-panel|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Agent Adapters|agent-adapter-list|agent-plan-panel|Agent Workspaces|agent-workspace-list|agent-workspace-panel|Agent Launches|agent-launch-list|agent-launch-panel|Launch Reviews|launch-review-list|launch-review-panel|Agent Routing|capability-probe-button|task-route-button|task-route-list|task-route-panel|Fleet Runs|fleet-run-list|fleet-run-panel|Execution Tasks|execution-task-create-button|execution-task-list|execution-task-panel|Workflow Versions|Workflow Runs|Decision Queue|decision-queue-list|Artifacts|artifact-list|artifact-panel|Run Detail/);
     assert.match(css.body, /Agent Workbench|summary-grid|overview-grid|overview-item|work-section|detail-panel|run-form|draft-step-list|draft-step-fields|source-map-list|evaluation-preview|artifact-preview|evidence-preview|fleet-run-preview|agent-plan-preview|agent-workspace-preview|agent-launch-preview/);
-    assert.match(js.body, /submitRun|searchContextEvidenceFromWorkbench|renderSystemOverview|renderContextEvidence|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|prepareAgentWorkspaceFromWorkbench|previewAgentLaunch|loadAgentWorkspace|loadAgentLaunch|createLaunchReviewFromWorkbench|loadLaunchReview|probeCapabilitiesFromWorkbench|routeTaskFromWorkbench|loadTaskRoute|renderAgentAdapters|renderAgentPlanPanel|renderAgentWorkspacePanel|renderAgentLaunches|renderAgentLaunchPanel|renderLaunchReviews|renderLaunchReviewPanel|renderCapabilityProbePanel|renderTaskRoutes|renderTaskRoutePanel|renderFleetRuns|renderFleetRunPanel|renderExecutionTasks|createExecutionTaskFromWorkbench|handleExecutionTaskAction|execution-task-links|execution-task-follow-up|execution-task-closure|completionSummary|loadExecutionTasks|fleetRunViewButton|loadFleetRun|taskRouteViewButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|agentWorkspaces|agentLaunches|launchReviews|capabilityProbes|taskRoutes|fleetRuns|executionTasks|resume|inbox|approval/i);
+    assert.match(js.body, /submitRun|searchContextEvidenceFromWorkbench|renderSystemOverview|renderContextEvidence|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|prepareAgentWorkspaceFromWorkbench|previewAgentLaunch|loadAgentWorkspace|loadAgentLaunch|createLaunchReviewFromWorkbench|loadLaunchReview|probeCapabilitiesFromWorkbench|routeTaskFromWorkbench|loadTaskRoute|renderAgentAdapters|renderAgentPlanPanel|renderAgentWorkspacePanel|renderAgentLaunches|renderAgentLaunchPanel|renderLaunchReviews|renderLaunchReviewPanel|renderCapabilityProbePanel|renderTaskRoutes|renderTaskRoutePanel|renderFleetRuns|renderFleetRunPanel|renderExecutionTasks|createExecutionTaskFromWorkbench|handleExecutionTaskAction|execution-task-links|execution-task-follow-up|execution-task-closure|execution-task-cancel|completionSummary|cancellationSummary|loadExecutionTasks|fleetRunViewButton|loadFleetRun|taskRouteViewButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|agentWorkspaces|agentLaunches|launchReviews|capabilityProbes|taskRoutes|fleetRuns|executionTasks|resume|inbox|approval/i);
     assert.match(mark.body, /SpruceAgent mark/);
   } finally {
     await closeServer(gateway.server);
@@ -2210,6 +2217,12 @@ test("gateway client manages durable execution task control without execution", 
     assert.equal(closure.completion.evidenceSnapshot.interface, "spruceagent.execution-task-evidence");
     const followUp = await client.createExecutionTaskFollowUp(task.id, { goal: "Gateway follow-up task" });
     assert.equal(followUp.followUpOf, task.id);
+    const cancelled = await client.updateExecutionTask(followUp.id, {
+      status: "cancelled",
+      cancellationSummary: "Gateway recorded the cancelled follow-up",
+    });
+    assert.equal(cancelled.cancellation.summary, "Gateway recorded the cancelled follow-up");
+    assert.equal((await client.executionTaskClosure(followUp.id)).cancellation.evidenceSnapshot.interface, "spruceagent.execution-task-evidence");
   } finally {
     await closeServer(gateway.server);
   }

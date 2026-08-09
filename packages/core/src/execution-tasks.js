@@ -17,7 +17,7 @@ export const EXECUTION_TASK_CONTRACT = Object.freeze({
     "A task can name a next action and evidence references, but TrustKernel, ContextOS, readiness, and exact approvals remain the execution authorities.",
     "Waiting-for-human state requires a concrete decision gate instead of silently treating missing authority as a blocker.",
     "A follow-up links durable control state to a terminal task; it does not reopen, rerun, or authorize the prior task.",
-    "Completion evidence is captured as a read-only local snapshot for audit; it is not an approval, independent verification, or execution authority.",
+    "Terminal evidence is captured as a read-only local snapshot for audit; it is not an approval, independent verification, or execution authority.",
   ],
 });
 
@@ -50,6 +50,7 @@ export function createExecutionTask(store, input = {}) {
     nextAction: optionalText(input.nextAction, 500),
     humanGate: null,
     completion: null,
+    cancellation: null,
     evidenceRefs: normalizeRefs(input.evidenceRefs),
     links: normalizeLinks(input.links),
     history: [{ at: now, type: "created", by: optionalText(input.actor, 120) ?? "local-user", note: "task created" }],
@@ -115,13 +116,21 @@ export function updateExecutionTask(store, taskId, input = {}) {
   }
   const evidenceRefs = input.evidenceRefs === undefined ? task.evidenceRefs : normalizeRefs(input.evidenceRefs);
   const links = input.links === undefined ? task.links : normalizeLinks(input.links);
-  const completionRecordedAt = nowIso();
+  const terminalRecordedAt = nowIso();
   const completion = status === "completed"
     ? task.completion ?? {
       summary: requiredText(input.completionSummary, "completionSummary", 500),
-      recordedAt: completionRecordedAt,
+      recordedAt: terminalRecordedAt,
       recordedBy: optionalText(input.actor, 120) ?? "local-user",
-      evidenceSnapshot: captureEvidence(store, { ...task, evidenceRefs, links }, completionRecordedAt),
+      evidenceSnapshot: captureEvidence(store, { ...task, evidenceRefs, links }, terminalRecordedAt),
+    }
+    : null;
+  const cancellation = status === "cancelled"
+    ? task.cancellation ?? {
+      summary: requiredText(input.cancellationSummary, "cancellationSummary", 500),
+      recordedAt: terminalRecordedAt,
+      recordedBy: optionalText(input.actor, 120) ?? "local-user",
+      evidenceSnapshot: captureEvidence(store, { ...task, evidenceRefs, links }, terminalRecordedAt),
     }
     : null;
   return updateTask(store, task, {
@@ -130,6 +139,7 @@ export function updateExecutionTask(store, taskId, input = {}) {
     nextAction: status === "completed" || status === "cancelled" ? null : input.nextAction === undefined ? task.nextAction : optionalText(input.nextAction, 500),
     humanGate,
     completion,
+    cancellation,
     evidenceRefs,
     links,
   }, "updated", input.actor, optionalText(input.note, 500) ?? `status ${task.status} -> ${status}`);
@@ -149,7 +159,7 @@ export function getExecutionTaskBoard(store) {
       const issues = evidence.links.filter((link) => ["missing", "unsupported"].includes(link.status));
       return issues.length ? { taskId: item.id, goal: item.goal, status: item.status, issues } : null;
     }).filter(Boolean),
-    closureAttention: listed.items.map((item) => completionDiagnostic(item)).filter(Boolean),
+    closureAttention: listed.items.map((item) => terminalDiagnostic(item)).filter(Boolean),
   };
 }
 
@@ -160,13 +170,14 @@ export function getExecutionTaskEvidence(store, taskId) {
 
 export function getExecutionTaskClosure(store, taskId) {
   const task = getExecutionTask(store, taskId);
-  const diagnostic = completionDiagnostic(task);
+  const diagnostic = terminalDiagnostic(task);
   return {
     version: EXECUTION_TASK_CONTRACT.version,
     interface: "spruceagent.execution-task-closure",
     taskId: task.id,
     status: task.status,
     completion: task.completion ?? null,
+    cancellation: task.cancellation ?? null,
     diagnostic: diagnostic?.diagnostic ?? null,
     limits: EXECUTION_TASK_CONTRACT.safetyBoundary,
   };
@@ -184,21 +195,22 @@ function captureEvidence(store, task, capturedAt) {
   };
 }
 
-function completionDiagnostic(task) {
-  if (task.status !== "completed") return null;
-  const snapshot = task.completion?.evidenceSnapshot;
+function terminalDiagnostic(task) {
+  if (!["completed", "cancelled"].includes(task.status)) return null;
+  const outcome = task.status === "completed" ? task.completion : task.cancellation;
+  const snapshot = outcome?.evidenceSnapshot;
   if (!snapshot) return {
     taskId: task.id,
     goal: task.goal,
     status: task.status,
-    diagnostic: { code: "completion_evidence_snapshot_missing", message: "This completed task predates completion evidence snapshots." },
+    diagnostic: { code: "terminal_evidence_snapshot_missing", message: "This terminal task lacks an evidence snapshot." },
   };
   const issues = snapshot.links.filter((link) => ["missing", "unsupported"].includes(link.status));
   return issues.length ? {
     taskId: task.id,
     goal: task.goal,
     status: task.status,
-    diagnostic: { code: "completion_evidence_snapshot_issues", issues },
+    diagnostic: { code: "terminal_evidence_snapshot_issues", issues },
   } : null;
 }
 
@@ -222,7 +234,7 @@ function summarizeTasks(tasks) {
 }
 
 function taskSummary(task) {
-  return { id: task.id, createdAt: task.createdAt, updatedAt: task.updatedAt, goal: task.goal, status: task.status, owner: task.owner, followUpOf: task.followUpOf ?? null, nextAction: task.nextAction, humanGate: task.humanGate, completion: task.completion ?? null, evidenceRefs: task.evidenceRefs, links: task.links };
+  return { id: task.id, createdAt: task.createdAt, updatedAt: task.updatedAt, goal: task.goal, status: task.status, owner: task.owner, followUpOf: task.followUpOf ?? null, nextAction: task.nextAction, humanGate: task.humanGate, completion: task.completion ?? null, cancellation: task.cancellation ?? null, evidenceRefs: task.evidenceRefs, links: task.links };
 }
 
 function normalizeStatus(value) {
