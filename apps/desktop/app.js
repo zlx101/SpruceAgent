@@ -373,6 +373,7 @@ nodes.autopilotList.addEventListener("click", async (event) => {
   if (button.dataset.action === "autopilot-last-task") await loadExecutionTaskReference(button.dataset.taskId);
   if (button.dataset.action === "autopilot-enable") await setAutopilotEnabledFromWorkbench(button, true);
   if (button.dataset.action === "autopilot-disable") await setAutopilotEnabledFromWorkbench(button, false);
+  if (button.dataset.action === "autopilot-edit") await editAutopilotFromWorkbench(button);
 });
 
 nodes.workflowList.addEventListener("click", async (event) => {
@@ -928,6 +929,41 @@ async function setAutopilotEnabledFromWorkbench(button, enabled) {
     state.autopilotDetail = result;
     render();
     setStatus(`Autopilot ${enabled ? "enabled" : "disabled"} - ${shortId(autopilotId)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+  }
+}
+
+async function editAutopilotFromWorkbench(button) {
+  const autopilotId = button.dataset.autopilotId;
+  const ifUpdatedAt = button.dataset.updatedAt;
+  if (!autopilotId || !ifUpdatedAt || state.busy) return;
+  try {
+    state.busy = true;
+    const current = await get(`/v1/autopilots/${encodeURIComponent(autopilotId)}`);
+    const goal = window.prompt("Repair or update this bounded task goal. This does not run the rule:", current.action?.goal ?? "");
+    if (goal === null) return;
+    if (!goal.trim()) throw new Error("Autopilot goal is required");
+    const intervalMinutes = window.prompt("Interval in minutes (5 through 10080):", String(current.schedule?.intervalMinutes ?? ""));
+    if (intervalMinutes === null) return;
+    if (!window.confirm("Save this Autopilot rule revision? This does not trigger the rule or modify existing tasks.")) return;
+    const result = await post(`/v1/autopilots/${encodeURIComponent(autopilotId)}/update`, {
+      goal: goal.trim(),
+      intervalMinutes: intervalMinutes.trim(),
+      ifUpdatedAt: current.updatedAt,
+      actor: "workbench-user",
+    });
+    const [autopilots, autopilotDue, status] = await Promise.all([
+      get("/v1/autopilots"), get("/v1/autopilots/due"), get("/v1/status"),
+    ]);
+    state.autopilots = autopilots;
+    state.autopilotDue = autopilotDue;
+    state.status = status;
+    state.autopilotDetail = result;
+    render();
+    setStatus(`Autopilot rule updated - ${shortId(autopilotId)}`);
   } catch (error) {
     setStatus(error.message, true);
   } finally {
@@ -2149,6 +2185,7 @@ function renderAutopilots(items, dueItems = []) {
       autopilotButton("autopilot-triggers", item.id, "&#128221;", "Triggers", "secondary"),
       autopilotButton("autopilot-failures", item.id, "&#9888;", "Failures", "secondary"),
       ...(item.lastTaskId ? [autopilotLastTaskButton(item.lastTaskId)] : []),
+      autopilotButton("autopilot-edit", item.id, "&#9998;", "Edit", "secondary", item.updatedAt),
       autopilotButton(item.enabled ? "autopilot-disable" : "autopilot-enable", item.id, item.enabled ? "&#9208;" : "&#9654;", item.enabled ? "Disable" : "Enable", "secondary", item.updatedAt),
     ],
   }));
