@@ -64,7 +64,7 @@ import {
 import { approveTicket, getApprovalTicket, listApprovalTickets, rejectTicket } from "./approvals.js";
 import { getApprovalQueue, getApprovalQueueContract } from "./approval-queue.js";
 import { claimExecutionTask, createExecutionTask, createExecutionTaskFollowUp, getExecutionTask, getExecutionTaskBoard, getExecutionTaskClosure, getExecutionTaskContract, getExecutionTaskEvidence, getExecutionTaskLineage, handoffExecutionTask, listExecutionTasks, resumeExecutionTask, updateExecutionTask } from "./execution-tasks.js";
-import { createAutopilot, getAutopilot, getAutopilotContract, listAutopilotFailures, listAutopilotTriggers, listAutopilots, listDueAutopilots, runDueAutopilots, setAutopilotEnabled, triggerAutopilot } from "./autopilots.js";
+import { createAutopilot, getAutopilot, getAutopilotContract, listAutopilotFailures, listAutopilotTriggers, listAutopilots, listDueAutopilots, runDueAutopilots, setAutopilotEnabled, triggerAutopilot, updateAutopilot } from "./autopilots.js";
 import { createAutopilotRunner } from "./autopilot-runner.js";
 import { getArtifact, getArtifactContract, listArtifacts } from "./artifacts.js";
 import { assessWorkspaceIndexFreshness, buildWorkspaceIndex, readWorkspaceIndex, searchWorkspaceContext } from "./context.js";
@@ -367,6 +367,7 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       authRequired: true,
       description: "Read a rule's durable failed-trigger ledger.",
     },
+    { id: "autopilots.update", method: "POST", path: "/v1/autopilots/:autopilotId/update", authRequired: true, description: "Update static Autopilot control fields with optimistic concurrency." },
     {
       id: "autopilots.create",
       method: "POST",
@@ -1540,6 +1541,7 @@ async function routeRequest(store, request, url, body, options = {}) {
   if (request.method === "GET" && pathParts[1] === "autopilots" && pathParts[2] && pathParts[3] === "triggers" && !pathParts[4]) return ok(listAutopilotTriggers(store, pathParts[2], { limit: url.searchParams.get("limit") ?? undefined }));
   if (request.method === "GET" && pathParts[1] === "autopilots" && pathParts[2] && pathParts[3] === "failures" && !pathParts[4]) return ok(listAutopilotFailures(store, pathParts[2], { limit: url.searchParams.get("limit") ?? undefined }));
   if (request.method === "POST" && pathParts[1] === "autopilots" && pathParts[2] && pathParts[3] === "trigger" && !pathParts[4]) return ok(triggerAutopilot(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
+  if (request.method === "POST" && pathParts[1] === "autopilots" && pathParts[2] && pathParts[3] === "update" && !pathParts[4]) return ok(updateAutopilot(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
   if (request.method === "POST" && pathParts[1] === "autopilots" && pathParts[2] && pathParts[3] === "enable" && !pathParts[4]) return ok(setAutopilotEnabled(store, pathParts[2], { ...body, enabled: true, actor: body.actor ?? "gateway-user" }));
   if (request.method === "POST" && pathParts[1] === "autopilots" && pathParts[2] && pathParts[3] === "disable" && !pathParts[4]) return ok(setAutopilotEnabled(store, pathParts[2], { ...body, enabled: false, actor: body.actor ?? "gateway-user" }));
   if (request.method === "GET" && pathParts[1] === "autopilots" && pathParts[2] && !pathParts[3]) return ok(getAutopilot(store, pathParts[2]));

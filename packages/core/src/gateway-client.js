@@ -56,6 +56,7 @@ export function createGatewayClient(options = {}) {
     createAutopilot: (input = {}) => request("POST", "/v1/autopilots", input),
     runDueAutopilots: (input = {}) => request("POST", "/v1/autopilots/run-due", input),
     triggerAutopilot: (autopilotId, input = {}) => request("POST", `/v1/autopilots/${encodePathPart(autopilotId)}/trigger`, input),
+    updateAutopilot: (autopilotId, input = {}) => request("POST", `/v1/autopilots/${encodePathPart(autopilotId)}/update`, input),
     enableAutopilot: (autopilotId, input = {}) => request("POST", `/v1/autopilots/${encodePathPart(autopilotId)}/enable`, input),
     disableAutopilot: (autopilotId, input = {}) => request("POST", `/v1/autopilots/${encodePathPart(autopilotId)}/disable`, input),
     artifacts: (input = {}) => request("GET", `/v1/artifacts${artifactParams(input)}`),

@@ -176,6 +176,7 @@ import {
   claimExecutionTask,
   handoffExecutionTask,
   updateExecutionTask,
+  updateAutopilot,
   resumeExecutionTask,
   triggerAutopilot,
   validateLlmProviderConfig,
@@ -786,6 +787,19 @@ async function handleAutopilot(action, args) {
     printJson(listAutopilotFailures(store, autopilotId, { limit: flags.limit }));
     return;
   }
+  if (action === "update") {
+    const [autopilotId, ...flagArgs] = args;
+    if (!autopilotId) throw new Error("usage: spruce autopilot update <autopilotId> --ifUpdatedAt <ISO> [--goal <text>] [--intervalMinutes <n>] [--nextDueAt <ISO>]");
+    const flags = parseFlags(flagArgs);
+    printJson(updateAutopilot(store, autopilotId, {
+      name: flags.name, goal: flags.goal, scope: flags.scope, nextAction: flags.nextAction,
+      intervalMinutes: flags.intervalMinutes ?? flags.interval, nextDueAt: flags.nextDueAt,
+      evidenceRefs: flags.evidenceRefs === undefined ? undefined : splitCsv(flags.evidenceRefs),
+      links: flags.links === undefined ? undefined : splitCsv(flags.links),
+      ifUpdatedAt: flags.ifUpdatedAt, actor: flags.by ?? "local-user",
+    }));
+    return;
+  }
   if (action === "create") {
     const flags = parseFlags(args);
     printJson(createAutopilot(store, {
@@ -836,7 +850,7 @@ async function handleAutopilot(action, args) {
     printJson(setAutopilotEnabled(store, autopilotId, { enabled: action === "enable", ifUpdatedAt: flags.ifUpdatedAt, actor: flags.by ?? "local-user" }));
     return;
   }
-  throw new Error("usage: spruce autopilot <list|contract|due|get|detail|triggers|failures|create|trigger|run-due|runner|enable|disable>");
+  throw new Error("usage: spruce autopilot <list|contract|due|get|detail|triggers|failures|create|update|trigger|run-due|runner|enable|disable>");
 }
 
 function handleArtifact(action, args) {

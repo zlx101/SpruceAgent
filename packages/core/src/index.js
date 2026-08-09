@@ -242,6 +242,7 @@ export {
   runDueAutopilots,
   setAutopilotEnabled,
   triggerAutopilot,
+  updateAutopilot,
 } from "./autopilots.js";
 export { AUTOPILOT_RUNNER_CONTRACT, createAutopilotRunner } from "./autopilot-runner.js";
 export { runAgent } from "./agent-runner.js";

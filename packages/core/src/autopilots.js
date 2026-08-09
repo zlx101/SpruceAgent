@@ -112,6 +112,26 @@ export function setAutopilotEnabled(store, autopilotId, input = {}) {
   return record;
 }
 
+export function updateAutopilot(store, autopilotId, input = {}) {
+  const record = getAutopilot(store, autopilotId);
+  assertAutopilotRevision(record, input);
+  const changes = [];
+  if (input.name !== undefined) { record.name = requiredText(input.name, "name", 160); changes.push("name"); }
+  if (input.intervalMinutes !== undefined) { record.schedule.intervalMinutes = boundedInteger(input.intervalMinutes, "intervalMinutes"); changes.push("intervalMinutes"); }
+  if (input.nextDueAt !== undefined) { record.schedule.nextDueAt = parseTime(input.nextDueAt, "nextDueAt"); changes.push("nextDueAt"); }
+  if (input.goal !== undefined) { record.action.goal = requiredText(input.goal, "goal", 500); changes.push("goal"); }
+  if (input.scope !== undefined) { record.action.scope = optionalText(input.scope, 1000); changes.push("scope"); }
+  if (input.nextAction !== undefined) { record.action.nextAction = optionalText(input.nextAction, 500); changes.push("nextAction"); }
+  if (input.evidenceRefs !== undefined) { record.action.evidenceRefs = normalizeRefs(input.evidenceRefs); changes.push("evidenceRefs"); }
+  if (input.links !== undefined) { record.action.links = normalizeLinks(input.links); changes.push("links"); }
+  if (!changes.length) throw new Error("Autopilot update requires at least one editable field");
+  record.updatedAt = nowIso();
+  writeJson(autopilotPath(store, record.id), record);
+  appendJsonl(autopilotIndexPath(store), summary(record));
+  audit(store, "autopilot.updated", record, { actor: optionalText(input.actor, 120) ?? "local-user", fields: changes });
+  return record;
+}
+
 export function triggerAutopilot(store, autopilotId, input = {}) {
   const record = getAutopilot(store, autopilotId);
   const triggerKey = optionalText(input.triggerKey, 240) ?? `${record.id}:${record.schedule.nextDueAt}`;

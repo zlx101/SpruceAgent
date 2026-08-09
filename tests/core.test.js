@@ -196,6 +196,7 @@ import {
   handoffExecutionTask,
   resumeExecutionTask,
   triggerAutopilot,
+  updateAutopilot,
   validateLlmProviderConfig,
   cancelFleetRun,
 } from "../packages/core/src/index.js";
@@ -470,6 +471,16 @@ test("autopilot due runs isolate a failed rule and expose partial runner health"
   assert.equal(listExecutionTasks(store).summary.total, 1);
   assert.equal(runner.snapshot().lastResult.failedCount, 1);
   assert.match(runner.snapshot().lastError, /1 of 2 due Autopilot rule/);
+
+  const repaired = updateAutopilot(store, broken.id, {
+    goal: "Repaired bounded review task",
+    ifUpdatedAt: brokenRecord.updatedAt,
+    actor: "recovery-test",
+  });
+  assert.equal(repaired.action.goal, "Repaired bounded review task");
+  const recovery = await runner.tick({ now: "2026-08-10T01:00:00.000Z" });
+  assert.equal(recovery.result.failedCount, 0);
+  assert.equal(listExecutionTasks(store).summary.total, 2);
 });
 
 test("execution task evidence resolves typed local records without granting authority", () => {
