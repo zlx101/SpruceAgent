@@ -34,6 +34,13 @@ export function createGatewayClient(options = {}) {
     inboxContract: () => request("GET", "/v1/inbox/contract"),
     approvalQueue: (input = {}) => request("GET", `/v1/approval-queue${queueParams(input)}`),
     approvalQueueContract: () => request("GET", "/v1/approval-queue/contract"),
+    listExecutionTasks: (input = {}) => request("GET", `/v1/execution-tasks${executionTaskParams(input)}`),
+    executionTaskBoard: () => request("GET", "/v1/execution-tasks/board"),
+    executionTaskContract: () => request("GET", "/v1/execution-tasks/contract"),
+    getExecutionTask: (taskId) => request("GET", `/v1/execution-tasks/${encodePathPart(taskId)}`),
+    createExecutionTask: (input = {}) => request("POST", "/v1/execution-tasks", input),
+    claimExecutionTask: (taskId, input = {}) => request("POST", `/v1/execution-tasks/${encodePathPart(taskId)}/claim`, input),
+    updateExecutionTask: (taskId, input = {}) => request("POST", `/v1/execution-tasks/${encodePathPart(taskId)}/update`, input),
     artifacts: (input = {}) => request("GET", `/v1/artifacts${artifactParams(input)}`),
     artifact: (artifactId) => request("GET", `/v1/artifacts/${encodePathPart(artifactId)}`),
     artifactContract: () => request("GET", "/v1/artifacts/contract"),
@@ -275,6 +282,14 @@ function agentTrialParams(input = {}) {
   if (input.adapterId) params.set("adapterId", input.adapterId);
   if (input.status) params.set("status", input.status);
   if (input.attested !== undefined) params.set("attested", String(Boolean(input.attested)));
+  const value = params.toString();
+  return value ? `?${value}` : "";
+}
+
+function executionTaskParams(input = {}) {
+  const params = new URLSearchParams();
+  if (input.status) params.set("status", input.status);
+  if (input.owner) params.set("owner", input.owner);
   const value = params.toString();
   return value ? `?${value}` : "";
 }

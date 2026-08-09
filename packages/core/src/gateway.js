@@ -63,6 +63,7 @@ import {
 } from "./task-router.js";
 import { approveTicket, getApprovalTicket, listApprovalTickets, rejectTicket } from "./approvals.js";
 import { getApprovalQueue, getApprovalQueueContract } from "./approval-queue.js";
+import { claimExecutionTask, createExecutionTask, getExecutionTask, getExecutionTaskBoard, getExecutionTaskContract, listExecutionTasks, updateExecutionTask } from "./execution-tasks.js";
 import { getArtifact, getArtifactContract, listArtifacts } from "./artifacts.js";
 import { assessWorkspaceIndexFreshness, buildWorkspaceIndex, readWorkspaceIndex, searchWorkspaceContext } from "./context.js";
 import { createContextEvidencePack, getContextEvidenceContract } from "./context-evidence.js";
@@ -1336,6 +1337,14 @@ async function routeRequest(store, request, url, body) {
   if (request.method === "GET" && url.pathname === "/v1/approval-queue/contract") {
     return ok(getApprovalQueueContract());
   }
+
+  if (request.method === "GET" && url.pathname === "/v1/execution-tasks") return ok(listExecutionTasks(store, { status: url.searchParams.get("status") ?? undefined, owner: url.searchParams.get("owner") ?? undefined }));
+  if (request.method === "GET" && url.pathname === "/v1/execution-tasks/board") return ok(getExecutionTaskBoard(store));
+  if (request.method === "GET" && url.pathname === "/v1/execution-tasks/contract") return ok(getExecutionTaskContract());
+  if (request.method === "POST" && url.pathname === "/v1/execution-tasks") return ok(createExecutionTask(store, { ...body, actor: body.actor ?? "gateway-user" }));
+  if (request.method === "GET" && pathParts[1] === "execution-tasks" && pathParts[2] && !pathParts[3]) return ok(getExecutionTask(store, pathParts[2]));
+  if (request.method === "POST" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "claim" && !pathParts[4]) return ok(claimExecutionTask(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
+  if (request.method === "POST" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "update" && !pathParts[4]) return ok(updateExecutionTask(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
 
   if (request.method === "GET" && url.pathname === "/v1/artifacts") {
     return ok(listArtifacts(store, {
