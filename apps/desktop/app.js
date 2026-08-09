@@ -367,6 +367,8 @@ nodes.autopilotList.addEventListener("click", async (event) => {
   if (!button || state.busy) return;
   if (button.dataset.action === "autopilot-view") await loadAutopilot(button.dataset.autopilotId);
   if (button.dataset.action === "autopilot-triggers") await loadAutopilotTriggers(button.dataset.autopilotId);
+  if (button.dataset.action === "autopilot-enable") await setAutopilotEnabledFromWorkbench(button, true);
+  if (button.dataset.action === "autopilot-disable") await setAutopilotEnabledFromWorkbench(button, false);
 });
 
 nodes.workflowList.addEventListener("click", async (event) => {
@@ -828,6 +830,34 @@ async function runDueAutopilotsFromWorkbench() {
     state.autopilotDetail = result;
     render();
     setStatus(`Autopilot due run created ${result.results.length} open task${result.results.length === 1 ? "" : "s"}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+  }
+}
+
+async function setAutopilotEnabledFromWorkbench(button, enabled) {
+  const autopilotId = button.dataset.autopilotId;
+  const ifUpdatedAt = button.dataset.updatedAt;
+  if (!autopilotId || !ifUpdatedAt || state.busy) return;
+  const action = enabled ? "enable" : "disable";
+  if (!window.confirm(`Confirm ${action} for this Autopilot rule? This does not run, cancel, or delete any task.`)) return;
+  try {
+    state.busy = true;
+    const result = await post(`/v1/autopilots/${encodeURIComponent(autopilotId)}/${action}`, {
+      actor: "workbench-user",
+      ifUpdatedAt,
+    });
+    const [autopilots, autopilotDue, status] = await Promise.all([
+      get("/v1/autopilots"), get("/v1/autopilots/due"), get("/v1/status"),
+    ]);
+    state.autopilots = autopilots;
+    state.autopilotDue = autopilotDue;
+    state.status = status;
+    state.autopilotDetail = result;
+    render();
+    setStatus(`Autopilot ${enabled ? "enabled" : "disabled"} - ${shortId(autopilotId)}`);
   } catch (error) {
     setStatus(error.message, true);
   } finally {
@@ -2043,6 +2073,7 @@ function renderAutopilots(items, dueItems = []) {
     actions: [
       autopilotButton("autopilot-view", item.id, "&#128065;", "View"),
       autopilotButton("autopilot-triggers", item.id, "&#128221;", "Triggers", "secondary"),
+      autopilotButton(item.enabled ? "autopilot-disable" : "autopilot-enable", item.id, item.enabled ? "&#9208;" : "&#9654;", item.enabled ? "Disable" : "Enable", "secondary", item.updatedAt),
     ],
   }));
 }
@@ -3293,12 +3324,13 @@ function executionTaskReferenceButton(taskId) {
   return button;
 }
 
-function autopilotButton(action, autopilotId, iconHtml, label, tone = "primary") {
+function autopilotButton(action, autopilotId, iconHtml, label, tone = "primary", updatedAt = null) {
   const button = document.createElement("button");
   button.className = `item-action ${tone}`;
   button.type = "button";
   button.dataset.action = action;
   button.dataset.autopilotId = autopilotId;
+  if (updatedAt) button.dataset.updatedAt = updatedAt;
   button.innerHTML = `<span aria-hidden="true">${iconHtml}</span><span>${label}</span>`;
   return button;
 }
