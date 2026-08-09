@@ -109,6 +109,8 @@ Workbench v0 supports:
 - inspect any task's parent and Follow Up chain through a read-only Lineage action
 - create a fresh follow-up task from a completed or cancelled task, preserving the terminal record rather than reopening it
 - inspect a completed task's immutable completion statement and local evidence snapshot through the **Closure** action
+- surface a terminal task's read-only closure diagnostic directly in the task list, including adverse declared Fleet, Squad, or Agent Launch evidence
+- show a declared Execution Task reference on Fleet Run and Squad list records, without granting any additional control surface
 - create Context Evidence packs through `POST /v1/context/evidence`
 
 ## Safety Boundary

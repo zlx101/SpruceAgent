@@ -1436,7 +1436,7 @@ function render() {
   renderFleetRunPanel(state.fleetRunDetail);
   renderSquads(squads.items);
   renderSquadPanel(state.squadDetail, state.squadReadiness);
-  renderExecutionTasks(executionTasks.items);
+  renderExecutionTasks(executionTasks.items, executionTasks.closureAttention || []);
   renderExecutionTaskPanel(state.executionTaskDetail);
   renderWorkflowSkillOptions(skills);
   renderWorkflowDraft(state.workflowDraft);
@@ -1525,6 +1525,7 @@ function renderFleetRuns(items) {
       ["adapter", item.adapterId],
       ["candidates", `${item.candidateCount} candidates`],
       ["parallel", item.maxParallel],
+      ...(item.executionTaskId ? [["task", shortId(item.executionTaskId)]] : []),
       ["updated", formatTime(item.updatedAt || item.createdAt)],
     ],
     actions: [fleetRunViewButton(item.id)],
@@ -1536,6 +1537,7 @@ function renderFleetRunPanel(fleetRun) {
     id: fleetRun.id,
     status: fleetRun.status,
     routeId: fleetRun.routeId,
+    executionTaskId: fleetRun.executionTaskId ?? null,
     traceId: fleetRun.traceId,
     goal: fleetRun.goal,
     role: fleetRun.role,
@@ -1553,7 +1555,7 @@ function renderFleetRunPanel(fleetRun) {
 function renderSquads(items) {
   replaceList(nodes.squadList, items, (item) => itemNode({
     title: item.name || item.goal || item.id,
-    meta: [[statusClass(item.status), item.status], ["members", `${item.memberCount} members`], ["handoffs", `${item.handoffCount} handoffs`], ["updated", formatTime(item.updatedAt || item.createdAt)]],
+    meta: [[statusClass(item.status), item.status], ["members", `${item.memberCount} members`], ["handoffs", `${item.handoffCount} handoffs`], ...(item.executionTaskId ? [["task", shortId(item.executionTaskId)]] : []), ["updated", formatTime(item.updatedAt || item.createdAt)]],
     actions: [squadViewButton(item.id)],
   }));
 }
@@ -1899,13 +1901,15 @@ function renderTaskRoutePanel(route) {
   nodes.taskRoutePanel.textContent = route ? JSON.stringify(route, null, 2) : "{}";
 }
 
-function renderExecutionTasks(items) {
+function renderExecutionTasks(items, closureAttention = []) {
+  const closureByTaskId = new Map(closureAttention.map((item) => [item.taskId, item.diagnostic]));
   replaceList(nodes.executionTaskList, items, (item) => itemNode({
     title: item.goal || item.id,
     meta: [
       [statusClass(item.status), item.status],
       ["owner", item.owner || "unclaimed"],
       ["next", item.nextAction || "no next action"],
+      ...(closureByTaskId.has(item.id) ? [["failed", `closure: ${closureByTaskId.get(item.id).code}`]] : []),
       ["updated", formatTime(item.updatedAt)],
     ],
     actions: [
