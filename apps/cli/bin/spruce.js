@@ -655,6 +655,7 @@ function handleExecutionTask(action, args) {
       owner: flags.owner,
       nextAction: flags.nextAction,
       humanGate: flags.humanGate,
+      completionSummary: flags.completionSummary,
       note: flags.note,
       actor: flags.by ?? "local-user",
     };
@@ -664,7 +665,7 @@ function handleExecutionTask(action, args) {
     return;
   }
 
-  throw new Error("usage: spruce task <list|board|contract|get|create|claim|update>");
+  throw new Error("usage: spruce task <list|board|contract|get|evidence|create|claim|update>");
 }
 
 function handleArtifact(action, args) {
@@ -2080,6 +2081,7 @@ Usage:
   ${executable} task list [--status open] [--owner <owner>]
   ${executable} task claim <taskId> --owner <owner>
   ${executable} task update <taskId> --status waiting_for_human --humanGate "Approve production release"
+  ${executable} task update <taskId> --status completed --completionSummary "Focused checks passed; release handoff recorded"
   ${executable} task board
   ${executable} task evidence <taskId>
   ${executable} task contract

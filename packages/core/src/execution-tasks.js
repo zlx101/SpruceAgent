@@ -41,6 +41,7 @@ export function createExecutionTask(store, input = {}) {
     owner: optionalText(input.owner, 160) ?? null,
     nextAction: optionalText(input.nextAction, 500),
     humanGate: null,
+    completion: null,
     evidenceRefs: normalizeRefs(input.evidenceRefs),
     links: normalizeLinks(input.links),
     history: [{ at: now, type: "created", by: optionalText(input.actor, 120) ?? "local-user", note: "task created" }],
@@ -95,11 +96,19 @@ export function updateExecutionTask(store, taskId, input = {}) {
   if (status === "completed" && input.nextAction !== undefined && optionalText(input.nextAction, 500)) {
     throw new Error("completed execution task cannot retain a nextAction");
   }
+  const completion = status === "completed"
+    ? task.completion ?? {
+      summary: requiredText(input.completionSummary, "completionSummary", 500),
+      recordedAt: nowIso(),
+      recordedBy: optionalText(input.actor, 120) ?? "local-user",
+    }
+    : null;
   return updateTask(store, task, {
     status,
     owner: input.owner === undefined ? task.owner : optionalText(input.owner, 160),
     nextAction: status === "completed" || status === "cancelled" ? null : input.nextAction === undefined ? task.nextAction : optionalText(input.nextAction, 500),
     humanGate,
+    completion,
     evidenceRefs: input.evidenceRefs === undefined ? task.evidenceRefs : normalizeRefs(input.evidenceRefs),
     links: input.links === undefined ? task.links : normalizeLinks(input.links),
   }, "updated", input.actor, optionalText(input.note, 500) ?? `status ${task.status} -> ${status}`);
@@ -154,7 +163,7 @@ function summarizeTasks(tasks) {
 }
 
 function taskSummary(task) {
-  return { id: task.id, createdAt: task.createdAt, updatedAt: task.updatedAt, goal: task.goal, status: task.status, owner: task.owner, nextAction: task.nextAction, humanGate: task.humanGate, evidenceRefs: task.evidenceRefs, links: task.links };
+  return { id: task.id, createdAt: task.createdAt, updatedAt: task.updatedAt, goal: task.goal, status: task.status, owner: task.owner, nextAction: task.nextAction, humanGate: task.humanGate, completion: task.completion ?? null, evidenceRefs: task.evidenceRefs, links: task.links };
 }
 
 function normalizeStatus(value) {

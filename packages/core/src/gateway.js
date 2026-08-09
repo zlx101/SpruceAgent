@@ -286,7 +286,7 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       method: "POST",
       path: "/v1/execution-tasks/:taskId/update",
       authRequired: true,
-      description: "Update task control state; human waiting requires a concrete gate.",
+      description: "Update task control state; human waiting requires a concrete gate and first completion requires a recorded outcome.",
     },
     {
       id: "artifacts.list",

@@ -647,8 +647,11 @@ async function handleExecutionTaskAction(button) {
     }
     if (button.dataset.action === "execution-task-complete") {
       if (!window.confirm("Mark this control task completed? This does not approve or execute anything.")) return;
+      const completionSummary = window.prompt("Record the completed outcome or verification basis for the audit ledger:");
+      if (!completionSummary?.trim()) return;
       task = await post(`/v1/execution-tasks/${encodeURIComponent(taskId)}/update`, {
         status: "completed",
+        completionSummary: completionSummary.trim(),
         actor: "workbench-user",
       });
     }
