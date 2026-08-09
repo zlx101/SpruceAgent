@@ -255,6 +255,7 @@ test("execution tasks preserve ownership, gates, evidence, and operator attentio
   assert.equal(completed.completion.summary, "Focused control-state checks completed");
   assert.ok(completed.completion.recordedAt);
   assert.throws(() => claimExecutionTask(store, task.id, { owner: "coding-agent" }), /cannot claim terminal/);
+  assert.throws(() => updateExecutionTask(store, task.id, { status: "in_progress" }), /cannot reopen terminal/);
 });
 
 test("execution task evidence resolves typed local records without granting authority", () => {

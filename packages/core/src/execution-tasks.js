@@ -90,6 +90,9 @@ export function claimExecutionTask(store, taskId, input = {}) {
 export function updateExecutionTask(store, taskId, input = {}) {
   const task = getExecutionTask(store, taskId);
   const status = input.status === undefined ? task.status : normalizeStatus(input.status);
+  if (["completed", "cancelled"].includes(task.status) && status !== task.status) {
+    throw new Error(`cannot reopen terminal execution task: ${taskId}; create a follow-up task instead`);
+  }
   const humanGate = status === "waiting_for_human"
     ? requiredText(input.humanGate ?? task.humanGate, "humanGate", 500)
     : input.humanGate === undefined ? task.humanGate : optionalText(input.humanGate, 500);

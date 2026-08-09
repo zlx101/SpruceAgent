@@ -39,6 +39,7 @@ Each record includes a bounded goal, optional scope and owner, next action, conc
 - Claiming uses a durable owner mutex. A task already claimed by a different owner cannot be claimed again.
 - `waiting_for_human` requires a non-empty concrete `humanGate`.
 - `completed` and `cancelled` clear `nextAction`; terminal tasks cannot be claimed.
+- Terminal tasks cannot be reopened through an update. A regression or newly discovered scope must be represented by a new follow-up task, keeping the original task's outcome record intact.
 - The first transition to `completed` requires a bounded `completionSummary`, retained with its recorder and timestamp. It is an operator's auditable outcome statement, not an execution authorization or a claim that the linked evidence was independently verified.
 - All create, claim, and update events are appended to the audit ledger.
 - The board orders unresolved attention as `waiting_for_human`, `blocked`, `in_progress`, then `open`.
