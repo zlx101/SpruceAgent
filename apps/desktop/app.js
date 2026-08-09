@@ -1614,6 +1614,7 @@ function render() {
 
 function renderSystemOverview(status, freshness) {
   nodes.systemOverview.replaceChildren();
+  const autopilotRunner = status?.autopilotRunner;
   const modules = [
     ["ContextOS", `${status?.indexedDocumentCount ?? 0} indexed`, freshness?.status ?? "unknown"],
     ["Memory", `${status?.memoryCount ?? 0} notes`, "available"],
@@ -1623,6 +1624,7 @@ function renderSystemOverview(status, freshness) {
     ["Agent Mesh", `${status?.agentAdapterCount ?? 0} adapters / ${status?.taskRouteCount ?? 0} routes`, "available"],
     ["Execution Tasks", `${status?.executionTaskCount ?? 0} tasks / ${status?.executionTaskEvidenceIssueCount ?? 0} evidence issues / ${status?.executionTaskClosureDiagnosticCount ?? 0} closure diagnostics`, (status?.executionTaskEvidenceIssueCount || status?.executionTaskClosureDiagnosticCount) ? "blocked" : "available"],
     ["Autopilot", `${status?.autopilotCount ?? 0} rules / ${status?.autopilotDueCount ?? 0} due`, status?.autopilotDueCount ? "pending" : status?.autopilotCount ? "available" : "empty"],
+    ["Autopilot Runner", autopilotRunner ? `${autopilotRunner.running ? "running" : "stopped"} / ${autopilotRunner.intervalMs}ms / ${autopilotRunner.lastResult?.resultCount ?? 0} last results` : "not attached", autopilotRunner?.lastError ? "blocked" : autopilotRunner?.running ? "available" : "empty"],
     ["Fleet", `${status?.fleetRunCount ?? 0} runs`, status?.fleetRunCount ? "available" : "empty"],
     ["Artifacts", `${status?.artifactCount ?? 0} artifacts`, "available"],
   ];

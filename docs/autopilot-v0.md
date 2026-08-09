@@ -91,4 +91,12 @@ The Workbench exposes the same lifecycle actions with an explicit confirmation a
 
 ## Opt-in local runner
 
-`spruce autopilot runner` is the built-in foreground polling host. It performs one safe due tick at startup, then repeats at the bounded `--intervalMs` interval (1,000 to 3,600,000 milliseconds). It reports a health snapshot on start and on a `SIGINT` / `SIGTERM` shutdown. It is never started automatically by rule creation, the Workbench, or Gateway startup.
+`spruce autopilot runner` is the built-in foreground polling host. It performs one safe due tick at startup, then repeats at the bounded `--intervalMs` interval (1,000 to 3,600,000 milliseconds). It reports a health snapshot on start and on a `SIGINT` / `SIGTERM` shutdown. It is never started automatically by rule creation or the Workbench.
+
+For a single local operational process, Gateway can explicitly host the same runner:
+
+```bash
+npm run spruce -- gateway serve --autopilotPollMs 60000
+```
+
+This option is off by default. When supplied, Gateway performs one safe due tick before listening, starts the bounded polling timer only after it is listening, and stops that timer when the Gateway server closes. `GET /v1/status` then includes an `autopilotRunner` health snapshot; it is `null` when no runner is attached. The Workbench displays that Gateway-reported state, including the last tick result or error. Neither hosting mode grants task execution authority: every tick can only create the same open local Execution Tasks described above.

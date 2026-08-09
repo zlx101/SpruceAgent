@@ -65,6 +65,7 @@ import { approveTicket, getApprovalTicket, listApprovalTickets, rejectTicket } f
 import { getApprovalQueue, getApprovalQueueContract } from "./approval-queue.js";
 import { claimExecutionTask, createExecutionTask, createExecutionTaskFollowUp, getExecutionTask, getExecutionTaskBoard, getExecutionTaskClosure, getExecutionTaskContract, getExecutionTaskEvidence, getExecutionTaskLineage, handoffExecutionTask, listExecutionTasks, resumeExecutionTask, updateExecutionTask } from "./execution-tasks.js";
 import { createAutopilot, getAutopilot, getAutopilotContract, listAutopilotTriggers, listAutopilots, listDueAutopilots, runDueAutopilots, setAutopilotEnabled, triggerAutopilot } from "./autopilots.js";
+import { createAutopilotRunner } from "./autopilot-runner.js";
 import { getArtifact, getArtifactContract, listArtifacts } from "./artifacts.js";
 import { assessWorkspaceIndexFreshness, buildWorkspaceIndex, readWorkspaceIndex, searchWorkspaceContext } from "./context.js";
 import { createContextEvidencePack, getContextEvidenceContract } from "./context-evidence.js";
@@ -1417,12 +1418,20 @@ export async function startGatewayServer(store, options = {}) {
   }
 
   const token = ensureGatewayToken(store);
-  const server = createGatewayServer(store, options);
+  const autopilotRunner = options.autopilotPollMs === undefined || options.autopilotPollMs === null
+    ? null
+    : createAutopilotRunner(store, { intervalMs: options.autopilotPollMs, actor: "gateway-autopilot-runner" });
+  const startupTick = autopilotRunner ? await autopilotRunner.tick() : null;
+  const server = createGatewayServer(store, { ...options, autopilotRunner });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, host, resolve);
   });
   const address = server.address();
+  if (autopilotRunner) {
+    autopilotRunner.start();
+    server.once("close", () => autopilotRunner.stop());
+  }
   return {
     server,
     host,
@@ -1430,6 +1439,8 @@ export async function startGatewayServer(store, options = {}) {
     tokenCreated: token.created,
     token: token.token,
     tokenPrefix: token.tokenPrefix,
+    autopilotRunner: autopilotRunner?.snapshot() ?? null,
+    autopilotStartupTick: startupTick,
   };
 }
 
@@ -1457,7 +1468,7 @@ export function createGatewayHandler(store, options = {}) {
       }
 
       const body = await readBody(request);
-      const result = await routeRequest(store, request, url, body);
+      const result = await routeRequest(store, request, url, body, options);
       return sendJson(response, result.statusCode ?? 200, result.body);
     } catch (error) {
       return sendJson(response, error.statusCode ?? 500, {
@@ -1468,14 +1479,14 @@ export function createGatewayHandler(store, options = {}) {
   };
 }
 
-async function routeRequest(store, request, url, body) {
+async function routeRequest(store, request, url, body, options = {}) {
   const pathParts = url.pathname.split("/").filter(Boolean);
   if (pathParts[0] !== "v1") {
     return notFound();
   }
 
   if (request.method === "GET" && url.pathname === "/v1/status") {
-    return ok(gatewayStatus(store));
+    return ok(gatewayStatus(store, options.autopilotRunner));
   }
 
   if (request.method === "GET" && url.pathname === "/v1/inbox") {
@@ -2340,7 +2351,7 @@ async function routeRequest(store, request, url, body) {
   return notFound();
 }
 
-function gatewayStatus(store) {
+function gatewayStatus(store, autopilotRunner = null) {
   const index = readWorkspaceIndex(store);
   const executionTaskBoard = getExecutionTaskBoard(store);
   const autopilots = listAutopilots(store);
@@ -2368,6 +2379,7 @@ function gatewayStatus(store) {
     executionTaskClosureDiagnosticCount: executionTaskBoard.closureAttention.length,
     autopilotCount: autopilots.items.length,
     autopilotDueCount: dueAutopilots.items.length,
+    autopilotRunner: autopilotRunner?.snapshot() ?? null,
     fleetRunCount: listFleetRuns(store).summary.total,
     artifactCount: listArtifacts(store).summary.total,
     evaluationCount: listEvaluations(store).length,

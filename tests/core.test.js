@@ -2299,6 +2299,7 @@ test("gateway serves workbench static assets without API auth", async () => {
     assert.match(css.body, /Agent Workbench|summary-grid|overview-grid|overview-item|work-section|detail-panel|run-form|draft-step-list|draft-step-fields|source-map-list|evaluation-preview|artifact-preview|evidence-preview|fleet-run-preview|agent-plan-preview|agent-workspace-preview|agent-launch-preview/);
     assert.match(js.body, /submitRun|searchContextEvidenceFromWorkbench|renderSystemOverview|renderContextEvidence|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|prepareAgentWorkspaceFromWorkbench|previewAgentLaunch|loadAgentWorkspace|loadAgentLaunch|createLaunchReviewFromWorkbench|loadLaunchReview|probeCapabilitiesFromWorkbench|routeTaskFromWorkbench|loadTaskRoute|renderAgentAdapters|renderAgentPlanPanel|renderAgentWorkspacePanel|renderAgentLaunches|renderAgentLaunchPanel|renderLaunchReviews|renderLaunchReviewPanel|renderCapabilityProbePanel|renderTaskRoutes|renderTaskRoutePanel|renderFleetRuns|renderFleetRunPanel|renderExecutionTasks|renderAutopilots|renderAutopilotPanel|runDueAutopilotsFromWorkbench|loadAutopilotTriggers|createExecutionTaskFromWorkbench|handleExecutionTaskAction|execution-task-links|execution-task-follow-up|execution-task-closure|execution-task-lineage|execution-task-handoff|execution-task-cancel|execution-task-block|execution-task-resume|execution-task-reference-view|loadExecutionTaskReference|completionSummary|cancellationSummary|resumptionSummary|handoffSummary|ifUpdatedAt|blocker|loadExecutionTasks|fleetRunViewButton|loadFleetRun|taskRouteViewButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|agentWorkspaces|agentLaunches|launchReviews|capabilityProbes|taskRoutes|fleetRuns|executionTasks|autopilots|resume|inbox|approval/i);
     assert.match(js.body, /setAutopilotEnabledFromWorkbench|autopilot-enable|autopilot-disable|ifUpdatedAt/);
+    assert.match(js.body, /Autopilot Runner/);
     assert.match(js.body, /createAutopilotFromWorkbench|autopilot-create-button|intervalMinutes/);
     assert.match(mark.body, /SpruceAgent mark/);
   } finally {
@@ -2408,6 +2409,7 @@ test("gateway client reads status and route contract", async () => {
     assert.equal(status.executionTaskClosureDiagnosticCount, 0);
     assert.equal(status.autopilotCount, 0);
     assert.equal(status.autopilotDueCount, 0);
+    assert.equal(status.autopilotRunner, null);
     assert.equal(status.outcomeFixtureCount, 0);
     assert.equal(status.outcomeResultCount, 0);
     assert.equal(artifacts.status, "empty");
@@ -2571,6 +2573,29 @@ test("gateway client manages due Autopilot task creation without executing an ag
     const replay = await client.triggerAutopilot(rule.id, { triggerKey: due.results[0].triggerKey });
     assert.equal(replay.reused, true);
     assert.equal((await client.listAutopilotTriggers(rule.id)).items.length, 1);
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
+
+test("gateway optionally hosts an observable safe Autopilot runner", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  createAutopilot(store, {
+    name: "Gateway runner review",
+    goal: "Review a gateway-runner control task",
+    intervalMinutes: 60,
+    firstDueAt: "2000-01-01T00:00:00.000Z",
+  });
+  const gateway = await startGatewayServer(store, { port: 0, autopilotPollMs: 1000 });
+  const client = createGatewayClient({ baseUrl: `http://${gateway.host}:${gateway.port}`, token: gateway.token });
+  try {
+    assert.equal(gateway.autopilotRunner.running, true);
+    assert.equal(gateway.autopilotStartupTick.result.results.length, 1);
+    assert.equal(listExecutionTasks(store).summary.total, 1);
+    const status = await client.status();
+    assert.equal(status.autopilotRunner.running, true);
+    assert.equal(status.autopilotRunner.lastResult.resultCount, 1);
   } finally {
     await closeServer(gateway.server);
   }

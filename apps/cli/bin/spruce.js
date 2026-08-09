@@ -1526,6 +1526,7 @@ async function handleGateway(action, args) {
     const result = await startGatewayServer(store, {
       host,
       port,
+      autopilotPollMs: flags.autopilotPollMs,
     });
     const baseUrl = `http://${result.host}:${result.port}`;
     console.log(JSON.stringify({
@@ -1538,6 +1539,7 @@ async function handleGateway(action, args) {
       tokenPrefix: result.tokenPrefix,
       authHeader: result.token ? `Authorization: Bearer ${result.token}` : "Authorization: Bearer <gateway-token>",
       localOnly: true,
+      autopilotRunner: result.autopilotRunner,
     }, null, 2));
     return await new Promise(() => {});
   }
@@ -2363,7 +2365,7 @@ Usage:
   ${executable} gateway token --rotate
   ${executable} gateway contract
   ${executable} gateway call --path /v1/status --token <token>
-  ${executable} gateway serve [--host 127.0.0.1] [--port 7357]
+  ${executable} gateway serve [--host 127.0.0.1] [--port 7357] [--autopilotPollMs 60000]
 
 Workspace:
   ${path.join(process.cwd(), ".spruceagent")}
