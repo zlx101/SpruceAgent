@@ -99,6 +99,7 @@ Workbench v0 supports:
 - inspect a Fleet Run detail through `GET /v1/fleet-runs/:fleetRunId`
 - inspect the prioritized durable task board through `GET /v1/execution-tasks/board`
 - create, claim, update, and inspect Execution Tasks through the existing authenticated Gateway routes
+- replace an Execution Task's typed local links through an explicit Workbench prompt; this only updates task metadata and audit history
 - create Context Evidence packs through `POST /v1/context/evidence`
 
 ## Safety Boundary
