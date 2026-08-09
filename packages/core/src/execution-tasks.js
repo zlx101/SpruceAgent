@@ -3,10 +3,12 @@ import path from "node:path";
 import { createId, nowIso } from "./id.js";
 import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
 import { getArtifact } from "./artifacts.js";
+import { getAgentLaunch } from "./agent-launcher.js";
 import { getAgentTrial } from "./agent-trials.js";
 import { getFleetRun } from "./fleet-runs.js";
 import { getLaunchReview } from "./launch-review.js";
 import { getTaskRoute } from "./task-router.js";
+import { listTraces } from "./trace.js";
 
 export const EXECUTION_TASK_CONTRACT = Object.freeze({
   version: "0.1.0",
@@ -379,11 +381,23 @@ function normalizeStatus(value) {
 function normalizeRefs(value) { return normalizeList(value, 160, "evidenceRefs"); }
 function normalizeLinks(value) { return normalizeList(value, 240, "links"); }
 function resolveLink(store, link) {
-  const match = /^(artifact|agent_trial|fleet_run|launch_review|task_route):(.+)$/.exec(link);
-  if (!match) return { link, status: "unsupported", authority: "reference_only", message: "Use a typed local link such as artifact:<id> or agent_trial:<id>." };
+  const match = /^(agent_launch|agent_trial|artifact|fleet_run|launch_review|task_route|trace):(.+)$/.exec(link);
+  if (!match) return { link, status: "unsupported", authority: "reference_only", message: "Use a typed local link such as agent_launch:<id>, artifact:<id>, or trace:<id>." };
   const [, kind, id] = match;
   if (!/^[A-Za-z0-9_-]{1,160}$/.test(id)) return { link, kind, id, status: "unsupported", authority: "reference_only", message: "Typed local link IDs must be a single safe identifier." };
-  const readers = { artifact: getArtifact, agent_trial: getAgentTrial, fleet_run: getFleetRun, launch_review: getLaunchReview, task_route: getTaskRoute };
+  const readers = {
+    agent_launch: getAgentLaunch,
+    agent_trial: getAgentTrial,
+    artifact: getArtifact,
+    fleet_run: getFleetRun,
+    launch_review: getLaunchReview,
+    task_route: getTaskRoute,
+    trace: (source, traceId) => {
+      const trace = listTraces(source).find((item) => item.id === traceId);
+      if (!trace) throw new Error(`trace not found: ${traceId}`);
+      return trace;
+    },
+  };
   try {
     const record = readers[kind](store, id);
     return { link, kind, id, status: "resolved", recordStatus: record.status ?? null, authority: "reference_only" };

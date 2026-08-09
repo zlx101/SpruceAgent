@@ -96,11 +96,11 @@ npm run spruce -- task board
 npm run spruce -- task contract
 ```
 
-`--evidenceRefs` and `--links` accept comma-separated values. A caller can use IDs from existing routes, traces, artifacts, launch reviews, or trials, but the ledger does not reinterpret those values as authority.
+`--evidenceRefs` and `--links` accept comma-separated values. Resolvable `--links` include `agent_launch:<id>`, `agent_trial:<id>`, `artifact:<id>`, `fleet_run:<id>`, `launch_review:<id>`, `task_route:<id>`, and `trace:<id>`; they return only local record presence and status, and never reinterpret evidence as authority.
 
 `--ifUpdatedAt` is optional on `claim`, `follow-up`, `handoff`, `resume`, and `update`; it is a local optimistic-concurrency guard, not an approval or execution token.
 
-For a resolvable local link, use `kind:<id>` where `<id>` is a single safe identifier (`A-Z`, `a-z`, `0-9`, `_`, or `-`, at most 160 characters). Paths, URLs, and IDs containing separators are reported as unsupported and are never passed to a local record reader.
+For a resolvable local link, use one of the supported `kind:<id>` values above, where `<id>` is a single safe identifier (`A-Z`, `a-z`, `0-9`, `_`, or `-`, at most 160 characters). Paths, URLs, and IDs containing separators are reported as unsupported and are never passed to a local record reader.
 
 ## Gateway and client
 
