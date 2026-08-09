@@ -4429,6 +4429,13 @@ test("task router assigns roles separately and routes supported execute adapters
   assert.equal(getSquad(store, localSquad.id).executionTaskId, localTask.id);
   assert.equal(listSquads(store).items.find((item) => item.id === localSquad.id).executionTaskId, localTask.id);
   assert.equal(getExecutionTaskEvidence(store, localTask.id).linkedLaunches.length, 1);
+  assert.deepEqual(getExecutionTaskEvidence(store, localTask.id).linkedSquads, [{
+    id: localSquad.id,
+    status: "planned",
+    routeId: localSquadRoute.id,
+    memberCount: 1,
+    authority: "declared_reference",
+  }]);
   assert.equal(approvalRequest.reused, false);
   assert.equal(reusedApprovalRequest.reused, true);
   assert.equal(reusedApprovalRequest.launch.id, approvalRequest.launch.id);
@@ -5100,6 +5107,13 @@ test("fleet run prepares comparable Codex candidates and builds a review matrix"
   const evidence = getExecutionTaskEvidence(store, task.id);
   assert.equal(evidence.linkedLaunches.length, 4);
   assert.equal(evidence.linkedLaunches.every((launch) => launch.authority === "declared_reference"), true);
+  assert.deepEqual(evidence.linkedFleetRuns, [{
+    id: fleet.id,
+    status: "completed",
+    traceId: fleet.traceId,
+    routeId: route.id,
+    authority: "declared_reference",
+  }]);
   const progress = getFleetRunProgress(store, fleet.id);
   assert.equal(progress.status, "completed");
   assert.equal(progress.progress.completed, 2);

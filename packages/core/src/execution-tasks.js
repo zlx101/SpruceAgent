@@ -5,9 +5,10 @@ import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
 import { getArtifact } from "./artifacts.js";
 import { getAgentLaunch, listAgentLaunches } from "./agent-launcher.js";
 import { getAgentTrial } from "./agent-trials.js";
-import { getFleetRun } from "./fleet-runs.js";
+import { getFleetRun, listFleetRuns } from "./fleet-runs.js";
 import { getLaunchReview } from "./launch-review.js";
 import { getTaskRoute } from "./task-router.js";
+import { listSquads } from "./squads.js";
 import { listTraces } from "./trace.js";
 
 export const EXECUTION_TASK_CONTRACT = Object.freeze({
@@ -25,6 +26,7 @@ export const EXECUTION_TASK_CONTRACT = Object.freeze({
     "Ownership changes require an explicit handoff with the current owner, a handoff summary, and a next action; generic updates cannot transfer ownership.",
     "A follow-up links durable control state to a terminal task; it does not reopen, rerun, or authorize the prior task.",
     "Terminal evidence is captured as a read-only local snapshot for audit; it is not an approval, independent verification, or execution authority.",
+    "Declared Fleet Run and Squad references are read-only evidence projections; they never change task state or authorize their orchestration.",
   ],
 });
 
@@ -327,6 +329,12 @@ function captureEvidence(store, task, capturedAt) {
     linkedLaunches: listAgentLaunches(store).items
       .filter((launch) => launch.executionTaskId === task.id)
       .map((launch) => ({ id: launch.id, status: launch.status, traceId: launch.traceId, authority: "declared_reference" })),
+    linkedFleetRuns: listFleetRuns(store).items
+      .filter((fleet) => fleet.executionTaskId === task.id)
+      .map((fleet) => ({ id: fleet.id, status: fleet.status, traceId: fleet.traceId, routeId: fleet.routeId, authority: "declared_reference" })),
+    linkedSquads: listSquads(store).items
+      .filter((squad) => squad.executionTaskId === task.id)
+      .map((squad) => ({ id: squad.id, status: squad.status, routeId: squad.routeId, memberCount: squad.memberCount, authority: "declared_reference" })),
     evidenceRefs: task.evidenceRefs.map((ref) => ({ ref, status: "declared", authority: "reference_only" })),
     limits: EXECUTION_TASK_CONTRACT.safetyBoundary,
   };
