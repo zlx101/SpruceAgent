@@ -7,6 +7,7 @@ Approval Queue v0 gives SpruceAgent one read-only decision queue for approvals a
 - Lists pending approval tickets as `pending_decision`.
 - Lists approved candidate-step tickets that can resume agent runs as `ready_to_resume`.
 - Lists approved workflow tool tickets that can resume workflow runs as `ready_to_resume`.
+- Lists approved Agent Trial attestation tickets as `ready_to_resume`; their resume action carries only the launch and approval identifiers, while the acceptance command remains in the exact server-side approval ticket.
 - Lists consumed tickets as `completed`.
 - Provides route hints for `approve`, `reject`, and `resume` actions.
 - Feeds Run Inbox, Run Detail, Workflow Inbox, Workflow Detail, CLI, and Gateway.

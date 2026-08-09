@@ -1642,7 +1642,9 @@ async function handleAgent(action, args = []) {
     const [launchId, ...flagArgs] = args;
     if (!launchId) throw new Error("usage: spruce agent trial-attest <launchId> --command <acceptanceCommand> [--approvalId <id>] [--timeoutMs <ms>] [--noWorkspaceChange]");
     const flags = parseFlags(flagArgs);
-    if (!flags.command) throw new Error("--command is required");
+    if (!flags.command && !flags.approvalId) {
+      throw new Error("--command is required when --approvalId is not supplied");
+    }
     printJson(await attestAgentLaunchTrial(store, {
       launchId,
       acceptanceCommand: flags.command,
@@ -2060,6 +2062,7 @@ Usage:
   ${executable} agent external-launcher-contract
   ${executable} agent review-contract
   ${executable} agent trial-attest <launchId> --command "npm test" [--approvalId <id>] [--timeoutMs 120000]
+  ${executable} agent trial-attest <launchId> --approvalId <approvedAttestationId>
   ${executable} agent trial-record <adapterId> --processExitCode 0 --changedFileCount 1 --baselineWorkspaceClean true --acceptanceStatus passed --acceptanceExitCode 0 --acceptanceWorkspaceStable true --policyStatus allowed
   ${executable} agent trials [--adapterId codex-cli] [--status passed|failed] [--attested true|false]
   ${executable} agent trial-detail <trialId>

@@ -93,7 +93,12 @@ spruce agent trial-attestation-contract
 
 Manual observations must explicitly provide baseline cleanliness and acceptance workspace stability; omitted evidence cannot produce a passing Trial.
 
-The first `trial-attest` call returns `requires_approval`. Approve that exact ticket, then repeat the command with `--approvalId`.
+The first `trial-attest` call returns `requires_approval`. Approve that exact ticket, then either resume it from `spruce approval queue` or invoke the same launch with `--approvalId`. The CLI reloads the acceptance command exclusively from the exact server-side approval ticket, so a post-approval resume does not require re-entering or exposing the command:
+
+```bash
+npm run spruce -- approval queue --status ready_to_resume
+npm run spruce -- agent trial-attest <launchId> --approvalId <approvedAttestationId>
+```
 
 ## Gateway
 
