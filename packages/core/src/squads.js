@@ -31,6 +31,7 @@ export function getSquadContract() {
 export function createSquad(store, input = {}) {
   const routeId = String(input.routeId ?? "").trim();
   if (!routeId) throw new Error("routeId is required");
+  const executionTaskId = normalizeExecutionTaskId(input.executionTaskId);
   const route = getTaskRoute(store, routeId);
   if (route.status !== "routed") throw new Error("squad requires a fully routed Task Route");
   const members = route.assignments.map((assignment) => ({
@@ -49,6 +50,7 @@ export function createSquad(store, input = {}) {
     id: createId("squad"),
     name: String(input.name ?? route.goal).trim() || route.goal,
     routeId: route.id,
+    executionTaskId,
     goal: route.goal,
     createdAt,
     updatedAt: createdAt,
@@ -160,6 +162,7 @@ export async function requestSquadMemberApproval(store, squadId, input = {}, run
   if (readiness.status !== "ready_for_approval") throw new Error("Squad member is not ready for an execution approval request");
   const launch = await launchAgentWorkspace(store, {
     workspaceId: member.workspace.id,
+    executionTaskId: squad.executionTaskId,
     execute: true,
     trustMode: "approve",
     actor: input.actor ?? "local-user",
@@ -229,7 +232,7 @@ function assertAcyclic(roles, dependencies) {
 }
 
 function squadListItem(squad) {
-  return { id: squad.id, name: squad.name, routeId: squad.routeId, goal: squad.goal, status: squad.status, createdAt: squad.createdAt, updatedAt: squad.updatedAt, memberCount: squad.members.length, handoffCount: squad.handoffs.length };
+  return { id: squad.id, name: squad.name, routeId: squad.routeId, executionTaskId: squad.executionTaskId ?? null, goal: squad.goal, status: squad.status, createdAt: squad.createdAt, updatedAt: squad.updatedAt, memberCount: squad.members.length, handoffCount: squad.handoffs.length };
 }
 
 function persistUpdatedSquad(store, squad, eventType, details) {
@@ -249,3 +252,10 @@ function safeGetLaunch(store, launchId) {
 
 function squadPath(store, squadId) { return path.join(store.root, "squads", `${squadId}.json`); }
 function squadIndexPath(store) { return path.join(store.root, "squad-index.jsonl"); }
+
+function normalizeExecutionTaskId(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const id = String(value).trim();
+  if (!/^[A-Za-z0-9_-]{1,160}$/.test(id)) throw new Error("executionTaskId must be a single safe identifier");
+  return id;
+}

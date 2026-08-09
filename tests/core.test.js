@@ -4406,7 +4406,8 @@ test("task router assigns roles separately and routes supported execute adapters
     probeId: probe.id,
     mode: "execute",
   });
-  const localSquad = createSquad(store, { routeId: localSquadRoute.id, dependencies: [] });
+  const localTask = createExecutionTask(store, { goal: "Audit the Squad acceptance trial" });
+  const localSquad = createSquad(store, { routeId: localSquadRoute.id, dependencies: [], executionTaskId: localTask.id });
   const localWorkspace = prepareAgentWorkspace(store, {
     adapterId: "local-shell-agent",
     goal: "Run the deterministic acceptance check",
@@ -4424,6 +4425,10 @@ test("task router assigns roles separately and routes supported execute adapters
     purpose: "trial",
   });
   assert.equal(approvalRequest.launch.status, "requires_approval");
+  assert.equal(approvalRequest.launch.executionTaskId, localTask.id);
+  assert.equal(getSquad(store, localSquad.id).executionTaskId, localTask.id);
+  assert.equal(listSquads(store).items.find((item) => item.id === localSquad.id).executionTaskId, localTask.id);
+  assert.equal(getExecutionTaskEvidence(store, localTask.id).linkedLaunches.length, 1);
   assert.equal(approvalRequest.reused, false);
   assert.equal(reusedApprovalRequest.reused, true);
   assert.equal(reusedApprovalRequest.launch.id, approvalRequest.launch.id);
