@@ -74,6 +74,7 @@ import {
   getExternalCliLauncherContract,
   getExecutionTask,
   getExecutionTaskBoard,
+  getExecutionTaskEvidence,
   getExecutionTaskContract,
   getAgentTrial,
   getAgentTrialContract,
@@ -245,6 +246,34 @@ test("execution tasks preserve ownership, gates, evidence, and operator attentio
   assert.equal(board.attention[0].id, task.id);
   assert.throws(() => updateExecutionTask(store, task.id, { status: "waiting_for_human", humanGate: "" }), /humanGate is required/);
   assert.throws(() => claimExecutionTask(store, task.id, { owner: "other-agent" }), /already claimed/);
+});
+
+test("execution task evidence resolves typed local records without granting authority", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const trial = recordAgentTrial(store, {
+    adapterId: "codex-cli",
+    category: "coding_smoke",
+    processExitCode: 1,
+    durationMs: 1,
+    changedFileCount: 0,
+    acceptanceStatus: "not_run",
+    policyStatus: "allowed",
+  });
+  const task = createExecutionTask(store, {
+    goal: "Inspect trial evidence",
+    links: [`agent_trial:${trial.id}`, "artifact:artifact_missing", "free-form-note"],
+    evidenceRefs: ["tests/core.test.js"],
+  });
+  const evidence = getExecutionTaskEvidence(store, task.id);
+
+  assert.equal(evidence.interface, "spruceagent.execution-task-evidence");
+  assert.equal(evidence.links[0].status, "resolved");
+  assert.equal(evidence.links[0].recordStatus, "failed");
+  assert.equal(evidence.links[0].authority, "reference_only");
+  assert.equal(evidence.links[1].status, "missing");
+  assert.equal(evidence.links[2].status, "unsupported");
+  assert.equal(evidence.evidenceRefs[0].authority, "reference_only");
 });
 
 test("doctor reports alpha readiness without failed checks", () => {

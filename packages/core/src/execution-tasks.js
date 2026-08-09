@@ -2,6 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { createId, nowIso } from "./id.js";
 import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { getArtifact } from "./artifacts.js";
+import { getAgentTrial } from "./agent-trials.js";
+import { getFleetRun } from "./fleet-runs.js";
+import { getLaunchReview } from "./launch-review.js";
+import { getTaskRoute } from "./task-router.js";
 
 export const EXECUTION_TASK_CONTRACT = Object.freeze({
   version: "0.1.0",
@@ -112,6 +117,18 @@ export function getExecutionTaskBoard(store) {
   };
 }
 
+export function getExecutionTaskEvidence(store, taskId) {
+  const task = getExecutionTask(store, taskId);
+  return {
+    version: EXECUTION_TASK_CONTRACT.version,
+    interface: "spruceagent.execution-task-evidence",
+    taskId: task.id,
+    links: task.links.map((link) => resolveLink(store, link)),
+    evidenceRefs: task.evidenceRefs.map((ref) => ({ ref, status: "declared", authority: "reference_only" })),
+    limits: EXECUTION_TASK_CONTRACT.safetyBoundary,
+  };
+}
+
 function updateTask(store, task, changes, type, actor, note) {
   const now = nowIso();
   const updated = {
@@ -142,6 +159,18 @@ function normalizeStatus(value) {
 }
 function normalizeRefs(value) { return normalizeList(value, 160, "evidenceRefs"); }
 function normalizeLinks(value) { return normalizeList(value, 240, "links"); }
+function resolveLink(store, link) {
+  const match = /^(artifact|agent_trial|fleet_run|launch_review|task_route):(.+)$/.exec(link);
+  if (!match) return { link, status: "unsupported", authority: "reference_only", message: "Use a typed local link such as artifact:<id> or agent_trial:<id>." };
+  const [, kind, id] = match;
+  const readers = { artifact: getArtifact, agent_trial: getAgentTrial, fleet_run: getFleetRun, launch_review: getLaunchReview, task_route: getTaskRoute };
+  try {
+    const record = readers[kind](store, id);
+    return { link, kind, id, status: "resolved", recordStatus: record.status ?? null, authority: "reference_only" };
+  } catch (error) {
+    return { link, kind, id, status: "missing", authority: "reference_only", message: error.message };
+  }
+}
 function normalizeList(value, limit, name) {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) throw new Error(`${name} must be an array`);
