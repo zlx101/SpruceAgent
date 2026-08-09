@@ -2129,6 +2129,8 @@ test("gateway client reads status and route contract", async () => {
     assert.equal(status.agentAdapterCount >= 5, true);
     assert.equal(status.agentWorkspaceCount, 0);
     assert.equal(status.agentLaunchCount, 0);
+    assert.equal(status.executionTaskCount, 0);
+    assert.equal(status.executionTaskEvidenceIssueCount, 0);
     assert.equal(status.outcomeFixtureCount, 0);
     assert.equal(status.outcomeResultCount, 0);
     assert.equal(artifacts.status, "empty");

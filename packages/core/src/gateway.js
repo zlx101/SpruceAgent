@@ -2238,6 +2238,8 @@ function gatewayStatus(store) {
     capabilityProbeCount: listCapabilityProbes(store).summary.total,
     agentTrialCount: listAgentTrials(store).summary.total,
     taskRouteCount: listTaskRoutes(store).summary.total,
+    executionTaskCount: listExecutionTasks(store).summary.total,
+    executionTaskEvidenceIssueCount: getExecutionTaskBoard(store).evidenceAttention.length,
     fleetRunCount: listFleetRuns(store).summary.total,
     artifactCount: listArtifacts(store).summary.total,
     evaluationCount: listEvaluations(store).length,

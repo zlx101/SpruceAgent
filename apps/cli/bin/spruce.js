@@ -221,6 +221,8 @@ async function main() {
       launchReviewCount: listLaunchReviews(store).summary.total,
       capabilityProbeCount: listCapabilityProbes(store).summary.total,
       taskRouteCount: listTaskRoutes(store).summary.total,
+      executionTaskCount: listExecutionTasks(store).summary.total,
+      executionTaskEvidenceIssueCount: getExecutionTaskBoard(store).evidenceAttention.length,
       artifactCount: listArtifacts(store).summary.total,
       evaluationCount: listEvaluations(store).length,
       outcomeFixtureCount: listOutcomeFixtures(store).summary.total,
