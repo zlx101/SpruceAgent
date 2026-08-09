@@ -5268,6 +5268,37 @@ test("agent trials require process, workspace, acceptance, and policy evidence",
   );
 });
 
+test("agent trial ledger treats the last append as latest when timestamps tie", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const createdAt = "2026-01-01T00:00:00.000Z";
+  const base = {
+    createdAt,
+    adapterId: "local-shell-agent",
+    provider: "spruceagent",
+    category: "controlled_trial",
+    evidenceLevel: "launcher_attested_execution_diff_and_acceptance",
+    attestedByLauncher: true,
+    launchId: "agent_launch_tied",
+    failureCodes: [],
+    processExitCode: 0,
+    acceptanceStatus: "passed",
+    acceptanceWorkspaceStable: true,
+    changedFileCount: 1,
+    durationMs: 100,
+  };
+  fs.writeFileSync(path.join(store.root, "agent-trial-index.jsonl"), [
+    JSON.stringify({ ...base, id: "agent_trial_earlier", status: "passed" }),
+    JSON.stringify({ ...base, id: "agent_trial_later", status: "failed", failureCodes: ["acceptance_not_passed"], acceptanceStatus: "failed" }),
+  ].join("\n") + "\n", "utf8");
+
+  const listed = listAgentTrials(store, { adapterId: "local-shell-agent" });
+
+  assert.equal(listed.items[0].id, "agent_trial_later");
+  assert.equal(listed.summary.byAdapter["local-shell-agent"].latestAttestedStatus, "failed");
+  assert.equal(listed.summary.byAdapter["local-shell-agent"].latestAttestedTrialId, "agent_trial_later");
+});
+
 test("capability probe carries empirical trial evidence without treating installation as validation", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   const binDir = path.join(dir, "bin");

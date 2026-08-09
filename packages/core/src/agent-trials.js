@@ -141,10 +141,15 @@ export function getAgentTrial(store, trialId) {
 
 export function listAgentTrials(store, options = {}) {
   const trials = readJsonl(trialIndexPath(store))
-    .filter((item) => !options.adapterId || item.adapterId === options.adapterId)
-    .filter((item) => !options.status || item.status === options.status)
-    .filter((item) => options.attested === undefined || Boolean(item.attestedByLauncher) === Boolean(options.attested))
-    .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
+    .map((item, appendIndex) => ({ item, appendIndex }))
+    .filter(({ item }) => !options.adapterId || item.adapterId === options.adapterId)
+    .filter(({ item }) => !options.status || item.status === options.status)
+    .filter(({ item }) => options.attested === undefined || Boolean(item.attestedByLauncher) === Boolean(options.attested))
+    // ISO timestamps have millisecond precision. Preserve append order when
+    // two observations share that timestamp so a later failed attestation can
+    // never be hidden behind an earlier passing one.
+    .sort((left, right) => String(right.item.createdAt).localeCompare(String(left.item.createdAt)) || right.appendIndex - left.appendIndex)
+    .map(({ item }) => item);
   return {
     version: AGENT_TRIAL_CONTRACT.version,
     createdAt: nowIso(),
