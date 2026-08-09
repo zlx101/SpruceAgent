@@ -37,7 +37,7 @@ Each record includes a bounded goal, optional scope and owner, next action, conc
 ## Invariants
 
 - Claiming uses a durable owner mutex. A task already claimed by a different owner cannot be claimed again.
-- An owner cannot be changed through a generic update or resume. A non-terminal claimed task can only move to a distinct owner through an explicit handoff that names the current owner, records a bounded `handoffSummary`, and supplies the incoming owner's `nextAction`; the ledger appends a dedicated `handed_off` audit event.
+- An owner cannot be changed through a generic update or resume. A non-terminal claimed task can only move to a distinct owner through an explicit handoff that names the current owner, records a bounded `handoffSummary`, and supplies the incoming owner's `nextAction`; the ledger appends a dedicated `handed_off` event with both `fromOwner` and incoming `owner` in task history and the audit ledger.
 - `waiting_for_human` requires a non-empty concrete `humanGate`.
 - `blocked` requires a non-empty concrete `blocker`; an unexplained blocked status is rejected.
 - Resuming a `blocked` or `waiting_for_human` task requires both a bounded `resumptionSummary` and an explicit `nextAction`; it clears the stale blocker or human gate and appends a dedicated `resumed` audit event.

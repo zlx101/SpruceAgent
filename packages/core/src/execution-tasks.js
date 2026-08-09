@@ -342,15 +342,17 @@ function terminalDiagnostic(task) {
 
 function updateTask(store, task, changes, type, actor, note) {
   const now = nowIso();
+  const by = optionalText(actor, 120) ?? "local-user";
+  const ownership = task.owner === changes.owner ? {} : { fromOwner: task.owner, owner: changes.owner };
   const updated = {
     ...task,
     ...changes,
     updatedAt: now,
-    history: [...(task.history ?? []), { at: now, type, by: optionalText(actor, 120) ?? "local-user", note }],
+    history: [...(task.history ?? []), { at: now, type, by, note, ...ownership }],
   };
   writeTask(store, updated);
   appendJsonl(indexPath(store), taskSummary(updated));
-  audit(store, updated, `execution_task.${type}`, { by: optionalText(actor, 120) ?? "local-user", note });
+  audit(store, updated, `execution_task.${type}`, { by, note, ...ownership });
   return updated;
 }
 

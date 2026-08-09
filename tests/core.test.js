@@ -289,6 +289,15 @@ test("execution tasks preserve ownership, gates, evidence, and operator attentio
   });
   assert.equal(handedOff.owner, "reviewer");
   assert.equal(handedOff.history.at(-1).type, "handed_off");
+  assert.equal(handedOff.history.at(-1).fromOwner, "coding-agent");
+  assert.equal(handedOff.history.at(-1).owner, "reviewer");
+  const handoffAudit = fs.readFileSync(path.join(store.root, "audit.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+    .findLast((event) => event.type === "execution_task.handed_off");
+  assert.equal(handoffAudit.fromOwner, "coding-agent");
+  assert.equal(handoffAudit.owner, "reviewer");
   assert.throws(() => claimExecutionTask(store, task.id, { owner: "other-agent" }), /already claimed/);
   assert.throws(() => updateExecutionTask(store, task.id, { status: "completed" }), /completionSummary is required/);
   const completed = updateExecutionTask(store, task.id, {
@@ -2269,6 +2278,8 @@ test("gateway client manages durable execution task control without execution", 
     });
     assert.equal(handedOff.owner, "release-reviewer");
     assert.equal(handedOff.history.at(-1).type, "handed_off");
+    assert.equal(handedOff.history.at(-1).fromOwner, "reviewer");
+    assert.equal(handedOff.history.at(-1).owner, "release-reviewer");
     const completed = await client.updateExecutionTask(task.id, {
       status: "completed",
       completionSummary: "Gateway completion payload retained for audit",
