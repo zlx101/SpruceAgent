@@ -64,7 +64,7 @@ import {
 import { approveTicket, getApprovalTicket, listApprovalTickets, rejectTicket } from "./approvals.js";
 import { getApprovalQueue, getApprovalQueueContract } from "./approval-queue.js";
 import { claimExecutionTask, createExecutionTask, createExecutionTaskFollowUp, getExecutionTask, getExecutionTaskBoard, getExecutionTaskClosure, getExecutionTaskContract, getExecutionTaskEvidence, getExecutionTaskLineage, handoffExecutionTask, listExecutionTasks, resumeExecutionTask, updateExecutionTask } from "./execution-tasks.js";
-import { createAutopilot, getAutopilot, getAutopilotContract, listAutopilotTriggers, listAutopilots, listDueAutopilots, runDueAutopilots, triggerAutopilot } from "./autopilots.js";
+import { createAutopilot, getAutopilot, getAutopilotContract, listAutopilotTriggers, listAutopilots, listDueAutopilots, runDueAutopilots, setAutopilotEnabled, triggerAutopilot } from "./autopilots.js";
 import { getArtifact, getArtifactContract, listArtifacts } from "./artifacts.js";
 import { assessWorkspaceIndexFreshness, buildWorkspaceIndex, readWorkspaceIndex, searchWorkspaceContext } from "./context.js";
 import { createContextEvidencePack, getContextEvidenceContract } from "./context-evidence.js";
@@ -379,6 +379,20 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/autopilots/:autopilotId/trigger",
       authRequired: true,
       description: "Trigger one due rule and record its task-creation result; never launches an agent or tool.",
+    },
+    {
+      id: "autopilots.enable",
+      method: "POST",
+      path: "/v1/autopilots/:autopilotId/enable",
+      authRequired: true,
+      description: "Explicitly enable a durable rule without triggering it or granting execution authority.",
+    },
+    {
+      id: "autopilots.disable",
+      method: "POST",
+      path: "/v1/autopilots/:autopilotId/disable",
+      authRequired: true,
+      description: "Explicitly disable a durable rule without deleting its ledger or cancelling existing tasks.",
     },
     {
       id: "artifacts.list",
@@ -1507,6 +1521,8 @@ async function routeRequest(store, request, url, body) {
   if (request.method === "POST" && url.pathname === "/v1/autopilots/run-due") return ok(runDueAutopilots(store, { ...body, actor: body.actor ?? "gateway-user" }));
   if (request.method === "GET" && pathParts[1] === "autopilots" && pathParts[2] && pathParts[3] === "triggers" && !pathParts[4]) return ok(listAutopilotTriggers(store, pathParts[2], { limit: url.searchParams.get("limit") ?? undefined }));
   if (request.method === "POST" && pathParts[1] === "autopilots" && pathParts[2] && pathParts[3] === "trigger" && !pathParts[4]) return ok(triggerAutopilot(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
+  if (request.method === "POST" && pathParts[1] === "autopilots" && pathParts[2] && pathParts[3] === "enable" && !pathParts[4]) return ok(setAutopilotEnabled(store, pathParts[2], { ...body, enabled: true, actor: body.actor ?? "gateway-user" }));
+  if (request.method === "POST" && pathParts[1] === "autopilots" && pathParts[2] && pathParts[3] === "disable" && !pathParts[4]) return ok(setAutopilotEnabled(store, pathParts[2], { ...body, enabled: false, actor: body.actor ?? "gateway-user" }));
   if (request.method === "GET" && pathParts[1] === "autopilots" && pathParts[2] && !pathParts[3]) return ok(getAutopilot(store, pathParts[2]));
 
   if (request.method === "GET" && url.pathname === "/v1/artifacts") {

@@ -239,6 +239,7 @@ export {
   listAutopilots,
   listDueAutopilots,
   runDueAutopilots,
+  setAutopilotEnabled,
   triggerAutopilot,
 } from "./autopilots.js";
 export { runAgent } from "./agent-runner.js";

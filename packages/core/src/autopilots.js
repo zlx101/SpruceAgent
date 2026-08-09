@@ -15,6 +15,7 @@ export const AUTOPILOT_CONTRACT = Object.freeze({
     "Each scheduled occurrence uses a stable trigger key. Replaying the same occurrence returns the existing ledger result instead of creating another task.",
     "Rules are restricted to static human-authored task fields; no template expansion, shell interpolation, webhook dispatch, or remote side effect is performed.",
     "A hosting process may poll the due runner, but execution authority remains with the normal task, readiness, TrustKernel, and approval controls.",
+    "Enabling or disabling a rule is an explicit audited mutation. A caller may require the exact last updatedAt value to avoid overwriting a newer operator decision.",
   ],
 });
 
@@ -93,6 +94,22 @@ export function listDueAutopilots(store, input = {}) {
     items,
     limits: AUTOPILOT_CONTRACT.safetyBoundary,
   };
+}
+
+export function setAutopilotEnabled(store, autopilotId, input = {}) {
+  const record = getAutopilot(store, autopilotId);
+  assertAutopilotRevision(record, input);
+  if (typeof input.enabled !== "boolean") throw new Error("enabled must be a boolean");
+  if (record.enabled === input.enabled) return record;
+  record.enabled = input.enabled;
+  record.updatedAt = nowIso();
+  writeJson(autopilotPath(store, record.id), record);
+  appendJsonl(autopilotIndexPath(store), summary(record));
+  audit(store, input.enabled ? "autopilot.enabled" : "autopilot.disabled", record, {
+    actor: optionalText(input.actor, 120) ?? "local-user",
+    previousEnabled: !input.enabled,
+  });
+  return record;
 }
 
 export function triggerAutopilot(store, autopilotId, input = {}) {
@@ -245,6 +262,11 @@ function requiredId(value, name) {
   const id = String(value ?? "").trim();
   if (!/^[A-Za-z0-9_-]{1,160}$/.test(id)) throw new Error(`${name} must be a single safe identifier`);
   return id;
+}
+function assertAutopilotRevision(record, input) {
+  if (input.ifUpdatedAt === undefined) return;
+  const expected = requiredText(input.ifUpdatedAt, "ifUpdatedAt", 80);
+  if (expected !== record.updatedAt) throw new Error(`autopilot revision conflict: expected ${expected}, found ${record.updatedAt}`);
 }
 function normalizeRefs(value) {
   if (value === undefined || value === null) return [];

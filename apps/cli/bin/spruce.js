@@ -160,6 +160,7 @@ import {
   restoreWorkflowVersion,
   runDoctor,
   runDueAutopilots,
+  setAutopilotEnabled,
   runAgent,
   runPreflight,
   runWorkflow,
@@ -803,7 +804,14 @@ function handleAutopilot(action, args) {
     printJson(runDueAutopilots(store, { now: flags.now, limit: flags.limit, actor: flags.by ?? "local-user" }));
     return;
   }
-  throw new Error("usage: spruce autopilot <list|contract|due|get|detail|triggers|create|trigger|run-due>");
+  if (action === "enable" || action === "disable") {
+    const [autopilotId, ...flagArgs] = args;
+    if (!autopilotId) throw new Error(`usage: spruce autopilot ${action} <autopilotId> [--ifUpdatedAt <ISO>]`);
+    const flags = parseFlags(flagArgs);
+    printJson(setAutopilotEnabled(store, autopilotId, { enabled: action === "enable", ifUpdatedAt: flags.ifUpdatedAt, actor: flags.by ?? "local-user" }));
+    return;
+  }
+  throw new Error("usage: spruce autopilot <list|contract|due|get|detail|triggers|create|trigger|run-due|enable|disable>");
 }
 
 function handleArtifact(action, args) {

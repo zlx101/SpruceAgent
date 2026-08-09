@@ -179,6 +179,7 @@ import {
   restoreWorkflowVersion,
   runDoctor,
   runDueAutopilots,
+  setAutopilotEnabled,
   runAgent,
   runPreflight,
   runWorkflow,
@@ -374,6 +375,13 @@ test("autopilots persist due scheduling and idempotently create only local execu
   assert.equal(listAutopilots(store).items[0].id, autopilot.id);
   assert.equal(listDueAutopilots(store, { now: "2026-08-10T00:59:59.000Z" }).items.length, 0);
   assert.equal(listDueAutopilots(store, { now: "2026-08-10T01:00:00.000Z" }).items[0].id, autopilot.id);
+  const disabled = setAutopilotEnabled(store, autopilot.id, { enabled: false, ifUpdatedAt: autopilot.updatedAt, actor: "scheduler-test" });
+  assert.equal(disabled.enabled, false);
+  assert.equal(listDueAutopilots(store, { now: "2026-08-10T01:00:00.000Z" }).items.length, 0);
+  assert.throws(() => triggerAutopilot(store, autopilot.id, { now: "2026-08-10T01:00:00.000Z" }), /disabled/);
+  assert.throws(() => setAutopilotEnabled(store, autopilot.id, { enabled: true, ifUpdatedAt: autopilot.updatedAt }), /revision conflict/);
+  const enabled = setAutopilotEnabled(store, autopilot.id, { enabled: true, ifUpdatedAt: disabled.updatedAt, actor: "scheduler-test" });
+  assert.equal(enabled.enabled, true);
   assert.throws(() => triggerAutopilot(store, autopilot.id, { now: "2026-08-10T00:30:00.000Z" }), /not due/);
 
   const trigger = triggerAutopilot(store, autopilot.id, { now: "2026-08-10T01:00:00.000Z", actor: "scheduler-test" });
@@ -2239,6 +2247,8 @@ test("gateway route contract exposes stable route ids", () => {
   assert.ok(routeIds.includes("autopilots.create"));
   assert.ok(routeIds.includes("autopilots.run_due"));
   assert.ok(routeIds.includes("autopilots.trigger"));
+  assert.ok(routeIds.includes("autopilots.enable"));
+  assert.ok(routeIds.includes("autopilots.disable"));
   assert.equal(contract.routes.find((route) => route.id === "health").authRequired, false);
   assert.equal(contract.routes.find((route) => route.id === "status").authRequired, true);
 });
@@ -2505,7 +2515,7 @@ test("gateway client manages due Autopilot task creation without executing an ag
   const client = createGatewayClient({ baseUrl: `http://${gateway.host}:${gateway.port}`, token: gateway.token });
 
   try {
-    for (const method of ["listAutopilots", "listDueAutopilots", "autopilotContract", "getAutopilot", "listAutopilotTriggers", "createAutopilot", "runDueAutopilots", "triggerAutopilot"]) {
+    for (const method of ["listAutopilots", "listDueAutopilots", "autopilotContract", "getAutopilot", "listAutopilotTriggers", "createAutopilot", "runDueAutopilots", "triggerAutopilot", "enableAutopilot", "disableAutopilot"]) {
       assert.equal(typeof client[method], "function");
     }
     const contract = await client.autopilotContract();
@@ -2519,6 +2529,11 @@ test("gateway client manages due Autopilot task creation without executing an ag
     assert.equal((await client.listAutopilots()).items[0].id, rule.id);
     assert.equal((await client.status()).autopilotCount, 1);
     assert.equal((await client.status()).autopilotDueCount, 0);
+    const disabled = await client.disableAutopilot(rule.id, { ifUpdatedAt: rule.updatedAt });
+    assert.equal(disabled.enabled, false);
+    assert.equal((await client.listDueAutopilots({ now: "2030-08-10T03:00:00.000Z" })).items.length, 0);
+    const enabled = await client.enableAutopilot(rule.id, { ifUpdatedAt: disabled.updatedAt });
+    assert.equal(enabled.enabled, true);
     assert.equal((await client.listDueAutopilots({ now: "2030-08-10T02:59:59.000Z" })).items.length, 0);
     const due = await client.runDueAutopilots({ now: "2030-08-10T03:00:00.000Z" });
     assert.equal(due.results.length, 1);
