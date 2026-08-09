@@ -3,6 +3,8 @@ import path from "node:path";
 import { createId, nowIso } from "./id.js";
 import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
 import { getTaskRoute } from "./task-router.js";
+import { getAgentWorkspace } from "./agent-workspaces.js";
+import { getLaunchReview } from "./launch-review.js";
 
 export const SQUAD_CONTRACT = Object.freeze({
   version: "0.1.0",
@@ -14,6 +16,7 @@ export const SQUAD_CONTRACT = Object.freeze({
     "A member inherits its adapter assignment from a Task Route and cannot silently substitute another adapter.",
     "Dependencies are explicit, acyclic role handoffs; a downstream role must not start until its declared predecessors have reviewable output.",
     "Squad v0 does not auto-approve, merge, select a winner, or invoke a Fleet Run.",
+    "Workspace and review bindings only record independently created evidence; they do not start execution or alter the bound evidence.",
   ],
 });
 
@@ -77,6 +80,49 @@ export function getSquad(store, squadId) {
   return readJson(filePath);
 }
 
+export function bindSquadMemberWorkspace(store, squadId, input = {}) {
+  const squad = getSquad(store, squadId);
+  const role = String(input.role ?? "").trim();
+  const member = squad.members.find((item) => item.role === role);
+  if (!member) throw new Error("role is not a Squad member");
+  const workspace = getAgentWorkspace(store, input.workspaceId);
+  if (workspace.adapter?.id !== member.adapterId) throw new Error("workspace adapter does not match the Squad member assignment");
+  member.workspace = { id: workspace.id, status: workspace.status, boundAt: nowIso(), boundBy: input.actor ?? "local-user" };
+  return persistUpdatedSquad(store, squad, "squad.member.workspace_bound", { role, workspaceId: workspace.id });
+}
+
+export function bindSquadHandoffReview(store, squadId, input = {}) {
+  const squad = getSquad(store, squadId);
+  const from = String(input.from ?? "").trim();
+  const to = String(input.to ?? "").trim();
+  const handoff = squad.handoffs.find((item) => item.from === from && item.to === to);
+  if (!handoff) throw new Error("Squad handoff not found");
+  const source = squad.members.find((item) => item.role === from);
+  if (!source?.workspace?.id) throw new Error("source role needs a bound workspace before its handoff can be accepted");
+  const review = getLaunchReview(store, input.reviewId);
+  if (review.status !== "approved_for_manual_followup") throw new Error("handoff requires an approved Launch Review");
+  const selected = review.candidates?.find((item) => item.launchId === review.decision?.selectedLaunchId);
+  if (!selected || selected.workspaceId !== source.workspace.id) throw new Error("approved review must select a launch from the source role workspace");
+  handoff.status = "accepted";
+  handoff.evidence = { reviewId: review.id, selectedLaunchId: selected.launchId, acceptedAt: nowIso(), acceptedBy: input.actor ?? "local-user" };
+  return persistUpdatedSquad(store, squad, "squad.handoff.accepted", { from, to, reviewId: review.id });
+}
+
+export function getSquadReadiness(store, squadId) {
+  const squad = getSquad(store, squadId);
+  const members = squad.members.map((member) => {
+    const incoming = squad.handoffs.filter((handoff) => handoff.to === member.role);
+    const accepted = incoming.filter((handoff) => handoff.status === "accepted");
+    const status = !member.workspace?.id
+      ? "needs_workspace"
+      : accepted.length !== incoming.length
+        ? "waiting_for_handoff"
+        : "ready_for_approval";
+    return { role: member.role, adapterId: member.adapterId, workspaceId: member.workspace?.id ?? null, status, incomingHandoffs: incoming.length, acceptedHandoffs: accepted.length };
+  });
+  return { squadId: squad.id, status: squad.status, members, readyCount: members.filter((member) => member.status === "ready_for_approval").length, limits: SQUAD_CONTRACT.safetyBoundary };
+}
+
 export function listSquads(store, options = {}) {
   const items = readJsonl(squadIndexPath(store))
     .filter((item) => !options.status || item.status === options.status)
@@ -133,6 +179,13 @@ function assertAcyclic(roles, dependencies) {
 
 function squadListItem(squad) {
   return { id: squad.id, name: squad.name, routeId: squad.routeId, goal: squad.goal, status: squad.status, createdAt: squad.createdAt, updatedAt: squad.updatedAt, memberCount: squad.members.length, handoffCount: squad.handoffs.length };
+}
+
+function persistUpdatedSquad(store, squad, eventType, details) {
+  squad.updatedAt = nowIso();
+  writeJson(squadPath(store, squad.id), squad);
+  appendJsonl(path.join(store.root, "audit.jsonl"), { type: eventType, squadId: squad.id, createdAt: squad.updatedAt, ...details });
+  return squad;
 }
 
 function squadPath(store, squadId) { return path.join(store.root, "squads", `${squadId}.json`); }

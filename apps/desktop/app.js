@@ -24,6 +24,9 @@ const state = {
   fleetRuns: null,
   fleetRunDetail: null,
   fleetRunProgress: null,
+  squads: null,
+  squadDetail: null,
+  squadReadiness: null,
   workflows: [],
   workflowVersions: null,
   workflowDraft: null,
@@ -139,6 +142,10 @@ const nodes = {
   fleetRunList: document.querySelector("#fleet-run-list"),
   fleetLivePanel: document.querySelector("#fleet-live-panel"),
   fleetRunPanel: document.querySelector("#fleet-run-panel"),
+  squadState: document.querySelector("#squad-state"),
+  squadList: document.querySelector("#squad-list"),
+  squadPanel: document.querySelector("#squad-panel"),
+  squadReadinessPanel: document.querySelector("#squad-readiness-panel"),
   workflowList: document.querySelector("#workflow-list"),
   workflowVersionList: document.querySelector("#workflow-version-list"),
   workflowRunList: document.querySelector("#workflow-run-list"),
@@ -283,6 +290,36 @@ nodes.fleetRunList.addEventListener("click", async (event) => {
   await loadFleetRun(button.dataset.fleetRunId);
 });
 
+nodes.squadList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action='squad-view']");
+  if (button) await loadSquad(button.dataset.squadId);
+});
+
+nodes.squadReadinessPanel.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action]");
+  if (!button || state.busy || !state.squadDetail) return;
+  try {
+    if (button.dataset.action === "squad-bind-workspace") {
+      const workspaceId = window.prompt(`Bind a prepared ${button.dataset.adapterId} workspace ID for ${button.dataset.role}:`);
+      if (!workspaceId?.trim()) return;
+      state.busy = true;
+      await post(`/v1/squads/${encodeURIComponent(state.squadDetail.id)}/members/${encodeURIComponent(button.dataset.role)}/workspace`, { workspaceId: workspaceId.trim() });
+      await loadSquad(state.squadDetail.id);
+    }
+    if (button.dataset.action === "squad-accept-handoff") {
+      const reviewId = window.prompt(`Enter the approved Launch Review ID for ${button.dataset.from} → ${button.dataset.to}:`);
+      if (!reviewId?.trim()) return;
+      state.busy = true;
+      await post(`/v1/squads/${encodeURIComponent(state.squadDetail.id)}/handoffs/${encodeURIComponent(button.dataset.from)}/${encodeURIComponent(button.dataset.to)}/review`, { reviewId: reviewId.trim() });
+      await loadSquad(state.squadDetail.id);
+    }
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+  }
+});
+
 nodes.workflowList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action]");
   if (!button) return;
@@ -400,7 +437,7 @@ async function refresh() {
   state.busy = true;
   setStatus("Loading");
   try {
-    const [status, contextFreshness, inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches, launchReviews, capabilityProbes, taskRoutes, fleetRuns] = await Promise.all([
+    const [status, contextFreshness, inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches, launchReviews, capabilityProbes, taskRoutes, fleetRuns, squads] = await Promise.all([
       get("/v1/status"),
       get("/v1/context/freshness"),
       get("/v1/inbox"),
@@ -418,6 +455,7 @@ async function refresh() {
       get("/v1/capability-probes"),
       get("/v1/agent-routes"),
       get("/v1/fleet-runs"),
+      get("/v1/squads"),
     ]);
     state.status = status;
     state.contextFreshness = contextFreshness;
@@ -436,6 +474,7 @@ async function refresh() {
     state.capabilityProbes = capabilityProbes;
     state.taskRoutes = taskRoutes;
     state.fleetRuns = fleetRuns;
+    state.squads = squads;
     render();
     setStatus(`Connected - ${state.approvalQueue.status.replace(/_/g, " ")}`);
   } catch (error) {
@@ -1123,6 +1162,7 @@ function render() {
     summary: { total: 0, activeCount: 0, awaitingApprovalCount: 0, completedCount: 0, failedCount: 0, cancelledCount: 0 },
     items: [],
   };
+  const squads = state.squads || { summary: { total: 0, plannedCount: 0 }, items: [] };
 
   nodes.systemState.textContent = state.status ? "Connected" : "Disconnected";
   nodes.pendingCount.textContent = inbox.summary.pendingApprovalCount;
@@ -1154,6 +1194,7 @@ function render() {
     ? `${taskRoutes.summary.routedCount} routed / ${taskRoutes.summary.needsInputCount ?? 0} needs input / ${taskRoutes.summary.blockedCount} blocked`
     : "No capability probe";
   nodes.fleetRunState.textContent = `${fleetRuns.summary.total} total / ${fleetRuns.summary.activeCount} active / ${fleetRuns.summary.awaitingApprovalCount} awaiting approval`;
+  nodes.squadState.textContent = `${squads.summary.total} total / ${squads.summary.plannedCount} planned`;
 
   renderSystemOverview(state.status, state.contextFreshness);
   renderContextEvidence(state.contextEvidence);
@@ -1174,6 +1215,8 @@ function render() {
   renderTaskRoutePanel(state.taskRouteDetail);
   renderFleetRuns(fleetRuns.items);
   renderFleetRunPanel(state.fleetRunDetail);
+  renderSquads(squads.items);
+  renderSquadPanel(state.squadDetail, state.squadReadiness);
   renderWorkflowSkillOptions(skills);
   renderWorkflowDraft(state.workflowDraft);
   renderWorkflows(workflows);
@@ -1283,6 +1326,67 @@ function renderFleetRunPanel(fleetRun) {
     cancellation: fleetRun.cancellation,
     limits: fleetRun.limits,
   }, null, 2) : "{}";
+}
+
+function renderSquads(items) {
+  replaceList(nodes.squadList, items, (item) => itemNode({
+    title: item.name || item.goal || item.id,
+    meta: [[statusClass(item.status), item.status], ["members", `${item.memberCount} members`], ["handoffs", `${item.handoffCount} handoffs`], ["updated", formatTime(item.updatedAt || item.createdAt)]],
+    actions: [squadViewButton(item.id)],
+  }));
+}
+
+function renderSquadPanel(squad, readiness) {
+  nodes.squadPanel.textContent = squad ? JSON.stringify(squad, null, 2) : "{}";
+  nodes.squadReadinessPanel.replaceChildren();
+  if (!readiness) return;
+  const header = document.createElement("div");
+  header.className = "fleet-live-header";
+  header.innerHTML = `<div><strong>Coordination readiness</strong><span>${readiness.readyCount}/${readiness.members.length} ready for approval</span></div>`;
+  const grid = document.createElement("div");
+  grid.className = "fleet-member-grid";
+  for (const member of readiness.members) {
+    const card = document.createElement("article");
+    card.className = `fleet-member unit-${member.status}`;
+    const explanation = member.status === "ready_for_approval" ? "Workspace and all required handoffs are verified." : member.status === "waiting_for_handoff" ? `${member.acceptedHandoffs}/${member.incomingHandoffs} upstream handoffs accepted.` : "Bind a matching prepared workspace first.";
+    card.innerHTML = `<div class="fleet-member-title"><strong>${escapeHtml(member.role)}</strong><span class="tag">${escapeHtml(member.status.replaceAll("_", " "))}</span></div><p>${escapeHtml(explanation)}</p>`;
+    if (member.status === "needs_workspace") {
+      const action = document.createElement("button");
+      action.className = "secondary-action squad-action";
+      action.type = "button";
+      action.dataset.action = "squad-bind-workspace";
+      action.dataset.role = member.role;
+      action.dataset.adapterId = member.adapterId;
+      action.textContent = "Bind workspace";
+      card.appendChild(action);
+    }
+    grid.appendChild(card);
+  }
+  const handoffs = document.createElement("div");
+  handoffs.className = "fleet-timeline";
+  for (const handoff of squad?.handoffs ?? []) {
+    const line = document.createElement("div");
+    const label = document.createElement("span");
+    label.textContent = `${handoff.from} → ${handoff.to}: ${handoff.status}`;
+    line.appendChild(label);
+    const source = readiness.members.find((member) => member.role === handoff.from);
+    if (handoff.status !== "accepted" && source?.workspaceId) {
+      const action = document.createElement("button");
+      action.className = "secondary-action squad-action";
+      action.type = "button";
+      action.dataset.action = "squad-accept-handoff";
+      action.dataset.from = handoff.from;
+      action.dataset.to = handoff.to;
+      action.textContent = "Accept approved review";
+      line.appendChild(action);
+    } else if (handoff.status !== "accepted") {
+      const note = document.createElement("span");
+      note.textContent = "Bind the source workspace first";
+      line.appendChild(note);
+    }
+    handoffs.appendChild(line);
+  }
+  nodes.squadReadinessPanel.append(header, grid, handoffs);
 }
 
 function renderFleetLivePanel(progress) {
@@ -2146,6 +2250,21 @@ async function loadFleetRun(fleetRunId) {
   }
 }
 
+async function loadSquad(squadId) {
+  if (!squadId) return;
+  setStatus("Loading Squad");
+  try {
+    [state.squadDetail, state.squadReadiness] = await Promise.all([
+      get(`/v1/squads/${encodeURIComponent(squadId)}`),
+      get(`/v1/squads/${encodeURIComponent(squadId)}/readiness`),
+    ]);
+    renderSquadPanel(state.squadDetail, state.squadReadiness);
+    setStatus(`Loaded Squad - ${shortId(squadId)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 let fleetProgressRefreshTimer = null;
 
 function scheduleFleetProgressRefresh(fleetRunId) {
@@ -2679,6 +2798,16 @@ function fleetRunViewButton(fleetRunId) {
   button.type = "button";
   button.dataset.action = "fleet-run-view";
   button.dataset.fleetRunId = fleetRunId;
+  button.innerHTML = '<span aria-hidden="true">&#128065;</span><span>View</span>';
+  return button;
+}
+
+function squadViewButton(squadId) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "squad-view";
+  button.dataset.squadId = squadId;
   button.innerHTML = '<span aria-hidden="true">&#128065;</span><span>View</span>';
   return button;
 }

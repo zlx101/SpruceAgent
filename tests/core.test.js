@@ -14,6 +14,8 @@ import {
   approveFleetRun,
   approveTicket,
   buildWorkspaceIndex,
+  bindSquadHandoffReview,
+  bindSquadMemberWorkspace,
   createContextEvidencePack,
   createContextPack,
   createModelContextFromEvidence,
@@ -63,6 +65,7 @@ import {
   getFleetRunContract,
   getSquad,
   getSquadContract,
+  getSquadReadiness,
   getOutcomeEvaluationContract,
   getOutcomeEvaluationResult,
   getOutcomeFixture,
@@ -4032,6 +4035,23 @@ test("task router assigns roles separately and routes supported execute adapters
   assert.deepEqual(squad.handoffs.map((handoff) => [handoff.from, handoff.to]), [["coding", "review"]]);
   assert.equal(getSquad(store, squad.id).id, squad.id);
   assert.equal(listSquads(store).summary.plannedCount, 1);
+  const codingWorkspaceId = "agent_ws_squad_coding";
+  const reviewWorkspaceId = "agent_ws_squad_review";
+  fs.writeFileSync(path.join(store.root, "agent-workspaces", `${codingWorkspaceId}.json`), JSON.stringify({ id: codingWorkspaceId, status: "prepared", adapter: { id: "codex-cli" } }), "utf8");
+  fs.writeFileSync(path.join(store.root, "agent-workspaces", `${reviewWorkspaceId}.json`), JSON.stringify({ id: reviewWorkspaceId, status: "prepared", adapter: { id: "codex-cli" } }), "utf8");
+  bindSquadMemberWorkspace(store, squad.id, { role: "coding", workspaceId: codingWorkspaceId });
+  bindSquadMemberWorkspace(store, squad.id, { role: "review", workspaceId: reviewWorkspaceId });
+  assert.equal(getSquadReadiness(store, squad.id).members.find((member) => member.role === "coding").status, "ready_for_approval");
+  assert.equal(getSquadReadiness(store, squad.id).members.find((member) => member.role === "review").status, "waiting_for_handoff");
+  const reviewId = "launch_review_squad_coding";
+  fs.writeFileSync(path.join(store.root, "launch-reviews", `${reviewId}.json`), JSON.stringify({
+    id: reviewId,
+    status: "approved_for_manual_followup",
+    decision: { selectedLaunchId: "launch_squad_coding" },
+    candidates: [{ launchId: "launch_squad_coding", workspaceId: codingWorkspaceId }],
+  }), "utf8");
+  bindSquadHandoffReview(store, squad.id, { from: "coding", to: "review", reviewId });
+  assert.equal(getSquadReadiness(store, squad.id).members.find((member) => member.role === "review").status, "ready_for_approval");
   assert.throws(
     () => createSquad(store, { routeId: squadRoute.id, dependencies: [{ from: "coding", to: "review" }, { from: "review", to: "coding" }] }),
     /acyclic/,

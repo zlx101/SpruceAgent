@@ -149,7 +149,7 @@ export {
   listFleetRuns,
   requestFleetRunApprovals,
 } from "./fleet-runs.js";
-export { createSquad, getSquad, getSquadContract, listSquads, SQUAD_CONTRACT } from "./squads.js";
+export { bindSquadHandoffReview, bindSquadMemberWorkspace, createSquad, getSquad, getSquadContract, getSquadReadiness, listSquads, SQUAD_CONTRACT } from "./squads.js";
 export {
   createLaunchReview,
   decideLaunchReview,

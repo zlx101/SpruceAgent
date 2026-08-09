@@ -33,7 +33,7 @@ import {
   listFleetRuns,
   requestFleetRunApprovals,
 } from "./fleet-runs.js";
-import { createSquad, getSquad, getSquadContract, listSquads } from "./squads.js";
+import { bindSquadHandoffReview, bindSquadMemberWorkspace, createSquad, getSquad, getSquadContract, getSquadReadiness, listSquads } from "./squads.js";
 import {
   createLaunchReview,
   decideLaunchReview,
@@ -579,6 +579,27 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/squads/contract",
       authRequired: true,
       description: "Read the Squad v0 safety and coordination contract.",
+    },
+    {
+      id: "squads.readiness",
+      method: "GET",
+      path: "/v1/squads/:squadId/readiness",
+      authRequired: true,
+      description: "Project member readiness from bound workspaces and approved handoff reviews without launching an agent.",
+    },
+    {
+      id: "squads.bind_workspace",
+      method: "POST",
+      path: "/v1/squads/:squadId/members/:role/workspace",
+      authRequired: true,
+      description: "Bind an already prepared, adapter-matching Agent Workspace to a Squad member.",
+    },
+    {
+      id: "squads.accept_handoff",
+      method: "POST",
+      path: "/v1/squads/:squadId/handoffs/:from/:to/review",
+      authRequired: true,
+      description: "Accept a Squad handoff only with an approved review tied to the source workspace.",
     },
     {
       id: "tools.list",
@@ -1515,6 +1536,9 @@ async function routeRequest(store, request, url, body) {
 
   if (request.method === "GET" && url.pathname === "/v1/squads") return ok(listSquads(store));
   if (request.method === "GET" && url.pathname === "/v1/squads/contract") return ok(getSquadContract());
+  if (request.method === "GET" && pathParts[1] === "squads" && pathParts[2] && pathParts[3] === "readiness" && !pathParts[4]) return ok(getSquadReadiness(store, pathParts[2]));
+  if (request.method === "POST" && pathParts[1] === "squads" && pathParts[2] && pathParts[3] === "members" && pathParts[4] && pathParts[5] === "workspace" && !pathParts[6]) return ok(bindSquadMemberWorkspace(store, pathParts[2], { ...body, role: pathParts[4], actor: body.actor ?? "gateway-user" }));
+  if (request.method === "POST" && pathParts[1] === "squads" && pathParts[2] && pathParts[3] === "handoffs" && pathParts[4] && pathParts[5] && pathParts[6] === "review" && !pathParts[7]) return ok(bindSquadHandoffReview(store, pathParts[2], { ...body, from: pathParts[4], to: pathParts[5], actor: body.actor ?? "gateway-user" }));
   if (request.method === "GET" && pathParts[1] === "squads" && pathParts[2] && !pathParts[3]) return ok(getSquad(store, pathParts[2]));
   if (request.method === "POST" && url.pathname === "/v1/squads") return ok(createSquad(store, { ...body, actor: body.actor ?? "gateway-user" }));
 
