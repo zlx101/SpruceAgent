@@ -121,18 +121,26 @@ export function triggerAutopilot(store, autopilotId, input = {}) {
   const now = parseTime(input.now, "now") ?? nowIso();
   if (record.schedule.nextDueAt > now) throw new Error(`autopilot is not due until ${record.schedule.nextDueAt}`);
 
+  const triggerId = createId("autopilot_trigger");
   const task = createExecutionTask(store, {
     goal: record.action.goal,
     scope: record.action.scope ?? undefined,
     nextAction: record.action.nextAction ?? undefined,
     evidenceRefs: record.action.evidenceRefs,
     links: record.action.links,
+    origin: {
+      kind: "autopilot",
+      autopilotId: record.id,
+      triggerId,
+      triggerKey,
+      scheduledFor: record.schedule.nextDueAt,
+    },
     actor: `autopilot:${record.id}`,
   });
   const trigger = {
     version: AUTOPILOT_CONTRACT.version,
     interface: "spruceagent.autopilot-trigger",
-    id: createId("autopilot_trigger"),
+    id: triggerId,
     autopilotId: record.id,
     triggerKey,
     scheduledFor: record.schedule.nextDueAt,

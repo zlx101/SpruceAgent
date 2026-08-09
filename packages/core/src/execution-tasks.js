@@ -27,6 +27,7 @@ export const EXECUTION_TASK_CONTRACT = Object.freeze({
     "A follow-up links durable control state to a terminal task; it does not reopen, rerun, or authorize the prior task.",
     "Terminal evidence is captured as a read-only local snapshot for audit; it is not an approval, independent verification, or execution authority.",
     "Declared Fleet Run and Squad references are read-only evidence projections; they never change task state or authorize their orchestration.",
+    "Task origin is immutable creation provenance for audit and lineage; it is not execution authority or a dispatch instruction.",
   ],
 });
 
@@ -56,6 +57,7 @@ export function createExecutionTask(store, input = {}) {
     status: "open",
     owner: optionalText(input.owner, 160) ?? null,
     followUpOf,
+    origin: normalizeOrigin(input.origin),
     nextAction: optionalText(input.nextAction, 500),
     humanGate: null,
     blocker: null,
@@ -311,6 +313,7 @@ export function getExecutionTaskLineage(store, taskId) {
     version: EXECUTION_TASK_CONTRACT.version,
     interface: "spruceagent.execution-task-lineage",
     task: taskSummary(task),
+    origin: task.origin ?? null,
     ancestors,
     descendants,
     summary: { ancestorCount: ancestors.length, descendantCount: descendants.length, generation: ancestors.length },
@@ -411,7 +414,7 @@ function summarizeTasks(tasks) {
 }
 
 function taskSummary(task) {
-  return { id: task.id, createdAt: task.createdAt, updatedAt: task.updatedAt, goal: task.goal, status: task.status, owner: task.owner, followUpOf: task.followUpOf ?? null, nextAction: task.nextAction, humanGate: task.humanGate, blocker: task.blocker ?? null, completion: task.completion ?? null, cancellation: task.cancellation ?? null, evidenceRefs: task.evidenceRefs, links: task.links };
+  return { id: task.id, createdAt: task.createdAt, updatedAt: task.updatedAt, goal: task.goal, status: task.status, owner: task.owner, followUpOf: task.followUpOf ?? null, origin: task.origin ?? null, nextAction: task.nextAction, humanGate: task.humanGate, blocker: task.blocker ?? null, completion: task.completion ?? null, cancellation: task.cancellation ?? null, evidenceRefs: task.evidenceRefs, links: task.links };
 }
 
 function normalizeStatus(value) {
@@ -421,6 +424,18 @@ function normalizeStatus(value) {
 }
 function normalizeRefs(value) { return normalizeList(value, 160, "evidenceRefs"); }
 function normalizeLinks(value) { return normalizeList(value, 240, "links"); }
+function normalizeOrigin(value) {
+  if (value === undefined || value === null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("origin must be an object");
+  if (value.kind !== "autopilot") throw new Error("origin.kind must be autopilot");
+  return {
+    kind: "autopilot",
+    autopilotId: requiredTaskId(value.autopilotId, "origin.autopilotId"),
+    triggerId: requiredTaskId(value.triggerId, "origin.triggerId"),
+    triggerKey: requiredText(value.triggerKey, "origin.triggerKey", 240),
+    scheduledFor: requiredText(value.scheduledFor, "origin.scheduledFor", 80),
+  };
+}
 function resolveLink(store, link) {
   const match = /^(agent_launch|agent_trial|artifact|fleet_run|launch_review|task_route|trace):(.+)$/.exec(link);
   if (!match) return { link, status: "unsupported", authority: "reference_only", message: "Use a typed local link such as agent_launch:<id>, artifact:<id>, or trace:<id>." };

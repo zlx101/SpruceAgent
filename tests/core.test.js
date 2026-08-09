@@ -392,6 +392,14 @@ test("autopilots persist due scheduling and idempotently create only local execu
   assert.equal(createdTask.status, "open");
   assert.equal(createdTask.createdBy, `autopilot:${autopilot.id}`);
   assert.equal(createdTask.goal, "Review the prior development evidence");
+  assert.deepEqual(createdTask.origin, {
+    kind: "autopilot",
+    autopilotId: autopilot.id,
+    triggerId: trigger.id,
+    triggerKey: trigger.triggerKey,
+    scheduledFor: "2026-08-10T01:00:00.000Z",
+  });
+  assert.deepEqual(getExecutionTaskLineage(store, trigger.taskId).origin, createdTask.origin);
   assert.equal(createdTask.links[0], "trace:trace_example");
   assert.equal(getAutopilot(store, autopilot.id).schedule.nextDueAt, "2026-08-10T02:00:00.000Z");
   assert.equal(listAutopilotTriggers(store, autopilot.id).items.length, 1);
