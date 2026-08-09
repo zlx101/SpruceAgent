@@ -262,7 +262,7 @@ test("execution task evidence resolves typed local records without granting auth
   });
   const task = createExecutionTask(store, {
     goal: "Inspect trial evidence",
-    links: [`agent_trial:${trial.id}`, "artifact:artifact_missing", "free-form-note"],
+    links: [`agent_trial:${trial.id}`, "artifact:artifact_missing", "agent_trial:../outside", "free-form-note"],
     evidenceRefs: ["tests/core.test.js"],
   });
   const evidence = getExecutionTaskEvidence(store, task.id);
@@ -273,6 +273,7 @@ test("execution task evidence resolves typed local records without granting auth
   assert.equal(evidence.links[0].authority, "reference_only");
   assert.equal(evidence.links[1].status, "missing");
   assert.equal(evidence.links[2].status, "unsupported");
+  assert.equal(evidence.links[3].status, "unsupported");
   assert.equal(evidence.evidenceRefs[0].authority, "reference_only");
 });
 

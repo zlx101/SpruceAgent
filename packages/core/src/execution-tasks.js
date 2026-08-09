@@ -163,6 +163,7 @@ function resolveLink(store, link) {
   const match = /^(artifact|agent_trial|fleet_run|launch_review|task_route):(.+)$/.exec(link);
   if (!match) return { link, status: "unsupported", authority: "reference_only", message: "Use a typed local link such as artifact:<id> or agent_trial:<id>." };
   const [, kind, id] = match;
+  if (!/^[A-Za-z0-9_-]{1,160}$/.test(id)) return { link, kind, id, status: "unsupported", authority: "reference_only", message: "Typed local link IDs must be a single safe identifier." };
   const readers = { artifact: getArtifact, agent_trial: getAgentTrial, fleet_run: getFleetRun, launch_review: getLaunchReview, task_route: getTaskRoute };
   try {
     const record = readers[kind](store, id);
