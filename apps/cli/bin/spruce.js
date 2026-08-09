@@ -21,6 +21,7 @@ import {
   createExecutionTask,
   createExecutionTaskFollowUp,
   createAutopilot,
+  createAutopilotRunner,
   configureLlmProvider,
   createSkillReplayFixture,
   createGatewayClient,
@@ -304,7 +305,7 @@ async function main() {
   }
 
   if (command === "autopilot" || command === "autopilots") {
-    handleAutopilot(subcommand, rest);
+    await handleAutopilot(subcommand, rest);
     return;
   }
 
@@ -749,7 +750,7 @@ function handleExecutionTask(action, args) {
   throw new Error("usage: spruce task <list|board|contract|get|evidence|closure|lineage|create|follow-up|claim|handoff|resume|update>");
 }
 
-function handleAutopilot(action, args) {
+async function handleAutopilot(action, args) {
   if (!action || action === "list") {
     const flags = parseFlags(args);
     printJson(listAutopilots(store, { enabled: flags.enabled === undefined ? undefined : flags.enabled === "true" }));
@@ -804,6 +805,22 @@ function handleAutopilot(action, args) {
     printJson(runDueAutopilots(store, { now: flags.now, limit: flags.limit, actor: flags.by ?? "local-user" }));
     return;
   }
+  if (action === "runner") {
+    const flags = parseFlags(args);
+    const runner = createAutopilotRunner(store, {
+      intervalMs: flags.intervalMs ?? flags.interval,
+      actor: flags.by ?? "autopilot-runner",
+    });
+    const initial = await runner.tick({ limit: flags.limit });
+    runner.start();
+    printJson({ message: "Autopilot runner started. Press Ctrl+C to stop.", initial, health: runner.snapshot() });
+    await new Promise((resolve) => {
+      process.once("SIGINT", resolve);
+      process.once("SIGTERM", resolve);
+    });
+    printJson({ message: "Autopilot runner stopped.", health: runner.stop() });
+    return;
+  }
   if (action === "enable" || action === "disable") {
     const [autopilotId, ...flagArgs] = args;
     if (!autopilotId) throw new Error(`usage: spruce autopilot ${action} <autopilotId> [--ifUpdatedAt <ISO>]`);
@@ -811,7 +828,7 @@ function handleAutopilot(action, args) {
     printJson(setAutopilotEnabled(store, autopilotId, { enabled: action === "enable", ifUpdatedAt: flags.ifUpdatedAt, actor: flags.by ?? "local-user" }));
     return;
   }
-  throw new Error("usage: spruce autopilot <list|contract|due|get|detail|triggers|create|trigger|run-due|enable|disable>");
+  throw new Error("usage: spruce autopilot <list|contract|due|get|detail|triggers|create|trigger|run-due|runner|enable|disable>");
 }
 
 function handleArtifact(action, args) {
@@ -2240,6 +2257,7 @@ Usage:
   ${executable} task closure <taskId>
   ${executable} task lineage <taskId>
   ${executable} task contract
+  ${executable} autopilot runner [--intervalMs 60000] [--limit 100]
   ${executable} artifact list [--traceId <traceId>] [--kind tool_result]
   ${executable} artifact get <artifactId>
   ${executable} artifact contract

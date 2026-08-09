@@ -42,6 +42,8 @@ npm run spruce -- autopilot create \
 npm run spruce -- autopilot list
 npm run spruce -- autopilot due
 npm run spruce -- autopilot run-due
+# Explicitly run the opt-in local polling host; Ctrl+C stops it.
+npm run spruce -- autopilot runner --intervalMs 60000
 npm run spruce -- autopilot get <autopilotId>
 npm run spruce -- autopilot triggers <autopilotId>
 npm run spruce -- autopilot disable <autopilotId> --ifUpdatedAt "2026-08-10T03:00:00.000Z"
@@ -86,3 +88,7 @@ All endpoints are local and require the existing Gateway Bearer token.
 Autopilot is a scheduler for **control state**, not a scheduler for execution. Creating a task gives no actor ownership, no execution permission, and no evidence conclusion. Operators should inspect the generated task, claim it explicitly, and use the existing approved execution paths only when their own readiness and authority requirements are satisfied.
 
 The Workbench exposes the same lifecycle actions with an explicit confirmation and the last-read rule revision. A stale Workbench action is rejected rather than overwriting a newer enable or disable decision.
+
+## Opt-in local runner
+
+`spruce autopilot runner` is the built-in foreground polling host. It performs one safe due tick at startup, then repeats at the bounded `--intervalMs` interval (1,000 to 3,600,000 milliseconds). It reports a health snapshot on start and on a `SIGINT` / `SIGTERM` shutdown. It is never started automatically by rule creation, the Workbench, or Gateway startup.
