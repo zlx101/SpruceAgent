@@ -279,6 +279,9 @@ nodes.agentWorkspaceList.addEventListener("click", async (event) => {
   if (button.dataset.action === "agent-launch-preview") {
     await previewAgentLaunch(button.dataset.workspaceId);
   }
+  if (button.dataset.action === "agent-workspace-retire") {
+    await retireAgentWorkspaceFromWorkbench(button.dataset.workspaceId, button.dataset.updatedAt);
+  }
 });
 
 nodes.agentLaunchList.addEventListener("click", async (event) => {
@@ -2041,10 +2044,11 @@ function renderAgentWorkspaces(items) {
       ["mode", item.mode],
       ["branch", item.branchName || "-"],
       ["created", formatTime(item.createdAt)],
+      ...(item.retiredAt ? [["retired", formatTime(item.retiredAt)]] : []),
     ],
     actions: [
       agentWorkspaceViewButton(item.id),
-      agentLaunchPreviewButton(item.id),
+      ...(item.status === "retired" ? [] : [agentLaunchPreviewButton(item.id), agentWorkspaceRetireButton(item.id, item.updatedAt || item.createdAt)]),
     ],
   }));
 }
@@ -2693,6 +2697,21 @@ async function loadAgentWorkspace(workspaceId) {
     state.agentWorkspaceDetail = await get(`/v1/agent-workspaces/${encodeURIComponent(workspaceId)}`);
     renderAgentWorkspacePanel(state.agentWorkspaceDetail);
     setStatus(`Loaded workspace - ${shortId(workspaceId)}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+async function retireAgentWorkspaceFromWorkbench(workspaceId, ifUpdatedAt) {
+  if (!workspaceId) return;
+  const accepted = window.confirm("Retire this Agent Workspace? A clean managed Git worktree will be removed; its audit record and branch are retained.");
+  if (!accepted) return;
+  setStatus("Retiring agent workspace");
+  try {
+    state.agentWorkspaceDetail = await post(`/v1/agent-workspaces/${encodeURIComponent(workspaceId)}/retire`, { ifUpdatedAt });
+    state.agentWorkspaces = await get("/v1/agent-workspaces");
+    render();
+    setStatus(`Retired workspace - ${shortId(workspaceId)}`);
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -3364,6 +3383,17 @@ function agentLaunchPreviewButton(workspaceId) {
   button.dataset.action = "agent-launch-preview";
   button.dataset.workspaceId = workspaceId;
   button.innerHTML = '<span aria-hidden="true">&#9655;</span><span>Preview</span>';
+  return button;
+}
+
+function agentWorkspaceRetireButton(workspaceId, updatedAt) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary danger";
+  button.type = "button";
+  button.dataset.action = "agent-workspace-retire";
+  button.dataset.workspaceId = workspaceId;
+  button.dataset.updatedAt = updatedAt || "";
+  button.innerHTML = '<span aria-hidden="true">&#9851;</span><span>Retire</span>';
   return button;
 }
 

@@ -17,6 +17,8 @@ export const AGENT_WORKSPACE_CONTRACT = Object.freeze({
     "It does not start external CLI agents.",
     "It does not commit, push, merge, approve, or execute adapter commands.",
     "Workspace paths must stay inside the SpruceAgent store worktrees directory.",
+    "Retirement removes only clean, SpruceAgent-managed Git worktrees and retains an auditable workspace record.",
+    "Retirement never deletes an Agent branch unless the caller explicitly requests deletion and Git accepts a safe non-forced delete.",
     "Codex workspaces require a clean source repository and fresh ContextOS evidence when context is attached.",
     "Current-workspace approved mode is not read-only and still requires the Agent Launcher approval gate before execution.",
   ],
@@ -101,8 +103,64 @@ export function prepareAgentWorkspace(store, input = {}) {
   return record;
 }
 
+export function retireAgentWorkspace(store, workspaceId, input = {}) {
+  if (!workspaceId) throw new Error("workspaceId is required");
+  const workspace = getAgentWorkspace(store, workspaceId);
+  const currentUpdatedAt = workspace.updatedAt ?? workspace.createdAt;
+  if (input.ifUpdatedAt && input.ifUpdatedAt !== currentUpdatedAt) {
+    throw new Error(`agent workspace was updated since it was loaded: ${workspaceId}`);
+  }
+  if (workspace.status === "retired") {
+    throw new Error(`agent workspace is already retired: ${workspaceId}`);
+  }
+
+  const retiredAt = nowIso();
+  const retired = {
+    ...workspace,
+    status: "retired",
+    updatedAt: retiredAt,
+    retiredAt,
+    retiredBy: input.actor ?? input.by ?? "local-user",
+    retirement: {
+      requestedBranchDeletion: input.deleteBranch === true,
+      worktreeRemoved: false,
+      branchDeleted: false,
+      reason: input.reason ?? null,
+    },
+    notes: [...(workspace.notes ?? [])],
+  };
+
+  if (workspace.mode === "git_worktree") {
+    const worktreeRoot = path.resolve(store.root, "worktrees");
+    const workspacePath = path.resolve(workspace.workspacePath);
+    assertInside(worktreeRoot, workspacePath, "workspacePath");
+    if (!fs.existsSync(workspacePath)) {
+      throw new Error(`managed agent worktree is missing: ${workspacePath}`);
+    }
+    const dirty = runGitAt(workspacePath, ["status", "--porcelain"]).trim();
+    if (dirty) {
+      throw new Error("agent workspace has uncommitted changes; inspect, commit, or discard them before retirement");
+    }
+    runGit(store, ["worktree", "remove", workspacePath]);
+    retired.retirement.worktreeRemoved = true;
+    retired.notes.push("Clean managed Git worktree removed during retirement.");
+    if (input.deleteBranch === true && workspace.isolation?.branchName) {
+      runGit(store, ["branch", "-d", workspace.isolation.branchName]);
+      retired.retirement.branchDeleted = true;
+      retired.notes.push("Merged Agent branch deleted during retirement.");
+    }
+  } else {
+    retired.notes.push("Current-workspace record retired; the project directory was not changed.");
+  }
+
+  persistWorkspace(store, retired);
+  return retired;
+}
+
 export function listAgentWorkspaces(store, options = {}) {
-  const items = readJsonl(workspaceIndexPath(store))
+  const latestById = new Map();
+  for (const item of readJsonl(workspaceIndexPath(store))) latestById.set(item.id, item);
+  const items = [...latestById.values()]
     .filter((item) => !options.status || item.status === options.status)
     .filter((item) => !options.adapterId || item.adapter?.id === options.adapterId)
     .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
@@ -116,6 +174,7 @@ export function listAgentWorkspaces(store, options = {}) {
       byStatus: countBy(items, (item) => item.status),
       byAdapter: countBy(items, (item) => item.adapter?.id ?? "unknown"),
       gitWorktreeCount: items.filter((item) => item.mode === "git_worktree").length,
+      retiredCount: items.filter((item) => item.status === "retired").length,
     },
     items,
     limits: AGENT_WORKSPACE_CONTRACT.safetyBoundary,
@@ -135,6 +194,7 @@ function workspaceRecord(input) {
     id: input.workspaceId,
     planId: input.plan.id,
     createdAt: input.createdAt,
+    updatedAt: input.createdAt,
     status: input.status,
     mode: input.mode,
     adapter: input.plan.adapter,
@@ -166,6 +226,9 @@ function persistWorkspace(store, record) {
     workspacePath: record.workspacePath,
     branchName: record.isolation.branchName,
     reviewRequired: record.reviewGate?.required === true,
+    updatedAt: record.updatedAt ?? record.createdAt,
+    retiredAt: record.retiredAt ?? null,
+    retirement: record.retirement ?? null,
   });
 }
 
@@ -210,6 +273,13 @@ function hasSourceChanges(store) {
 
 function runGit(store, args) {
   return execFileSync("git", ["-C", store.cwd, ...args], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+}
+
+function runGitAt(cwd, args) {
+  return execFileSync("git", ["-C", cwd, ...args], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });

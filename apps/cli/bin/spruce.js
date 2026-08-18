@@ -146,6 +146,7 @@ import {
   proposeSkill,
   promoteSkillCandidate,
   prepareAgentWorkspace,
+  retireAgentWorkspace,
   probeAgentCapabilities,
   recordAgentTrial,
   launchAgentWorkspace,
@@ -1825,6 +1826,18 @@ async function handleAgent(action, args = []) {
     return;
   }
 
+  if (action === "retire-workspace") {
+    const [workspaceId, ...flagArgs] = args;
+    if (!workspaceId) throw new Error("usage: spruce agent retire-workspace <workspaceId> [--deleteBranch] [--reason <text>] [--ifUpdatedAt <timestamp>]");
+    const flags = parseFlags(flagArgs);
+    printJson(retireAgentWorkspace(store, workspaceId, {
+      deleteBranch: Boolean(flags.deleteBranch),
+      reason: flags.reason,
+      ifUpdatedAt: flags.ifUpdatedAt,
+    }));
+    return;
+  }
+
   if (action === "workspace-contract") {
     printJson(getAgentWorkspaceContract());
     return;
@@ -2345,6 +2358,7 @@ Usage:
   ${executable} agent prepare <adapterId> --goal "Implement task" [--context "query"]
   ${executable} agent workspaces [--adapterId codex-cli]
   ${executable} agent workspace <workspaceId>
+  ${executable} agent retire-workspace <workspaceId> [--deleteBranch] [--reason "completed"]
   ${executable} agent launch <workspaceId>
   ${executable} agent launch <codexWorkspaceId> --execute [--approvalId <approvalId>]
   ${executable} agent launch <localShellWorkspaceId> --execute --command "node -v" [--approvalId <approvalId>]

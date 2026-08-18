@@ -160,6 +160,7 @@ import {
   proposeSkill,
   promoteSkillCandidate,
   prepareAgentWorkspace,
+  retireAgentWorkspace,
   probeAgentCapabilities,
   recordAgentTrial,
   launchAgentWorkspace,
@@ -3178,7 +3179,6 @@ test("gateway client prepares and reads isolated agent workspaces", async () => 
     });
     const list = await client.listAgentWorkspaces();
     const detail = await client.getAgentWorkspace(prepared.id);
-    const status = await client.status();
 
     assert.equal(contract.interface, "spruceagent.agent-workspaces");
     assert.equal(prepared.status, "prepared");
@@ -3189,6 +3189,16 @@ test("gateway client prepares and reads isolated agent workspaces", async () => 
     assert.equal(fs.existsSync(path.join(prepared.workspacePath, "README.md")), true);
     assert.equal(list.summary.total, 1);
     assert.equal(detail.id, prepared.id);
+    const retired = await client.retireAgentWorkspace(prepared.id, {
+      ifUpdatedAt: prepared.updatedAt,
+      reason: "gateway test complete",
+    });
+    const retiredList = await client.listAgentWorkspaces();
+    const status = await client.status();
+    assert.equal(retired.status, "retired");
+    assert.equal(retired.retirement.worktreeRemoved, true);
+    assert.equal(fs.existsSync(prepared.workspacePath), false);
+    assert.equal(retiredList.summary.retiredCount, 1);
     assert.equal(status.agentWorkspaceCount, 1);
   } finally {
     await closeServer(gateway.server);
@@ -5100,6 +5110,53 @@ test("agent workspace records approval-gated current workspace without claiming 
   assert.equal(workspace.mode, "current_workspace_approved");
   assert.equal(workspace.workspacePath, dir);
   assert.equal(listAgentWorkspaces(store).summary.gitWorktreeCount, 0);
+});
+
+test("agent workspace retirement removes only clean managed worktrees and preserves audit history", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  initGitRepo(dir);
+  const store = ensureStore(createStore(dir));
+  const workspace = prepareAgentWorkspace(store, {
+    adapterId: "codex-cli",
+    goal: "Retire a clean isolated workspace",
+  });
+
+  const retired = retireAgentWorkspace(store, workspace.id, {
+    ifUpdatedAt: workspace.updatedAt,
+    reason: "demo complete",
+  });
+  const listed = listAgentWorkspaces(store);
+
+  assert.equal(retired.status, "retired");
+  assert.equal(retired.retirement.worktreeRemoved, true);
+  assert.equal(retired.retirement.branchDeleted, false);
+  assert.equal(fs.existsSync(workspace.workspacePath), false);
+  assert.equal(getAgentWorkspace(store, workspace.id).retiredAt, retired.retiredAt);
+  assert.equal(listed.summary.total, 1);
+  assert.equal(listed.summary.retiredCount, 1);
+  assert.throws(() => retireAgentWorkspace(store, workspace.id), /already retired/);
+});
+
+test("agent workspace retirement refuses dirty worktrees and never removes current workspace", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  initGitRepo(dir);
+  const store = ensureStore(createStore(dir));
+  const workspace = prepareAgentWorkspace(store, {
+    adapterId: "codex-cli",
+    goal: "Keep dirty worktree safe",
+  });
+  fs.writeFileSync(path.join(workspace.workspacePath, "uncommitted.txt"), "keep", "utf8");
+  assert.throws(() => retireAgentWorkspace(store, workspace.id), /uncommitted changes/);
+  assert.equal(fs.existsSync(workspace.workspacePath), true);
+
+  const current = prepareAgentWorkspace(store, {
+    adapterId: "local-shell-agent",
+    goal: "Retire record without touching source",
+  });
+  const retiredCurrent = retireAgentWorkspace(store, current.id);
+  assert.equal(retiredCurrent.status, "retired");
+  assert.equal(retiredCurrent.retirement.worktreeRemoved, false);
+  assert.equal(fs.existsSync(dir), true);
 });
 
 test("agent launcher keeps unverified external CLI adapters disabled", async () => {

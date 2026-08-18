@@ -73,6 +73,7 @@ export function createGatewayClient(options = {}) {
     getAgentWorkspace: (workspaceId) => request("GET", `/v1/agent-workspaces/${encodePathPart(workspaceId)}`),
     agentWorkspaceContract: () => request("GET", "/v1/agent-workspaces/contract"),
     prepareAgentWorkspace: (input = {}) => request("POST", "/v1/agent-workspaces", input),
+    retireAgentWorkspace: (workspaceId, input = {}) => request("POST", `/v1/agent-workspaces/${encodePathPart(workspaceId)}/retire`, input),
     listAgentLaunches: (input = {}) => request("GET", `/v1/agent-launches${agentLaunchParams(input)}`),
     getAgentLaunch: (launchId) => request("GET", `/v1/agent-launches/${encodePathPart(launchId)}`),
     agentLauncherContract: () => request("GET", "/v1/agent-launches/contract"),

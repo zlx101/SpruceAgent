@@ -186,6 +186,7 @@ export {
   getAgentWorkspaceContract,
   listAgentWorkspaces,
   prepareAgentWorkspace,
+  retireAgentWorkspace,
 } from "./agent-workspaces.js";
 export {
   createAgentAdapterRunPlan,

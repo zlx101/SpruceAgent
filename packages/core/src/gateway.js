@@ -14,6 +14,7 @@ import {
   getAgentWorkspaceContract,
   listAgentWorkspaces,
   prepareAgentWorkspace,
+  retireAgentWorkspace,
 } from "./agent-workspaces.js";
 import {
   getAgentLaunch,
@@ -486,6 +487,13 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/agent-workspaces",
       authRequired: true,
       description: "Prepare an isolated workspace from an adapter run plan without launching an external CLI.",
+    },
+    {
+      id: "agent_workspaces.retire",
+      method: "POST",
+      path: "/v1/agent-workspaces/:workspaceId/retire",
+      authRequired: true,
+      description: "Retire a clean managed Agent Workspace while retaining its audit record.",
     },
     {
       id: "agent_workspaces.contract",
@@ -1618,6 +1626,13 @@ async function routeRequest(store, request, url, body, options = {}) {
 
   if (request.method === "POST" && url.pathname === "/v1/agent-workspaces") {
     return ok(prepareAgentWorkspace(store, body));
+  }
+
+  if (request.method === "POST" && pathParts[1] === "agent-workspaces" && pathParts[2] && pathParts[3] === "retire") {
+    return ok(retireAgentWorkspace(store, pathParts[2], {
+      ...body,
+      actor: body.actor ?? "gateway-user",
+    }));
   }
 
   if (request.method === "GET" && url.pathname === "/v1/agent-launches") {

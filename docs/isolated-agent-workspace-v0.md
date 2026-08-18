@@ -33,6 +33,14 @@ Read one workspace:
 npm run spruce -- agent workspace <workspaceId>
 ```
 
+Retire a completed workspace. This removes a clean managed Git worktree but retains the workspace record and Agent branch for audit and recovery:
+
+```bash
+npm run spruce -- agent retire-workspace <workspaceId> --reason "review complete"
+```
+
+Use `--deleteBranch` only when Git accepts a safe non-forced deletion of an already-merged Agent branch. Retirement refuses worktrees with uncommitted changes. Current-workspace records are retired as metadata only and never remove the project directory.
+
 Read the contract:
 
 ```bash
@@ -47,6 +55,7 @@ Routes:
 GET  /v1/agent-workspaces
 GET  /v1/agent-workspaces/:workspaceId
 POST /v1/agent-workspaces
+POST /v1/agent-workspaces/:workspaceId/retire
 GET  /v1/agent-workspaces/contract
 ```
 
@@ -57,6 +66,7 @@ The Agent Adapters panel now has:
 - `Plan`: preview adapter isolation and launch metadata
 - `Prepare`: create the isolated workspace from the current Launch Run goal and context
 - `Agent Workspaces`: inspect prepared workspace records
+- `Retire`: remove a clean managed worktree after confirmation while retaining the audit record
 
 ## Safety Boundary
 
@@ -70,6 +80,7 @@ Agent Workspace v0 is deliberately conservative:
 - it only creates local worktrees under `.spruceagent/worktrees`
 - it records enough metadata for later Trace Report and review gates
 - Codex workspace preparation rejects a dirty source repository and stale attached ContextOS evidence
+- retirement refuses uncommitted worktrees and never removes paths outside `.spruceagent/worktrees`
 
 Agent Launcher v0.2 is the next gated layer. It can create launch previews, execute `local-shell-agent`, and execute Codex CLI through External CLI Launcher v1 after exact TrustKernel approval. Other external adapters remain disabled.
 
