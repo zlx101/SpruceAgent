@@ -3201,6 +3201,10 @@ test("gateway client prepares and reads isolated agent workspaces", async () => 
     assert.equal(retiredList.summary.retiredCount, 1);
     assert.equal(retiredList.summary.activeCount, 0);
     assert.equal(retiredList.summary.gitWorktreeCount, 0);
+    await assert.rejects(
+      () => client.launchAgentWorkspace({ workspaceId: prepared.id }),
+      /retired and cannot be launched/,
+    );
     assert.equal(status.agentWorkspaceCount, 1);
     assert.equal(status.agentActiveWorkspaceCount, 0);
     assert.equal(status.agentRetiredWorkspaceCount, 1);
@@ -4686,6 +4690,15 @@ test("task router assigns roles separately and routes supported execute adapters
     goal: "Run the deterministic acceptance check",
   });
   bindSquadMemberWorkspace(store, localSquad.id, { role: "deterministic_automation", workspaceId: localWorkspace.id });
+  const retiredWorkspace = prepareAgentWorkspace(store, {
+    adapterId: "local-shell-agent",
+    goal: "Retired workspaces cannot join a Squad",
+  });
+  retireAgentWorkspace(store, retiredWorkspace.id);
+  assert.throws(
+    () => bindSquadMemberWorkspace(store, localSquad.id, { role: "deterministic_automation", workspaceId: retiredWorkspace.id }),
+    /retired and cannot be launched/,
+  );
   buildWorkspaceIndex(store);
   const approvalRequest = await requestSquadMemberApproval(store, localSquad.id, {
     role: "deterministic_automation",
@@ -4713,6 +4726,17 @@ test("task router assigns roles separately and routes supported execute adapters
   assert.equal(reusedApprovalRequest.reused, true);
   assert.equal(reusedApprovalRequest.launch.id, approvalRequest.launch.id);
   assert.equal(getSquadReadiness(store, localSquad.id).members[0].status, "approval_pending");
+  retireAgentWorkspace(store, localWorkspace.id);
+  assert.equal(getSquadReadiness(store, localSquad.id).members[0].status, "workspace_retired");
+  assert.equal(getSquadReadiness(store, localSquad.id).members[0].executionBlocker, "workspace_retired");
+  await assert.rejects(
+    () => requestSquadMemberApproval(store, localSquad.id, {
+      role: "deterministic_automation",
+      command: "node -e \"process.exit(0)\"",
+      purpose: "trial",
+    }),
+    /workspace is retired/,
+  );
   assert.throws(
     () => createSquad(store, { routeId: squadRoute.id, dependencies: [{ from: "coding", to: "review" }, { from: "review", to: "coding" }] }),
     /acyclic/,
@@ -5186,6 +5210,26 @@ test("agent workspace retirement records cleanup when safe branch deletion is re
   assert.equal(fs.existsSync(workspace.workspacePath), false);
   assert.match(branches, new RegExp(workspace.isolation.branchName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.equal(retired.notes.includes("Agent branch was retained because Git did not allow safe non-forced deletion."), true);
+});
+
+test("agent launcher refuses retired agent workspaces before planning or execution", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const workspace = prepareAgentWorkspace(store, {
+    adapterId: "local-shell-agent",
+    goal: "Do not launch retired workspace",
+  });
+  retireAgentWorkspace(store, workspace.id);
+
+  await assert.rejects(
+    () => launchAgentWorkspace(store, { workspaceId: workspace.id }),
+    /retired and cannot be launched/,
+  );
+  await assert.rejects(
+    () => launchAgentWorkspace(store, { workspaceId: workspace.id, execute: true, command: "node -e \"process.exit(0)\"" }),
+    /retired and cannot be launched/,
+  );
+  assert.equal(listAgentLaunches(store).summary.total, 0);
 });
 
 test("agent launcher keeps unverified external CLI adapters disabled", async () => {

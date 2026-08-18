@@ -193,6 +193,13 @@ export function getAgentWorkspace(store, workspaceId) {
   return readJson(filePath);
 }
 
+export function assertAgentWorkspaceLaunchable(workspace) {
+  if (!workspace?.id) throw new Error("agent workspace is required");
+  if (workspace.status === "retired") {
+    throw new Error(`agent workspace is retired and cannot be launched: ${workspace.id}`);
+  }
+}
+
 function workspaceRecord(input) {
   return {
     version: AGENT_WORKSPACE_CONTRACT.version,

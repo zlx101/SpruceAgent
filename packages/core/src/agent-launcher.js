@@ -8,7 +8,7 @@ import {
   executeExternalCliInvocation,
   publicExternalCliInvocation,
 } from "./external-cli-launcher.js";
-import { getAgentWorkspace } from "./agent-workspaces.js";
+import { assertAgentWorkspaceLaunchable, getAgentWorkspace } from "./agent-workspaces.js";
 import { createId, nowIso } from "./id.js";
 import { auditPolicyDecision, evaluatePolicy } from "./policy.js";
 import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
@@ -30,6 +30,7 @@ export const AGENT_LAUNCHER_CONTRACT = Object.freeze({
     "Commands flow through TrustKernel policy and approval tickets.",
     "Git commit, push, merge, rebase, reset, and worktree mutation are blocked in user-supplied local-shell commands.",
     "External-agent subprocess choices are controlled by worktree isolation, Codex sandboxing, prompt constraints, Git evidence, and mandatory review rather than per-command interception.",
+    "Retired Agent Workspaces cannot be previewed, approved, or executed.",
     "Launcher records terminal logs, git status, and diff summaries, but never commits, pushes, merges, or approves changes.",
   ],
 });
@@ -50,6 +51,7 @@ export function getAgentLauncherContract() {
 
 export async function launchAgentWorkspace(store, input = {}, runtime = {}) {
   const workspace = getAgentWorkspace(store, input.workspaceId);
+  assertAgentWorkspaceLaunchable(workspace);
   const executionTaskId = normalizeExecutionTaskId(input.executionTaskId);
   const launchId = createId("agent_launch");
   const createdAt = nowIso();

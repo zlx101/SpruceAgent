@@ -182,6 +182,7 @@ export {
   getAgentTrialAttestationContract,
 } from "./agent-trial-attestation.js";
 export {
+  assertAgentWorkspaceLaunchable,
   getAgentWorkspace,
   getAgentWorkspaceContract,
   listAgentWorkspaces,

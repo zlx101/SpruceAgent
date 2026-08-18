@@ -14,6 +14,7 @@ This is the execution boundary after Agent Adapter Registry and Isolated Agent W
 - git status and diff summary capture
 - trace events for launch planned, blocked, approval required, and completed states
 - Artifact projection for agent launch records
+- retired Agent Workspaces are rejected before preview, approval, or execution records are created
 
 ## CLI
 
@@ -86,6 +87,7 @@ Agent Launcher v0.2:
 - routes commands through TrustKernel policy
 - creates approval tickets for shell execution
 - blocks git commit, push, merge, rebase, reset, and worktree mutation commands
+- refuses retired Agent Workspaces before planning or execution
 - records terminal logs and diff summaries
 - never commits, pushes, merges, or approves changes
 

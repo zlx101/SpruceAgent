@@ -12,6 +12,7 @@ This is the next Orca-inspired control-plane step after the read-only Adapter Re
 - a JSONL workspace index for Workbench, Gateway, and CLI
 - adapter, goal, branch, workspace path, git state, launch preview, and review gate metadata
 - explicit current-workspace records for approval-gated local adapters; these records do not claim the workspace is read-only
+- audited workspace retirement; retired workspaces are blocked from later Launch and Squad approval paths
 
 ## CLI
 
@@ -81,6 +82,7 @@ Agent Workspace v0 is deliberately conservative:
 - it records enough metadata for later Trace Report and review gates
 - Codex workspace preparation rejects a dirty source repository and stale attached ContextOS evidence
 - retirement refuses uncommitted worktrees and never removes paths outside `.spruceagent/worktrees`
+- retired workspace records cannot be used for new Agent Launch previews, execution approvals, or Squad member bindings
 
 Agent Launcher v0.2 is the next gated layer. It can create launch previews, execute `local-shell-agent`, and execute Codex CLI through External CLI Launcher v1 after exact TrustKernel approval. Other external adapters remain disabled.
 
