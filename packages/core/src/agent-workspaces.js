@@ -145,9 +145,13 @@ export function retireAgentWorkspace(store, workspaceId, input = {}) {
     retired.retirement.worktreeRemoved = true;
     retired.notes.push("Clean managed Git worktree removed during retirement.");
     if (input.deleteBranch === true && workspace.isolation?.branchName) {
-      runGit(store, ["branch", "-d", workspace.isolation.branchName]);
-      retired.retirement.branchDeleted = true;
-      retired.notes.push("Merged Agent branch deleted during retirement.");
+      try {
+        runGit(store, ["branch", "-d", workspace.isolation.branchName]);
+        retired.retirement.branchDeleted = true;
+        retired.notes.push("Merged Agent branch deleted during retirement.");
+      } catch {
+        retired.notes.push("Agent branch was retained because Git did not allow safe non-forced deletion.");
+      }
     }
   } else {
     retired.notes.push("Current-workspace record retired; the project directory was not changed.");

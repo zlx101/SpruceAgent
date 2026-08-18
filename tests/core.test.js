@@ -5159,6 +5159,29 @@ test("agent workspace retirement refuses dirty worktrees and never removes curre
   assert.equal(fs.existsSync(dir), true);
 });
 
+test("agent workspace retirement records cleanup when safe branch deletion is refused", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  initGitRepo(dir);
+  const store = ensureStore(createStore(dir));
+  const workspace = prepareAgentWorkspace(store, {
+    adapterId: "codex-cli",
+    goal: "Keep unmerged branch after workspace retirement",
+  });
+  fs.writeFileSync(path.join(workspace.workspacePath, "agent-change.txt"), "change", "utf8");
+  git(workspace.workspacePath, ["add", "agent-change.txt"]);
+  git(workspace.workspacePath, ["commit", "-m", "Agent change"]);
+
+  const retired = retireAgentWorkspace(store, workspace.id, { deleteBranch: true });
+  const branches = git(dir, ["branch", "--list", workspace.isolation.branchName]);
+
+  assert.equal(retired.status, "retired");
+  assert.equal(retired.retirement.worktreeRemoved, true);
+  assert.equal(retired.retirement.branchDeleted, false);
+  assert.equal(fs.existsSync(workspace.workspacePath), false);
+  assert.match(branches, new RegExp(workspace.isolation.branchName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.equal(retired.notes.includes("Agent branch was retained because Git did not allow safe non-forced deletion."), true);
+});
+
 test("agent launcher keeps unverified external CLI adapters disabled", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   initGitRepo(dir);

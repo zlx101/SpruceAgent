@@ -39,7 +39,7 @@ Retire a completed workspace. This removes a clean managed Git worktree but reta
 npm run spruce -- agent retire-workspace <workspaceId> --reason "review complete"
 ```
 
-Use `--deleteBranch` only when Git accepts a safe non-forced deletion of an already-merged Agent branch. Retirement refuses worktrees with uncommitted changes. Current-workspace records are retired as metadata only and never remove the project directory.
+Use `--deleteBranch` only when Git accepts a safe non-forced deletion of an already-merged Agent branch. If Git refuses that deletion, retirement still completes and records that the branch was retained. Retirement refuses worktrees with uncommitted changes. Current-workspace records are retired as metadata only and never remove the project directory.
 
 Read the contract:
 
