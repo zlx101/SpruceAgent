@@ -1616,7 +1616,7 @@ function render() {
   nodes.recentCount.textContent = inbox.summary.recentRunCount;
   nodes.artifactCount.textContent = artifacts.summary.total;
   nodes.agentAdapterCount.textContent = agentAdapters.summary.total;
-  nodes.agentWorkspaceCount.textContent = agentWorkspaces.summary.total;
+  nodes.agentWorkspaceCount.textContent = agentWorkspaces.summary.activeCount;
   nodes.agentLaunchCount.textContent = agentLaunches.summary.total;
   nodes.launchReviewCount.textContent = launchReviews.summary.total;
   nodes.taskRouteCount.textContent = taskRoutes.summary.total;
@@ -1634,7 +1634,7 @@ function render() {
   nodes.recentState.textContent = `${inbox.recentRuns.length}`;
   nodes.artifactState.textContent = `${artifacts.summary.total} artifacts / ${artifacts.summary.traceCount} traces`;
   nodes.agentAdapterState.textContent = `${agentAdapters.summary.total} planned`;
-  nodes.agentWorkspaceState.textContent = `${agentWorkspaces.summary.total} prepared / ${agentWorkspaces.summary.gitWorktreeCount} worktrees`;
+  nodes.agentWorkspaceState.textContent = `${agentWorkspaces.summary.activeCount} active / ${agentWorkspaces.summary.gitWorktreeCount} worktrees / ${agentWorkspaces.summary.retiredCount} retired`;
   nodes.agentLaunchState.textContent = `${agentLaunches.summary.total} launches / ${agentLaunches.summary.requiresApprovalCount} approvals`;
   nodes.launchReviewState.textContent = `${launchReviews.summary.pendingCount} pending / ${launchReviews.summary.approvedCount} approved`;
   nodes.taskRouteState.textContent = capabilityProbes.summary.total

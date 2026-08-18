@@ -3199,7 +3199,11 @@ test("gateway client prepares and reads isolated agent workspaces", async () => 
     assert.equal(retired.retirement.worktreeRemoved, true);
     assert.equal(fs.existsSync(prepared.workspacePath), false);
     assert.equal(retiredList.summary.retiredCount, 1);
+    assert.equal(retiredList.summary.activeCount, 0);
+    assert.equal(retiredList.summary.gitWorktreeCount, 0);
     assert.equal(status.agentWorkspaceCount, 1);
+    assert.equal(status.agentActiveWorkspaceCount, 0);
+    assert.equal(status.agentRetiredWorkspaceCount, 1);
   } finally {
     await closeServer(gateway.server);
   }
@@ -5133,7 +5137,9 @@ test("agent workspace retirement removes only clean managed worktrees and preser
   assert.equal(fs.existsSync(workspace.workspacePath), false);
   assert.equal(getAgentWorkspace(store, workspace.id).retiredAt, retired.retiredAt);
   assert.equal(listed.summary.total, 1);
+  assert.equal(listed.summary.activeCount, 0);
   assert.equal(listed.summary.retiredCount, 1);
+  assert.equal(listed.summary.gitWorktreeCount, 0);
   assert.throws(() => retireAgentWorkspace(store, workspace.id), /already retired/);
 });
 

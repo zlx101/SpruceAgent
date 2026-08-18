@@ -2381,6 +2381,7 @@ function gatewayStatus(store, autopilotRunner = null) {
   const executionTaskBoard = getExecutionTaskBoard(store);
   const autopilots = listAutopilots(store);
   const dueAutopilots = listDueAutopilots(store);
+  const agentWorkspaces = listAgentWorkspaces(store);
   return {
     root: store.root,
     auth: getGatewayAuthStatus(store),
@@ -2393,7 +2394,9 @@ function gatewayStatus(store, autopilotRunner = null) {
     approvedSkillCount: listSkills(store, "approved").length,
     workflowCount: listWorkflows(store).length,
     agentAdapterCount: listAgentAdapters().summary.total,
-    agentWorkspaceCount: listAgentWorkspaces(store).summary.total,
+    agentWorkspaceCount: agentWorkspaces.summary.total,
+    agentActiveWorkspaceCount: agentWorkspaces.summary.activeCount,
+    agentRetiredWorkspaceCount: agentWorkspaces.summary.retiredCount,
     agentLaunchCount: listAgentLaunches(store).summary.total,
     launchReviewCount: listLaunchReviews(store).summary.total,
     capabilityProbeCount: listCapabilityProbes(store).summary.total,
