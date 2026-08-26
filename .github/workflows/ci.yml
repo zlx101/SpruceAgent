@@ -29,6 +29,9 @@ jobs:
       - name: Doctor
         run: npm run doctor
 
+      - name: Deployment Preflight
+        run: npm run deploy:preflight
+
       - name: Test
         run: npm test
 

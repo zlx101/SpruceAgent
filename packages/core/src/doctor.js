@@ -46,6 +46,7 @@ const REQUIRED_PATHS = [
   "docs/agent-trial-evidence-v0.md",
   "docs/llm-provider-registry-v0.md",
   "docs/outcome-evaluation-suite-v1.md",
+  "docs/deployment-operations-v0.md",
   "docs/public-showcase-v0.md",
   "docs/release-checklist.md",
 ];

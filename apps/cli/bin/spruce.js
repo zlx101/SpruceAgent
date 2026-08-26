@@ -50,6 +50,7 @@ import {
   getOutcomeFixture,
   getCandidateApprovalContract,
   getContextEvidenceContract,
+  getDeploymentPreflightContract,
   getExecutionTask,
   getExecutionTaskEvidence,
   getExecutionTaskClosure,
@@ -161,6 +162,7 @@ import {
   replaySkillFixture,
   restoreSkillVersion,
   restoreWorkflowVersion,
+  runDeploymentPreflight,
   runDoctor,
   runDueAutopilots,
   setAutopilotEnabled,
@@ -349,6 +351,11 @@ async function main() {
 
   if (command === "gateway") {
     await handleGateway(subcommand, rest);
+    return;
+  }
+
+  if (command === "deploy" || command === "deployment") {
+    handleDeployment(subcommand, rest);
     return;
   }
 
@@ -1570,6 +1577,29 @@ async function handleGateway(action, args) {
   throw new Error("usage: spruce gateway <token|info|contract|call|serve>");
 }
 
+function handleDeployment(action, args = []) {
+  if (action === "preflight") {
+    const flags = parseFlags(args);
+    const report = runDeploymentPreflight(store, {
+      host: flags.host,
+      port: flags.port,
+      autopilotPollMs: flags.autopilotPollMs,
+      requireToken: Boolean(flags.requireToken),
+      allowRemote: Boolean(flags.allowRemote),
+    });
+    printJson(report);
+    if (report.status === "failed") process.exitCode = 1;
+    return;
+  }
+
+  if (action === "contract") {
+    printJson(getDeploymentPreflightContract());
+    return;
+  }
+
+  throw new Error("usage: spruce deploy <preflight|contract>");
+}
+
 function handleLlm(action, args = []) {
   if (action === "contract") {
     printJson(getLlmAdapterContract());
@@ -2251,6 +2281,8 @@ function printHelp() {
 Usage:
   ${executable} init
   ${executable} doctor
+  ${executable} deploy preflight [--host 127.0.0.1] [--port 7357] [--autopilotPollMs 60000] [--requireToken]
+  ${executable} deploy contract
   ${executable} status
   ${executable} run "Summarize TrustKernel" --context "TrustKernel"
   ${executable} run "Summarize TrustKernel" --context "TrustKernel" --requireFreshContext

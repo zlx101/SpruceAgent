@@ -25,6 +25,7 @@ Gateway v0 adds a local HTTP server with:
 - local bind by default: `127.0.0.1`
 - Bearer token auth for all `/v1/*` routes
 - health check without sensitive workspace data
+- deployment preflight endpoint for local long-running readiness
 - static Desktop UI Workbench at `/workbench`
 - status endpoint
 - inbox endpoint for Desktop UI workbench state
@@ -84,6 +85,12 @@ Health check:
 
 ```bash
 curl http://127.0.0.1:7357/health
+```
+
+Deployment preflight:
+
+```bash
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/deployment/preflight
 ```
 
 Workbench:

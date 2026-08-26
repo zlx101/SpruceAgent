@@ -15,6 +15,7 @@ Run all required checks:
 
 ```bash
 npm run doctor
+npm run deploy:preflight
 npm run check
 npm test
 npm run alpha:smoke
@@ -23,6 +24,7 @@ npm run alpha:smoke
 Expected alpha baseline:
 
 - `doctor` status is `passed`.
+- `deploy:preflight` has no failed checks. Warnings require an explicit operator note before unattended use.
 - `check` exits with code 0.
 - tests pass.
 - `alpha:smoke` returns `"ok": true`.

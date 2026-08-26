@@ -70,6 +70,7 @@ import { createAutopilotRunner } from "./autopilot-runner.js";
 import { getArtifact, getArtifactContract, listArtifacts } from "./artifacts.js";
 import { assessWorkspaceIndexFreshness, buildWorkspaceIndex, readWorkspaceIndex, searchWorkspaceContext } from "./context.js";
 import { createContextEvidencePack, getContextEvidenceContract } from "./context-evidence.js";
+import { getDeploymentPreflightContract, runDeploymentPreflight } from "./deployment-preflight.js";
 import { evaluateTrace, getEvaluation, listEvaluations } from "./evaluations.js";
 import {
   createOutcomeFixture,
@@ -199,6 +200,20 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/status",
       authRequired: true,
       description: "Read local workspace and gateway status.",
+    },
+    {
+      id: "deployment.preflight",
+      method: "GET",
+      path: "/v1/deployment/preflight",
+      authRequired: true,
+      description: "Read the local deployment and long-running runtime readiness report.",
+    },
+    {
+      id: "deployment.preflight_contract",
+      method: "GET",
+      path: "/v1/deployment/preflight/contract",
+      authRequired: true,
+      description: "Read the Deployment Preflight contract.",
     },
     {
       id: "context.freshness",
@@ -1461,14 +1476,29 @@ export async function startGatewayServer(store, options = {}) {
 }
 
 export function createGatewayHandler(store, options = {}) {
+  const startedAt = options.startedAt ?? new Date().toISOString();
   return async function gatewayHandler(request, response) {
     try {
       const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
       if (request.method === "GET" && url.pathname === "/health") {
         return sendJson(response, 200, {
           ok: true,
+          status: "ok",
           service: "spruceagent-gateway",
+          version: GATEWAY_ROUTE_CONTRACT.version,
           localOnly: true,
+          startedAt,
+          uptimeMs: Math.max(0, Date.now() - Date.parse(startedAt)),
+          authConfigured: getGatewayAuthStatus(store).tokenConfigured,
+          autopilotRunner: options.autopilotRunner ? {
+            running: options.autopilotRunner.snapshot().running,
+            inFlight: options.autopilotRunner.snapshot().inFlight,
+            intervalMs: options.autopilotRunner.snapshot().intervalMs,
+            lastTickAt: options.autopilotRunner.snapshot().lastTickAt,
+            lastSuccessAt: options.autopilotRunner.snapshot().lastSuccessAt,
+            lastError: options.autopilotRunner.snapshot().lastError,
+          } : null,
+          deploymentPreflight: "/v1/deployment/preflight",
         });
       }
 
@@ -1503,6 +1533,20 @@ async function routeRequest(store, request, url, body, options = {}) {
 
   if (request.method === "GET" && url.pathname === "/v1/status") {
     return ok(gatewayStatus(store, options.autopilotRunner));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/deployment/preflight") {
+    return ok(runDeploymentPreflight(store, {
+      host: url.searchParams.get("host") ?? undefined,
+      port: url.searchParams.get("port") ?? undefined,
+      autopilotPollMs: url.searchParams.get("autopilotPollMs") ?? undefined,
+      requireToken: url.searchParams.get("requireToken") === "true",
+      allowRemote: url.searchParams.get("allowRemote") === "true",
+    }));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/deployment/preflight/contract") {
+    return ok(getDeploymentPreflightContract());
   }
 
   if (request.method === "GET" && url.pathname === "/v1/inbox") {

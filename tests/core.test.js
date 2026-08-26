@@ -102,6 +102,7 @@ import {
   getLlmProviderRegistryContract,
   getCandidateApprovalContract,
   getContextEvidenceContract,
+  getDeploymentPreflightContract,
   getCandidateExecutionContract,
   getPlannerPromotionContract,
   getRunInbox,
@@ -179,6 +180,7 @@ import {
   replaySkillFixture,
   restoreSkillVersion,
   restoreWorkflowVersion,
+  runDeploymentPreflight,
   runDoctor,
   runDueAutopilots,
   setAutopilotEnabled,
@@ -597,6 +599,31 @@ test("doctor reports alpha readiness without failed checks", () => {
   assert.ok(["passed", "warning"].includes(report.status));
   assert.ok(report.checks.some((check) => check.id === "node.version" && check.status === "passed"));
   assert.ok(report.checks.some((check) => check.id === "store.temp" && check.status === "passed"));
+});
+
+test("deployment preflight reports local runtime readiness without exposing tokens", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore({ cwd: path.resolve("."), root: path.join(dir, ".spruceagent") });
+
+  const missingToken = runDeploymentPreflight(store, { host: "127.0.0.1", port: 7357 });
+  assert.equal(getDeploymentPreflightContract().interface, "spruceagent.deployment-preflight");
+  assert.equal(missingToken.interface, "spruceagent.deployment-preflight");
+  assert.equal(missingToken.summary.failedCount, 0);
+  assert.equal(missingToken.status, "warning");
+  assert.equal(missingToken.runtime.tokenConfigured, false);
+  assert.equal(Object.prototype.hasOwnProperty.call(missingToken.runtime, "token"), false);
+  assert.equal(missingToken.checks.some((check) => check.id === "gateway.token" && check.status === "warning"), true);
+  assert.equal(fs.existsSync(path.join(store.root, "deployment-preflight.tmp")), false);
+
+  ensureGatewayToken(store);
+  const ready = runDeploymentPreflight(store, { host: "127.0.0.1", port: 7357, autopilotPollMs: 60000, requireToken: true });
+  assert.equal(ready.status, "passed");
+  assert.equal(ready.runtime.tokenConfigured, true);
+  assert.equal(ready.target.baseUrl, "http://127.0.0.1:7357");
+
+  const remoteBlocked = runDeploymentPreflight(store, { host: "0.0.0.0", port: 7357 });
+  assert.equal(remoteBlocked.status, "failed");
+  assert.equal(remoteBlocked.checks.some((check) => check.id === "gateway.host" && check.status === "failed"), true);
 });
 
 test("memory add and search works", () => {
@@ -2134,6 +2161,11 @@ test("gateway token is generated and required for v1 routes", async () => {
     const health = await fetchJson(`${baseUrl}/health`);
     assert.equal(health.status, 200);
     assert.equal(health.body.ok, true);
+    assert.equal(health.body.status, "ok");
+    assert.equal(health.body.authConfigured, true);
+    assert.equal(health.body.deploymentPreflight, "/v1/deployment/preflight");
+    assert.equal(Object.prototype.hasOwnProperty.call(health.body, "token"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(health.body, "root"), false);
 
     const workbench = await fetchText(`${baseUrl}/workbench`);
     assert.equal(workbench.status, 200);
@@ -2444,6 +2476,7 @@ test("gateway client reads status and route contract", async () => {
     assert.equal(outcomeResults.status, "empty");
     assert.equal(inboxContract.interface, "spruceagent.run-inbox");
     assert.ok(contract.routes.some((route) => route.id === "tools.run"));
+    assert.ok(contract.routes.some((route) => route.id === "deployment.preflight"));
     assert.equal(llmContract.interface, "spruceagent.llm-adapter");
     assert.equal(candidateContract.interface, "spruceagent.candidate-execution");
     assert.equal(candidateApprovalContract.interface, "spruceagent.candidate-approval");
@@ -2469,6 +2502,34 @@ test("gateway client reads status and route contract", async () => {
     assert.equal(workflowInboxContract.interface, "spruceagent.workflow-inbox");
     assert.equal(workflowDetailContract.interface, "spruceagent.workflow-detail");
     assert.equal(workflowContinuationContract.interface, "spruceagent.workflow-continuation");
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
+
+test("gateway client reads deployment preflight readiness", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore({ cwd: path.resolve("."), root: path.join(dir, ".spruceagent") });
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const client = createGatewayClient({
+    baseUrl: `http://${gateway.host}:${gateway.port}`,
+    token: gateway.token,
+  });
+
+  try {
+    const contract = await client.deploymentPreflightContract();
+    const report = await client.deploymentPreflight({
+      host: gateway.host,
+      port: gateway.port,
+      requireToken: true,
+    });
+
+    assert.equal(contract.interface, "spruceagent.deployment-preflight");
+    assert.equal(report.interface, "spruceagent.deployment-preflight");
+    assert.equal(report.status, "passed");
+    assert.equal(report.runtime.tokenConfigured, true);
+    assert.equal(report.target.baseUrl, `http://${gateway.host}:${gateway.port}`);
+    assert.equal(Object.prototype.hasOwnProperty.call(report.runtime, "token"), false);
   } finally {
     await closeServer(gateway.server);
   }

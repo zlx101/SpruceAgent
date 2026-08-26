@@ -28,6 +28,11 @@ export {
 } from "./gateway.js";
 export { createGatewayClient } from "./gateway-client.js";
 export {
+  DEPLOYMENT_PREFLIGHT_CONTRACT,
+  getDeploymentPreflightContract,
+  runDeploymentPreflight,
+} from "./deployment-preflight.js";
+export {
   createAnthropicLlmProvider,
   createDeepSeekLlmProvider,
   createLlmProvider,

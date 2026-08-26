@@ -26,6 +26,23 @@ npm run doctor
 
 A missing `.git` directory is a warning, not a runtime failure.
 
+## Verify Deployment Readiness
+
+```bash
+npm run deploy:preflight
+```
+
+Deployment preflight checks the local long-running alpha runtime boundary:
+
+- required npm scripts
+- `.spruceagent` store paths and writeability
+- `.gitignore` protection for runtime state
+- Gateway host and port configuration
+- Gateway token presence without exposing the token
+- Workbench and showcase static assets
+- optional Autopilot foreground runner interval
+- pending operator attention before unattended use
+
 ## Run The Test Suite
 
 ```bash

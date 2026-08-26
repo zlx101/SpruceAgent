@@ -30,6 +30,8 @@ export function createGatewayClient(options = {}) {
     request,
     health: () => request("GET", "/health", undefined, { auth: false }),
     status: () => request("GET", "/v1/status"),
+    deploymentPreflight: (input = {}) => request("GET", `/v1/deployment/preflight${deploymentPreflightParams(input)}`),
+    deploymentPreflightContract: () => request("GET", "/v1/deployment/preflight/contract"),
     inbox: (input = {}) => request("GET", `/v1/inbox${input.limit ? `?limit=${encodeURIComponent(input.limit)}` : ""}`),
     inboxContract: () => request("GET", "/v1/inbox/contract"),
     approvalQueue: (input = {}) => request("GET", `/v1/approval-queue${queueParams(input)}`),
@@ -210,6 +212,17 @@ function queueParams(input = {}) {
   if (input.limit) params.set("limit", input.limit);
   if (input.traceKind) params.set("traceKind", input.traceKind);
   if (input.status) params.set("status", input.status);
+  const value = params.toString();
+  return value ? `?${value}` : "";
+}
+
+function deploymentPreflightParams(input = {}) {
+  const params = new URLSearchParams();
+  if (input.host) params.set("host", input.host);
+  if (input.port !== undefined) params.set("port", input.port);
+  if (input.autopilotPollMs !== undefined) params.set("autopilotPollMs", input.autopilotPollMs);
+  if (input.requireToken !== undefined) params.set("requireToken", input.requireToken === true ? "true" : "false");
+  if (input.allowRemote !== undefined) params.set("allowRemote", input.allowRemote === true ? "true" : "false");
   const value = params.toString();
   return value ? `?${value}` : "";
 }
