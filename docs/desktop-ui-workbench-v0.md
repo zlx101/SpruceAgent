@@ -22,9 +22,11 @@ The HTML/CSS/JS assets are local static files. API calls still require the Gatew
 
 ## What It Shows
 
-The first screen is backed by Gateway routes including `GET /v1/status`, `GET /v1/context/freshness`, `GET /v1/inbox`, and `GET /v1/fleet-runs`. It renders:
+The first screen is backed by Gateway routes including `GET /v1/status`, `GET /v1/context/freshness`, `GET /v1/deployment/preflight`, `GET /v1/gateway/runtime`, `GET /v1/inbox`, and `GET /v1/fleet-runs`. It renders:
 
 - system overview across ContextOS, Memory, TrustKernel, SkillForge, Workflow, Agent Mesh, Fleet, and Artifacts
+- deployment preflight readiness counts
+- last recorded Gateway runtime status, base URL, and pid
 - run launcher
 - context evidence search
 - workflow editor
@@ -141,6 +143,7 @@ Workbench v0 does not bypass TrustKernel.
 - detail calls use read-only `GET /v1/runs/:traceId`
 - artifact calls are read-only projections and do not copy workspace outputs
 - report export calls are read-only and compose existing trace evidence
+- deployment preflight and Gateway runtime cards are read-only operator diagnostics
 - agent adapter plan calls do not execute external CLIs or create worktrees
 - agent workspace prepare calls may create local git worktrees under `.spruceagent/worktrees`, but do not execute external CLIs, commit, push, merge, or approve changes
 - agent launch preview calls do not execute commands from the browser UI

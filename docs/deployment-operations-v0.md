@@ -99,6 +99,21 @@ Authenticated Gateway runtime state:
 curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/gateway/runtime
 ```
 
+## Workbench
+
+The local Workbench System Overview also reads the authenticated deployment and runtime routes:
+
+- `GET /v1/deployment/preflight`
+- `GET /v1/gateway/runtime`
+
+It displays:
+
+- deployment preflight pass/fail/warning counts
+- the last recorded Gateway runtime status
+- the active Gateway base URL and pid when present
+
+This is an operator visibility surface only. It does not start Gateway, rotate tokens, kill stale processes, launch Agents, approve tickets, or run workflows.
+
 ## Gateway Runtime State
 
 `npm run spruce -- gateway serve` writes local process state to:

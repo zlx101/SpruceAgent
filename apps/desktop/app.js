@@ -3,6 +3,8 @@ const state = {
   token: localStorage.getItem("spruce.gatewayToken") || "",
   status: null,
   contextFreshness: null,
+  deploymentPreflight: null,
+  gatewayRuntime: null,
   contextEvidence: null,
   inbox: null,
   skills: [],
@@ -496,9 +498,11 @@ async function refresh() {
   state.busy = true;
   setStatus("Loading");
   try {
-    const [status, contextFreshness, inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches, launchReviews, capabilityProbes, taskRoutes, fleetRuns, squads, executionTasks, autopilots, autopilotDue] = await Promise.all([
+    const [status, contextFreshness, deploymentPreflight, gatewayRuntime, inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches, launchReviews, capabilityProbes, taskRoutes, fleetRuns, squads, executionTasks, autopilots, autopilotDue] = await Promise.all([
       get("/v1/status"),
       get("/v1/context/freshness"),
+      get("/v1/deployment/preflight"),
+      get("/v1/gateway/runtime"),
       get("/v1/inbox"),
       get("/v1/skills?status=approved"),
       get("/v1/skills?status=candidates"),
@@ -521,6 +525,8 @@ async function refresh() {
     ]);
     state.status = status;
     state.contextFreshness = contextFreshness;
+    state.deploymentPreflight = deploymentPreflight;
+    state.gatewayRuntime = gatewayRuntime;
     state.inbox = inbox;
     state.skills = skills;
     state.candidateSkills = candidateSkills;
@@ -591,8 +597,10 @@ async function handleDecisionQueueAction(button) {
 }
 
 async function refreshAfterRunControlAction() {
-  const [status, inbox, workflowInbox, approvalQueue, artifacts, fleetRuns, agentLaunches] = await Promise.all([
+  const [status, deploymentPreflight, gatewayRuntime, inbox, workflowInbox, approvalQueue, artifacts, fleetRuns, agentLaunches] = await Promise.all([
     get("/v1/status"),
+    get("/v1/deployment/preflight"),
+    get("/v1/gateway/runtime"),
     get("/v1/inbox"),
     get("/v1/workflows/inbox"),
     get("/v1/approval-queue"),
@@ -601,6 +609,8 @@ async function refreshAfterRunControlAction() {
     get("/v1/agent-launches"),
   ]);
   state.status = status;
+  state.deploymentPreflight = deploymentPreflight;
+  state.gatewayRuntime = gatewayRuntime;
   state.inbox = inbox;
   state.workflowInbox = workflowInbox;
   state.approvalQueue = approvalQueue;
@@ -1646,7 +1656,7 @@ function render() {
   nodes.autopilotState.textContent = `${autopilots.items.length} rules / ${autopilotDue.items.length} due`;
   nodes.autopilotRunDueButton.disabled = state.busy || !autopilotDue.items.length;
 
-  renderSystemOverview(state.status, state.contextFreshness);
+  renderSystemOverview(state.status, state.contextFreshness, state.deploymentPreflight, state.gatewayRuntime);
   renderContextEvidence(state.contextEvidence);
   renderSkills(skills);
   renderCandidateSkills(candidateSkills);
@@ -1685,11 +1695,13 @@ function render() {
   renderDetail(state.detail);
 }
 
-function renderSystemOverview(status, freshness) {
+function renderSystemOverview(status, freshness, deploymentPreflight, gatewayRuntime) {
   nodes.systemOverview.replaceChildren();
   const autopilotRunner = status?.autopilotRunner;
   const modules = [
     ["ContextOS", `${status?.indexedDocumentCount ?? 0} indexed`, freshness?.status ?? "unknown"],
+    ["Deployment Preflight", deploymentPreflightSummary(deploymentPreflight), deploymentPreflightStatus(deploymentPreflight)],
+    ["Gateway Runtime", gatewayRuntimeSummary(gatewayRuntime), gatewayRuntimeStatus(gatewayRuntime)],
     ["Memory", `${status?.memoryCount ?? 0} notes`, "available"],
     ["TrustKernel", `${status?.pendingApprovalCount ?? 0} pending`, status?.pendingApprovalCount ? "pending" : "clear"],
     ["SkillForge", `${status?.approvedSkillCount ?? 0} approved / ${status?.candidateSkillCount ?? 0} candidate`, "available"],
@@ -1711,6 +1723,42 @@ function renderSystemOverview(status, freshness) {
     );
     nodes.systemOverview.appendChild(item);
   }
+}
+
+function deploymentPreflightSummary(report) {
+  if (!report) return "not loaded";
+  const summary = report.summary || {};
+  const passedCount = Number(summary.passedCount || 0);
+  const warningCount = Number(summary.warningCount || 0);
+  const failedCount = Number(summary.failedCount || 0);
+  const checkCount = Number(summary.checkCount || passedCount + warningCount + failedCount);
+  return `${passedCount}/${checkCount} checks / ${failedCount} failed / ${warningCount} warnings`;
+}
+
+function deploymentPreflightStatus(report) {
+  if (!report) return "unknown";
+  if (report.status === "passed") return "passed";
+  if (report.status === "warning") return "pending";
+  if (report.status === "failed") return "blocked";
+  return report.status || "unknown";
+}
+
+function gatewayRuntimeSummary(runtime) {
+  if (!runtime) return "not loaded";
+  const record = runtime.record || {};
+  const statusText = runtime.status || record.status || "unknown";
+  const target = record.baseUrl || runtime.baseUrl || (record.host && record.port ? `http://${record.host}:${record.port}` : "no active gateway");
+  const pid = record.pid ? `pid ${record.pid}` : "no pid";
+  return `${statusText} / ${target} / ${pid}`;
+}
+
+function gatewayRuntimeStatus(runtime) {
+  const statusText = runtime?.status || runtime?.record?.status;
+  if (statusText === "running") return "available";
+  if (statusText === "stale") return "stale";
+  if (statusText === "stopped" || statusText === "missing") return "empty";
+  if (statusText === "corrupt") return "blocked";
+  return statusText || "unknown";
 }
 
 function renderContextEvidence(pack) {
