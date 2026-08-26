@@ -20,6 +20,7 @@ const REQUIRED_PATHS = [
   "apps/desktop/index.html",
   "apps/desktop/app.js",
   "apps/desktop/styles.css",
+  "scripts/release-verify.js",
   "packages/core/src/index.js",
   "packages/core/src/agent-trial-attestation.js",
   "packages/core/src/external-cli-launcher.js",
@@ -141,7 +142,7 @@ function buildNextActions(checks) {
     actions.push("Initialize git before preparing the public GitHub repository.");
   }
   if (!actions.length) {
-    actions.push("Run npm test and npm run alpha:smoke before publishing.");
+    actions.push("Run npm run release:verify before publishing.");
   }
   return actions;
 }

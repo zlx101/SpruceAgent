@@ -14,12 +14,18 @@ Use this checklist before publishing a GitHub release, announcing an alpha, or a
 Run all required checks:
 
 ```bash
-npm run doctor
-npm run deploy:preflight
-npm run check
-npm test
-npm run alpha:smoke
+npm run release:verify
 ```
+
+`release:verify` runs the local alpha release gate in order:
+
+1. `npm run doctor`
+2. `npm run deploy:preflight`
+3. `npm run check`
+4. `npm test`
+5. `npm run alpha:smoke`
+
+It stops on the first failing command and prints a machine-readable `spruceagent.release-verification` summary.
 
 Expected alpha baseline:
 

@@ -29,8 +29,9 @@
     "spruce": "node apps/cli/bin/spruce.js",
     "doctor": "node apps/cli/bin/spruce.js doctor",
     "deploy:preflight": "node apps/cli/bin/spruce.js deploy preflight",
+    "release:verify": "node scripts/release-verify.js",
     "alpha:smoke": "node scripts/alpha-smoke.js",
-    "check": "node --check apps/cli/bin/spruce.js && node --check apps/desktop/app.js && node --check apps/showcase/app.js",
+    "check": "node --check apps/cli/bin/spruce.js && node --check apps/desktop/app.js && node --check apps/showcase/app.js && node --check scripts/alpha-smoke.js && node --check scripts/release-verify.js",
     "test": "node --test"
   },
   "engines": {

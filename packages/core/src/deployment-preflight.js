@@ -112,7 +112,7 @@ function checkPackageScripts(cwd) {
   if (!fs.existsSync(packagePath)) return fail("package.scripts", "package.json is missing.");
   try {
     const pkg = readJson(packagePath);
-    const required = ["spruce", "doctor", "check", "test", "alpha:smoke", "deploy:preflight"];
+    const required = ["spruce", "doctor", "check", "test", "alpha:smoke", "deploy:preflight", "release:verify"];
     const missing = required.filter((script) => !pkg.scripts?.[script]);
     return missing.length
       ? fail("package.scripts", `Missing deployment scripts: ${missing.join(", ")}.`)

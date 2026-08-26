@@ -629,6 +629,24 @@ test("deployment preflight reports local runtime readiness without exposing toke
   assert.equal(remoteBlocked.checks.some((check) => check.id === "gateway.host" && check.status === "failed"), true);
 });
 
+test("release verification gate is shared by package scripts, CI, and docs", () => {
+  const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8"));
+  const ci = fs.readFileSync(path.resolve(".github", "workflows", "ci.yml"), "utf8");
+  const checklist = fs.readFileSync(path.resolve("docs", "release-checklist.md"), "utf8");
+  const quickstart = fs.readFileSync(path.resolve("docs", "open-source-alpha-quickstart.md"), "utf8");
+  const script = fs.readFileSync(path.resolve("scripts", "release-verify.js"), "utf8");
+
+  assert.equal(packageJson.scripts["release:verify"], "node scripts/release-verify.js");
+  assert.match(packageJson.scripts.check, /scripts\/release-verify\.js/);
+  assert.match(ci, /npm run release:verify/);
+  assert.match(checklist, /npm run release:verify/);
+  assert.match(quickstart, /npm run release:verify/);
+  assert.match(script, /spruceagent\.release-verification/);
+  for (const command of ["doctor", "deploy:preflight", "check", "test", "alpha:smoke"]) {
+    assert.match(script, new RegExp(command.replace(":", ":")));
+  }
+});
+
 test("memory add and search works", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   const store = ensureStore(createStore(dir));

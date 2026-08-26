@@ -161,11 +161,7 @@ Gateway Runtime v0:
 Recommended local sequence:
 
 ```bash
-npm run doctor
-npm run deploy:preflight
-npm run check
-npm test
-npm run alpha:smoke
+npm run release:verify
 npm run spruce -- gateway token
 npm run spruce -- gateway serve --autopilotPollMs 60000
 ```

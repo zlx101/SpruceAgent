@@ -26,6 +26,16 @@ npm run doctor
 
 A missing `.git` directory is a warning, not a runtime failure.
 
+## Run The Full Local Release Gate
+
+For the same verification sequence used by CI:
+
+```bash
+npm run release:verify
+```
+
+This runs `doctor`, deployment preflight, syntax checks, the full test suite, and the alpha smoke flow. It stops on the first failing command and prints a machine-readable release verification summary.
+
 ## Verify Deployment Readiness
 
 ```bash

@@ -23,17 +23,5 @@ jobs:
       - name: Install
         run: npm install --ignore-scripts
 
-      - name: Syntax Check
-        run: npm run check
-
-      - name: Doctor
-        run: npm run doctor
-
-      - name: Deployment Preflight
-        run: npm run deploy:preflight
-
-      - name: Test
-        run: npm test
-
-      - name: Alpha Smoke
-        run: npm run alpha:smoke
+      - name: Release Verify
+        run: npm run release:verify
