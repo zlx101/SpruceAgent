@@ -73,6 +73,14 @@ import { createContextEvidencePack, getContextEvidenceContract } from "./context
 import { getDeploymentPreflightContract, runDeploymentPreflight } from "./deployment-preflight.js";
 import { evaluateTrace, getEvaluation, listEvaluations } from "./evaluations.js";
 import {
+  gatewayRuntimeHealth,
+  getGatewayRuntimeContract,
+  getGatewayRuntimeState,
+  markGatewayRuntimeRunning,
+  markGatewayRuntimeStopped,
+  reserveGatewayRuntime,
+} from "./gateway-runtime.js";
+import {
   createOutcomeFixture,
   evaluateOutcomeFixture,
   getOutcomeEvaluationContract,
@@ -214,6 +222,20 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/deployment/preflight/contract",
       authRequired: true,
       description: "Read the Deployment Preflight contract.",
+    },
+    {
+      id: "gateway.runtime",
+      method: "GET",
+      path: "/v1/gateway/runtime",
+      authRequired: true,
+      description: "Read local Gateway runtime process state for this SpruceAgent store.",
+    },
+    {
+      id: "gateway.runtime_contract",
+      method: "GET",
+      path: "/v1/gateway/runtime/contract",
+      authRequired: true,
+      description: "Read the Gateway Runtime contract.",
     },
     {
       id: "context.freshness",
@@ -1448,28 +1470,59 @@ export async function startGatewayServer(store, options = {}) {
     throw new Error("gateway refuses non-local host unless allowRemote is explicitly set");
   }
 
+  if (!options.disableRuntimeLock) {
+    reserveGatewayRuntime(store, {
+      host,
+      port,
+      autopilotPollMs: options.autopilotPollMs,
+      localOnly: isLocalHost(host),
+    });
+  }
   const token = ensureGatewayToken(store);
   const autopilotRunner = options.autopilotPollMs === undefined || options.autopilotPollMs === null
     ? null
     : createAutopilotRunner(store, { intervalMs: options.autopilotPollMs, actor: "gateway-autopilot-runner" });
   const startupTick = autopilotRunner ? await autopilotRunner.tick() : null;
-  const server = createGatewayServer(store, { ...options, autopilotRunner });
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(port, host, resolve);
-  });
+  const startedAt = new Date().toISOString();
+  const server = createGatewayServer(store, { ...options, autopilotRunner, startedAt });
+  try {
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(port, host, resolve);
+    });
+  } catch (error) {
+    if (!options.disableRuntimeLock) markGatewayRuntimeStopped(store, { reason: `listen_failed:${error.code ?? "error"}` });
+    throw error;
+  }
   const address = server.address();
+  const actualPort = typeof address === "object" && address ? address.port : port;
+  const runtimeState = options.disableRuntimeLock
+    ? getGatewayRuntimeState(store)
+    : markGatewayRuntimeRunning(store, {
+        host,
+        port: actualPort,
+        tokenPrefix: token.tokenPrefix,
+        autopilotPollMs: options.autopilotPollMs ?? null,
+        localOnly: isLocalHost(host),
+      });
   if (autopilotRunner) {
     autopilotRunner.start();
-    server.once("close", () => autopilotRunner.stop());
+    server.once("close", () => {
+      autopilotRunner.stop();
+      if (!options.disableRuntimeLock) markGatewayRuntimeStopped(store);
+    });
+  } else if (!options.disableRuntimeLock) {
+    server.once("close", () => markGatewayRuntimeStopped(store));
   }
   return {
     server,
     host,
-    port: typeof address === "object" && address ? address.port : port,
+    port: actualPort,
     tokenCreated: token.created,
     token: token.token,
     tokenPrefix: token.tokenPrefix,
+    startedAt,
+    runtime: runtimeState,
     autopilotRunner: autopilotRunner?.snapshot() ?? null,
     autopilotStartupTick: startupTick,
   };
@@ -1481,6 +1534,7 @@ export function createGatewayHandler(store, options = {}) {
     try {
       const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
       if (request.method === "GET" && url.pathname === "/health") {
+        const runtime = gatewayRuntimeHealth(store);
         return sendJson(response, 200, {
           ok: true,
           status: "ok",
@@ -1490,6 +1544,7 @@ export function createGatewayHandler(store, options = {}) {
           startedAt,
           uptimeMs: Math.max(0, Date.now() - Date.parse(startedAt)),
           authConfigured: getGatewayAuthStatus(store).tokenConfigured,
+          runtime,
           autopilotRunner: options.autopilotRunner ? {
             running: options.autopilotRunner.snapshot().running,
             inFlight: options.autopilotRunner.snapshot().inFlight,
@@ -1547,6 +1602,14 @@ async function routeRequest(store, request, url, body, options = {}) {
 
   if (request.method === "GET" && url.pathname === "/v1/deployment/preflight/contract") {
     return ok(getDeploymentPreflightContract());
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/gateway/runtime") {
+    return ok(getGatewayRuntimeState(store));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/gateway/runtime/contract") {
+    return ok(getGatewayRuntimeContract());
   }
 
   if (request.method === "GET" && url.pathname === "/v1/inbox") {
@@ -2429,6 +2492,7 @@ function gatewayStatus(store, autopilotRunner = null) {
   return {
     root: store.root,
     auth: getGatewayAuthStatus(store),
+    runtime: gatewayRuntimeHealth(store),
     memoryCount: listMemory(store).length,
     traceCount: listTraces(store).length,
     pendingApprovalCount: listApprovalTickets(store, "pending").length,

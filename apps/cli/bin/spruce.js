@@ -62,6 +62,8 @@ import {
   getCandidateExecutionContract,
   getGatewayAuthStatus,
   getGatewayRouteContract,
+  getGatewayRuntimeContract,
+  getGatewayRuntimeState,
   getIndexedDocument,
   getApprovalTicket,
   getApprovalQueue,
@@ -1534,6 +1536,16 @@ async function handleGateway(action, args) {
     return;
   }
 
+  if (action === "runtime") {
+    printJson(getGatewayRuntimeState(store));
+    return;
+  }
+
+  if (action === "runtime-contract") {
+    printJson(getGatewayRuntimeContract());
+    return;
+  }
+
   if (action === "call") {
     const flags = parseFlags(args);
     if (!flags.path) {
@@ -1574,7 +1586,7 @@ async function handleGateway(action, args) {
     return await new Promise(() => {});
   }
 
-  throw new Error("usage: spruce gateway <token|info|contract|call|serve>");
+  throw new Error("usage: spruce gateway <token|info|contract|runtime|runtime-contract|call|serve>");
 }
 
 function handleDeployment(action, args = []) {
@@ -2432,6 +2444,8 @@ Usage:
   ${executable} gateway token
   ${executable} gateway token --rotate
   ${executable} gateway contract
+  ${executable} gateway runtime
+  ${executable} gateway runtime-contract
   ${executable} gateway call --path /v1/status --token <token>
   ${executable} gateway serve [--host 127.0.0.1] [--port 7357] [--autopilotPollMs 60000]
 

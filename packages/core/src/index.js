@@ -26,6 +26,15 @@ export {
   startGatewayServer,
   verifyGatewayToken,
 } from "./gateway.js";
+export {
+  GATEWAY_RUNTIME_CONTRACT,
+  gatewayRuntimeHealth,
+  getGatewayRuntimeContract,
+  getGatewayRuntimeState,
+  markGatewayRuntimeRunning,
+  markGatewayRuntimeStopped,
+  reserveGatewayRuntime,
+} from "./gateway-runtime.js";
 export { createGatewayClient } from "./gateway-client.js";
 export {
   DEPLOYMENT_PREFLIGHT_CONTRACT,

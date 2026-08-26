@@ -16,7 +16,7 @@ For the deployment, long-running, and productization track, the current top five
 2. Lightweight Gateway health with uptime and runner state.
 3. CLI and npm entry points for repeatable operator checks.
 4. CI release gate coverage for deployment readiness.
-5. Operator documentation that states what is safe to run unattended.
+5. Gateway runtime state and duplicate-start protection for long-running local processes.
 
 ## CLI
 
@@ -50,6 +50,18 @@ Read the contract:
 npm run spruce -- deploy contract
 ```
 
+Read the last recorded Gateway process state:
+
+```bash
+npm run spruce -- gateway runtime
+```
+
+Read the runtime contract:
+
+```bash
+npm run spruce -- gateway runtime-contract
+```
+
 ## Gateway
 
 Unauthenticated health remains intentionally lightweight:
@@ -81,6 +93,24 @@ Authenticated contract:
 curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/deployment/preflight/contract
 ```
 
+Authenticated Gateway runtime state:
+
+```bash
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/gateway/runtime
+```
+
+## Gateway Runtime State
+
+`npm run spruce -- gateway serve` writes local process state to:
+
+```text
+.spruceagent/runtime/gateway.json
+```
+
+The record includes pid, host, port, base URL, start time, update time, stop time, and the Autopilot polling interval when one is configured. It does not contain the Gateway token.
+
+Before starting, Gateway checks this runtime record. If another live Gateway process is already recorded for the same SpruceAgent store, startup is rejected instead of creating a second long-running owner. When the server closes normally, the record is marked `stopped`. If the process disappears without a clean close, later diagnostics report the record as `stale` and a new start can replace it.
+
 ## Result Semantics
 
 `passed` means the local alpha runtime checks have no blocking errors or warnings.
@@ -101,6 +131,15 @@ Deployment Preflight v0:
 - does not trigger Autopilot rules
 - does not expose Gateway token values
 - creates and removes only one temporary write-probe file under `.spruceagent`
+
+Gateway Runtime v0:
+
+- does not kill processes
+- does not reclaim ports
+- does not start Agents
+- does not run tools
+- does not grant approvals
+- only records and checks the local Gateway process for the current SpruceAgent store
 
 ## Long-Running Alpha Start
 

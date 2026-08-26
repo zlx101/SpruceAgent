@@ -24,6 +24,7 @@ const REQUIRED_PATHS = [
   "packages/core/src/agent-trial-attestation.js",
   "packages/core/src/external-cli-launcher.js",
   "packages/core/src/fleet-runs.js",
+  "packages/core/src/gateway-runtime.js",
   "packages/core/src/llm-provider-registry.js",
   "tests/core.test.js",
   "docs/open-source-alpha-quickstart.md",

@@ -26,6 +26,7 @@ Gateway v0 adds a local HTTP server with:
 - Bearer token auth for all `/v1/*` routes
 - health check without sensitive workspace data
 - deployment preflight endpoint for local long-running readiness
+- gateway runtime state endpoint for local process diagnostics
 - static Desktop UI Workbench at `/workbench`
 - status endpoint
 - inbox endpoint for Desktop UI workbench state
@@ -91,6 +92,12 @@ Deployment preflight:
 
 ```bash
 curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/deployment/preflight
+```
+
+Gateway runtime state:
+
+```bash
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/gateway/runtime
 ```
 
 Workbench:

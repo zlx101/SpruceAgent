@@ -36,6 +36,7 @@ export function ensureStore(store) {
   fs.mkdirSync(path.join(store.root, "execution-tasks"), { recursive: true });
   fs.mkdirSync(path.join(store.root, "autopilots"), { recursive: true });
   fs.mkdirSync(path.join(store.root, "worktrees"), { recursive: true });
+  fs.mkdirSync(path.join(store.root, "runtime"), { recursive: true });
 
   const configPath = path.join(store.root, "config.json");
   if (!fs.existsSync(configPath)) {

@@ -5,6 +5,7 @@ import { listAgentWorkspaces } from "./agent-workspaces.js";
 import { listApprovalTickets } from "./approvals.js";
 import { listAutopilots, listDueAutopilots } from "./autopilots.js";
 import { listFleetRuns } from "./fleet-runs.js";
+import { getGatewayRuntimeState } from "./gateway-runtime.js";
 import { nowIso } from "./id.js";
 import { getExecutionTaskBoard, listExecutionTasks } from "./execution-tasks.js";
 import { readJson } from "./storage.js";
@@ -46,6 +47,7 @@ export function runDeploymentPreflight(store, input = {}) {
     checkHost(host, input.allowRemote === true),
     checkPort(port),
     checkGatewayToken(store, requireToken),
+    checkGatewayRuntime(store),
     checkWorkbenchAssets(store.cwd),
     checkAutopilotPollMs(autopilotPollMs),
     checkOperatorQueues(store),
@@ -80,6 +82,7 @@ export function runDeploymentPreflight(store, input = {}) {
     runtime: {
       storeRoot: store.root,
       tokenConfigured: readGatewayTokenStatus(store).tokenConfigured,
+      gatewayRuntime: gatewayRuntimeSummary(store),
       pendingApprovalCount: pendingApprovals.length,
       executionTaskCount: itemCount(executionTasks),
       executionTaskEvidenceIssueCount: executionTaskBoard.evidenceAttention.length,
@@ -190,6 +193,23 @@ function checkGatewayToken(store, requireToken) {
     : warn("gateway.token", "Gateway bearer token is not configured yet; gateway serve will create one and print it once.");
 }
 
+function checkGatewayRuntime(store) {
+  const state = getGatewayRuntimeState(store);
+  if (state.processAlive && state.record?.pid !== process.pid) {
+    return fail("gateway.runtime", `Another Gateway process is already recorded for this store: pid ${state.record.pid}.`);
+  }
+  if (state.processAlive && state.record?.pid === process.pid) {
+    return pass("gateway.runtime", "Current Gateway process owns this store runtime record.");
+  }
+  if (state.status === "stale") {
+    return warn("gateway.runtime", "Gateway runtime record is stale and can be replaced on the next start.");
+  }
+  if (state.status === "stopped") {
+    return pass("gateway.runtime", "Last Gateway runtime record is stopped.");
+  }
+  return pass("gateway.runtime", "No active Gateway runtime is recorded for this store.");
+}
+
 function checkWorkbenchAssets(cwd) {
   const required = [
     "apps/desktop/index.html",
@@ -203,6 +223,18 @@ function checkWorkbenchAssets(cwd) {
   return missing.length
     ? fail("gateway.static_assets", `Missing static assets: ${missing.join(", ")}.`)
     : pass("gateway.static_assets", "Workbench and showcase static assets are present.");
+}
+
+function gatewayRuntimeSummary(store) {
+  const state = getGatewayRuntimeState(store);
+  return {
+    status: state.status,
+    processAlive: state.processAlive,
+    pid: state.record?.pid ?? null,
+    baseUrl: state.record?.baseUrl ?? null,
+    startedAt: state.record?.startedAt ?? null,
+    stoppedAt: state.record?.stoppedAt ?? null,
+  };
 }
 
 function checkAutopilotPollMs(value) {

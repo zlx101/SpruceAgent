@@ -97,6 +97,8 @@ import {
   getIndexedDocument,
   getApprovalTicket,
   getGatewayRouteContract,
+  getGatewayRuntimeContract,
+  getGatewayRuntimeState,
   getLlmAdapterContract,
   getLlmProviderConfig,
   getLlmProviderRegistryContract,
@@ -242,6 +244,7 @@ test("workspace store initializes core files", () => {
   assert.ok(fs.existsSync(path.join(store.root, "capability-probes")));
   assert.ok(fs.existsSync(path.join(store.root, "agent-routes")));
   assert.ok(fs.existsSync(path.join(store.root, "worktrees")));
+  assert.ok(fs.existsSync(path.join(store.root, "runtime")));
 });
 
 test("execution tasks preserve ownership, gates, evidence, and operator attention", () => {
@@ -2184,6 +2187,33 @@ test("gateway token is generated and required for v1 routes", async () => {
   }
 });
 
+test("gateway runtime state prevents duplicate long-running starts", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const gateway = await startGatewayServer(store, { port: 0 });
+
+  try {
+    const running = getGatewayRuntimeState(store);
+    assert.equal(getGatewayRuntimeContract().interface, "spruceagent.gateway-runtime");
+    assert.equal(running.status, "running");
+    assert.equal(running.processAlive, true);
+    assert.equal(running.record.pid, process.pid);
+    assert.equal(running.record.port, gateway.port);
+    assert.equal(running.record.baseUrl, `http://${gateway.host}:${gateway.port}`);
+    await assert.rejects(
+      () => startGatewayServer(store, { port: 0 }),
+      /already running/,
+    );
+  } finally {
+    await closeServer(gateway.server);
+  }
+
+  const stopped = getGatewayRuntimeState(store);
+  assert.equal(stopped.status, "stopped");
+  assert.equal(stopped.processAlive, false);
+  assert.equal(stopped.record.pid, process.pid);
+});
+
 test("gateway tool execution still uses approval tickets", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   const store = ensureStore(createStore(dir));
@@ -2457,9 +2487,13 @@ test("gateway client reads status and route contract", async () => {
     const workflowInboxContract = await client.workflowInboxContract();
     const workflowDetailContract = await client.workflowDetailContract();
     const workflowContinuationContract = await client.workflowContinuationContract();
+    const gatewayRuntime = await client.gatewayRuntime();
+    const gatewayRuntimeContract = await client.gatewayRuntimeContract();
 
     assert.equal(health.ok, true);
+    assert.equal(health.runtime.status, "running");
     assert.equal(status.auth.tokenConfigured, true);
+    assert.equal(status.runtime.status, "running");
     assert.equal(inbox.version, "0.1.0");
     assert.deepEqual(skills, []);
     assert.equal(skillEvaluationContract.interface, "spruceagent.skill-evaluation");
@@ -2477,6 +2511,7 @@ test("gateway client reads status and route contract", async () => {
     assert.equal(inboxContract.interface, "spruceagent.run-inbox");
     assert.ok(contract.routes.some((route) => route.id === "tools.run"));
     assert.ok(contract.routes.some((route) => route.id === "deployment.preflight"));
+    assert.ok(contract.routes.some((route) => route.id === "gateway.runtime"));
     assert.equal(llmContract.interface, "spruceagent.llm-adapter");
     assert.equal(candidateContract.interface, "spruceagent.candidate-execution");
     assert.equal(candidateApprovalContract.interface, "spruceagent.candidate-approval");
@@ -2502,6 +2537,9 @@ test("gateway client reads status and route contract", async () => {
     assert.equal(workflowInboxContract.interface, "spruceagent.workflow-inbox");
     assert.equal(workflowDetailContract.interface, "spruceagent.workflow-detail");
     assert.equal(workflowContinuationContract.interface, "spruceagent.workflow-continuation");
+    assert.equal(gatewayRuntime.interface, "spruceagent.gateway-runtime");
+    assert.equal(gatewayRuntime.status, "running");
+    assert.equal(gatewayRuntimeContract.interface, "spruceagent.gateway-runtime");
   } finally {
     await closeServer(gateway.server);
   }

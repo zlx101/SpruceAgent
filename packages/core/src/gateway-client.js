@@ -32,6 +32,8 @@ export function createGatewayClient(options = {}) {
     status: () => request("GET", "/v1/status"),
     deploymentPreflight: (input = {}) => request("GET", `/v1/deployment/preflight${deploymentPreflightParams(input)}`),
     deploymentPreflightContract: () => request("GET", "/v1/deployment/preflight/contract"),
+    gatewayRuntime: () => request("GET", "/v1/gateway/runtime"),
+    gatewayRuntimeContract: () => request("GET", "/v1/gateway/runtime/contract"),
     inbox: (input = {}) => request("GET", `/v1/inbox${input.limit ? `?limit=${encodeURIComponent(input.limit)}` : ""}`),
     inboxContract: () => request("GET", "/v1/inbox/contract"),
     approvalQueue: (input = {}) => request("GET", `/v1/approval-queue${queueParams(input)}`),
