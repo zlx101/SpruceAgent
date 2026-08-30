@@ -27,6 +27,13 @@ npm run release:verify
 
 It stops on the first failing command, prints a machine-readable `spruceagent.release-verification` summary, and records the summarized result under the local `.spruceagent/release-verifications/` runtime store.
 
+Inspect recorded release verification evidence locally:
+
+```bash
+npm run spruce -- release list
+npm run spruce -- release get <verificationId>
+```
+
 Expected alpha baseline:
 
 - `doctor` status is `passed`.

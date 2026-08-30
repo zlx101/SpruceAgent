@@ -51,6 +51,8 @@ import {
   getCandidateApprovalContract,
   getContextEvidenceContract,
   getDeploymentPreflightContract,
+  getReleaseVerification,
+  getReleaseVerificationContract,
   getExecutionTask,
   getExecutionTaskEvidence,
   getExecutionTaskClosure,
@@ -130,6 +132,7 @@ import {
   listAutopilots,
   listAutopilotTriggers,
   listDueAutopilots,
+  listReleaseVerifications,
   listFleetRuns,
   listOutcomeEvaluationResults,
   listOutcomeFixtures,
@@ -254,6 +257,7 @@ async function main() {
       skillReplayResultCount: listSkillReplayResults(store).length,
       skillPackageCount: listSkillPackages(store).length,
       skillPackageImportCount: listSkillPackageImports(store).length,
+      releaseVerificationCount: listReleaseVerifications(store, { limit: 1 }).summary.total,
       gateway: getGatewayAuthStatus(store),
     });
     return;
@@ -358,6 +362,11 @@ async function main() {
 
   if (command === "deploy" || command === "deployment") {
     handleDeployment(subcommand, rest);
+    return;
+  }
+
+  if (command === "release" || command === "releases") {
+    handleRelease(subcommand, rest);
     return;
   }
 
@@ -1612,6 +1621,28 @@ function handleDeployment(action, args = []) {
   throw new Error("usage: spruce deploy <preflight|contract>");
 }
 
+function handleRelease(action, args = []) {
+  if (!action || action === "list") {
+    const flags = parseFlags([action, ...args].filter(Boolean));
+    printJson(listReleaseVerifications(store, { limit: flags.limit }));
+    return;
+  }
+
+  if (action === "get") {
+    const [verificationId] = args;
+    if (!verificationId) throw new Error("usage: spruce release get <verificationId>");
+    printJson(getReleaseVerification(store, verificationId));
+    return;
+  }
+
+  if (action === "contract") {
+    printJson(getReleaseVerificationContract());
+    return;
+  }
+
+  throw new Error("usage: spruce release <list|get|contract> [verificationId]");
+}
+
 function handleLlm(action, args = []) {
   if (action === "contract") {
     printJson(getLlmAdapterContract());
@@ -2448,6 +2479,9 @@ Usage:
   ${executable} gateway runtime-contract
   ${executable} gateway call --path /v1/status --token <token>
   ${executable} gateway serve [--host 127.0.0.1] [--port 7357] [--autopilotPollMs 60000]
+  ${executable} release list [--limit 20]
+  ${executable} release get <verificationId>
+  ${executable} release contract
 
 Workspace:
   ${path.join(process.cwd(), ".spruceagent")}

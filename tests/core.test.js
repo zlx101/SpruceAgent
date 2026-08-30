@@ -688,6 +688,7 @@ test("release verification gate is shared by package scripts, CI, and docs", () 
   const checklist = fs.readFileSync(path.resolve("docs", "release-checklist.md"), "utf8");
   const quickstart = fs.readFileSync(path.resolve("docs", "open-source-alpha-quickstart.md"), "utf8");
   const script = fs.readFileSync(path.resolve("scripts", "release-verify.js"), "utf8");
+  const cli = fs.readFileSync(path.resolve("apps", "cli", "bin", "spruce.js"), "utf8");
 
   assert.equal(packageJson.scripts["release:verify"], "node scripts/release-verify.js");
   assert.match(packageJson.scripts.check, /scripts\/release-verify\.js/);
@@ -697,6 +698,8 @@ test("release verification gate is shared by package scripts, CI, and docs", () 
   assert.match(script, /spruceagent\.release-verification/);
   assert.match(script, /persistReleaseVerificationReport/);
   assert.match(packageJson.scripts.check, /packages\/core\/src\/release-verifications\.js/);
+  assert.match(cli, /handleRelease/);
+  assert.match(cli, /release list \[--limit 20\]/);
   for (const command of ["doctor", "deploy:preflight", "check", "test", "alpha:smoke"]) {
     assert.match(script, new RegExp(command.replace(":", ":")));
   }
@@ -2562,6 +2565,8 @@ test("gateway client reads status and route contract", async () => {
     const workflowContinuationContract = await client.workflowContinuationContract();
     const gatewayRuntime = await client.gatewayRuntime();
     const gatewayRuntimeContract = await client.gatewayRuntimeContract();
+    const releaseVerificationContract = await client.releaseVerificationContract();
+    const releaseVerifications = await client.releaseVerifications();
 
     assert.equal(health.ok, true);
     assert.equal(health.runtime.status, "running");
@@ -2585,6 +2590,9 @@ test("gateway client reads status and route contract", async () => {
     assert.ok(contract.routes.some((route) => route.id === "tools.run"));
     assert.ok(contract.routes.some((route) => route.id === "deployment.preflight"));
     assert.ok(contract.routes.some((route) => route.id === "gateway.runtime"));
+    assert.ok(contract.routes.some((route) => route.id === "release_verifications.list"));
+    assert.ok(contract.routes.some((route) => route.id === "release_verifications.detail"));
+    assert.ok(contract.routes.some((route) => route.id === "release_verifications.contract"));
     assert.equal(llmContract.interface, "spruceagent.llm-adapter");
     assert.equal(candidateContract.interface, "spruceagent.candidate-execution");
     assert.equal(candidateApprovalContract.interface, "spruceagent.candidate-approval");
@@ -2603,6 +2611,7 @@ test("gateway client reads status and route contract", async () => {
     assert.equal(status.autopilotCount, 0);
     assert.equal(status.autopilotDueCount, 0);
     assert.equal(status.autopilotRunner, null);
+    assert.equal(status.releaseVerificationCount, 0);
     assert.equal(status.outcomeFixtureCount, 0);
     assert.equal(status.outcomeResultCount, 0);
     assert.equal(artifacts.status, "empty");
@@ -2613,6 +2622,8 @@ test("gateway client reads status and route contract", async () => {
     assert.equal(gatewayRuntime.interface, "spruceagent.gateway-runtime");
     assert.equal(gatewayRuntime.status, "running");
     assert.equal(gatewayRuntimeContract.interface, "spruceagent.gateway-runtime");
+    assert.equal(releaseVerificationContract.interface, "spruceagent.release-verification");
+    assert.equal(releaseVerifications.summary.total, 0);
   } finally {
     await closeServer(gateway.server);
   }
@@ -2641,6 +2652,45 @@ test("gateway client reads deployment preflight readiness", async () => {
     assert.equal(report.runtime.tokenConfigured, true);
     assert.equal(report.target.baseUrl, `http://${gateway.host}:${gateway.port}`);
     assert.equal(Object.prototype.hasOwnProperty.call(report.runtime, "token"), false);
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
+
+test("gateway client reads persisted release verification evidence", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const record = persistReleaseVerificationReport(store, {
+    startedAt: "2026-08-30T01:00:00.000Z",
+    finishedAt: "2026-08-30T01:00:05.000Z",
+    status: "passed",
+    summary: {
+      stepCount: 5,
+      completedCount: 5,
+      passedCount: 5,
+      failedCount: 0,
+      skippedCount: 0,
+    },
+    results: [],
+  });
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const client = createGatewayClient({
+    baseUrl: `http://${gateway.host}:${gateway.port}`,
+    token: gateway.token,
+  });
+
+  try {
+    const list = await client.releaseVerifications({ limit: 5 });
+    const detail = await client.releaseVerification(record.id);
+    const contract = await client.releaseVerificationContract();
+    const status = await client.status();
+
+    assert.equal(contract.interface, "spruceagent.release-verification");
+    assert.equal(list.summary.total, 1);
+    assert.equal(list.items[0].id, record.id);
+    assert.equal(detail.id, record.id);
+    assert.equal(detail.persistence.status, "recorded");
+    assert.equal(status.releaseVerificationCount, 1);
   } finally {
     await closeServer(gateway.server);
   }

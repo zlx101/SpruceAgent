@@ -34,6 +34,9 @@ export function createGatewayClient(options = {}) {
     deploymentPreflightContract: () => request("GET", "/v1/deployment/preflight/contract"),
     gatewayRuntime: () => request("GET", "/v1/gateway/runtime"),
     gatewayRuntimeContract: () => request("GET", "/v1/gateway/runtime/contract"),
+    releaseVerifications: (input = {}) => request("GET", `/v1/release-verifications${limitParams(input)}`),
+    releaseVerification: (verificationId) => request("GET", `/v1/release-verifications/${encodePathPart(verificationId)}`),
+    releaseVerificationContract: () => request("GET", "/v1/release-verifications/contract"),
     inbox: (input = {}) => request("GET", `/v1/inbox${input.limit ? `?limit=${encodeURIComponent(input.limit)}` : ""}`),
     inboxContract: () => request("GET", "/v1/inbox/contract"),
     approvalQueue: (input = {}) => request("GET", `/v1/approval-queue${queueParams(input)}`),
@@ -225,6 +228,13 @@ function deploymentPreflightParams(input = {}) {
   if (input.autopilotPollMs !== undefined) params.set("autopilotPollMs", input.autopilotPollMs);
   if (input.requireToken !== undefined) params.set("requireToken", input.requireToken === true ? "true" : "false");
   if (input.allowRemote !== undefined) params.set("allowRemote", input.allowRemote === true ? "true" : "false");
+  const value = params.toString();
+  return value ? `?${value}` : "";
+}
+
+function limitParams(input = {}) {
+  const params = new URLSearchParams();
+  if (input.limit) params.set("limit", input.limit);
   const value = params.toString();
   return value ? `?${value}` : "";
 }

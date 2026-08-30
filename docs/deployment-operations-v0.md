@@ -112,6 +112,14 @@ Authenticated Gateway runtime state:
 curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/gateway/runtime
 ```
 
+Authenticated release verification evidence:
+
+```bash
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/release-verifications
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/release-verifications/<verificationId>
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/release-verifications/contract
+```
+
 ## Workbench
 
 The local Workbench System Overview also reads the authenticated deployment and runtime routes:

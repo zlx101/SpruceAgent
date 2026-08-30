@@ -33,6 +33,9 @@ The client includes high-level methods:
 
 - `health()`
 - `status()`
+- `releaseVerifications(input)`
+- `releaseVerification(verificationId)`
+- `releaseVerificationContract()`
 - `inbox(input)`
 - `inboxContract()`
 - `listExecutionTasks(input)`
@@ -151,6 +154,7 @@ This layer does not add new authority.
 - skill package imports create candidates only
 - skill replay methods are static and do not execute tools
 - the route contract is descriptive, not a permission grant
+- release verification methods are read-only local evidence views; they do not run the release gate or persist new records
 - execution task methods only manage local control state; they do not create execution or approval authority
 
 ## Why It Matters

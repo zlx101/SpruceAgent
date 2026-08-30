@@ -73,6 +73,11 @@ import { createContextEvidencePack, getContextEvidenceContract } from "./context
 import { getDeploymentPreflightContract, runDeploymentPreflight } from "./deployment-preflight.js";
 import { evaluateTrace, getEvaluation, listEvaluations } from "./evaluations.js";
 import {
+  getReleaseVerification,
+  getReleaseVerificationContract,
+  listReleaseVerifications,
+} from "./release-verifications.js";
+import {
   gatewayRuntimeHealth,
   getGatewayRuntimeContract,
   getGatewayRuntimeState,
@@ -236,6 +241,27 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/gateway/runtime/contract",
       authRequired: true,
       description: "Read the Gateway Runtime contract.",
+    },
+    {
+      id: "release_verifications.list",
+      method: "GET",
+      path: "/v1/release-verifications",
+      authRequired: true,
+      description: "List summarized local release verification gate records.",
+    },
+    {
+      id: "release_verifications.detail",
+      method: "GET",
+      path: "/v1/release-verifications/:verificationId",
+      authRequired: true,
+      description: "Read one summarized local release verification gate record.",
+    },
+    {
+      id: "release_verifications.contract",
+      method: "GET",
+      path: "/v1/release-verifications/contract",
+      authRequired: true,
+      description: "Read the Release Verification contract.",
     },
     {
       id: "context.freshness",
@@ -1612,6 +1638,20 @@ async function routeRequest(store, request, url, body, options = {}) {
     return ok(getGatewayRuntimeContract());
   }
 
+  if (request.method === "GET" && url.pathname === "/v1/release-verifications") {
+    return ok(listReleaseVerifications(store, {
+      limit: url.searchParams.get("limit") ?? undefined,
+    }));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/release-verifications/contract") {
+    return ok(getReleaseVerificationContract());
+  }
+
+  if (request.method === "GET" && pathParts[1] === "release-verifications" && pathParts[2] && !pathParts[3]) {
+    return ok(getReleaseVerification(store, pathParts[2]));
+  }
+
   if (request.method === "GET" && url.pathname === "/v1/inbox") {
     return ok(getRunInbox(store, {
       limit: url.searchParams.get("limit") ?? undefined,
@@ -2489,6 +2529,7 @@ function gatewayStatus(store, autopilotRunner = null) {
   const autopilots = listAutopilots(store);
   const dueAutopilots = listDueAutopilots(store);
   const agentWorkspaces = listAgentWorkspaces(store);
+  const releaseVerifications = listReleaseVerifications(store, { limit: 1 });
   return {
     root: store.root,
     auth: getGatewayAuthStatus(store),
@@ -2516,6 +2557,7 @@ function gatewayStatus(store, autopilotRunner = null) {
     autopilotCount: autopilots.items.length,
     autopilotDueCount: dueAutopilots.items.length,
     autopilotRunner: autopilotRunner?.snapshot() ?? null,
+    releaseVerificationCount: releaseVerifications.summary.total,
     fleetRunCount: listFleetRuns(store).summary.total,
     artifactCount: listArtifacts(store).summary.total,
     evaluationCount: listEvaluations(store).length,

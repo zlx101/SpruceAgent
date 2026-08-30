@@ -27,6 +27,7 @@ Gateway v0 adds a local HTTP server with:
 - health check without sensitive workspace data
 - deployment preflight endpoint for local long-running readiness
 - gateway runtime state endpoint for local process diagnostics
+- release verification endpoints for summarized local release-gate evidence
 - static Desktop UI Workbench at `/workbench`
 - status endpoint
 - inbox endpoint for Desktop UI workbench state
@@ -98,6 +99,14 @@ Gateway runtime state:
 
 ```bash
 curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/gateway/runtime
+```
+
+Release verification records:
+
+```bash
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/release-verifications
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/release-verifications/<verificationId>
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/release-verifications/contract
 ```
 
 Workbench:
