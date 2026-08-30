@@ -129,6 +129,7 @@ function checkStorePaths(store) {
     "approval-index.jsonl",
     "execution-task-index.jsonl",
     "autopilot-index.jsonl",
+    "release-verification-index.jsonl",
     "agent-workspace-index.jsonl",
     "agent-launch-index.jsonl",
   ];

@@ -42,6 +42,13 @@ export {
   runDeploymentPreflight,
 } from "./deployment-preflight.js";
 export {
+  RELEASE_VERIFICATION_CONTRACT,
+  getReleaseVerification,
+  getReleaseVerificationContract,
+  listReleaseVerifications,
+  persistReleaseVerificationReport,
+} from "./release-verifications.js";
+export {
   createAnthropicLlmProvider,
   createDeepSeekLlmProvider,
   createLlmProvider,

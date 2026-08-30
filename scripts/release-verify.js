@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-
-const VERIFY_CONTRACT = Object.freeze({
-  version: "0.1.0",
-  interface: "spruceagent.release-verification",
-  outputKind: "local_release_gate_report",
-});
+import {
+  RELEASE_VERIFICATION_CONTRACT,
+  createStore,
+  ensureStore,
+  persistReleaseVerificationReport,
+} from "../packages/core/src/index.js";
 
 const steps = Object.freeze([
   {
@@ -34,6 +34,7 @@ const steps = Object.freeze([
       ["--check", "apps/cli/bin/spruce.js"],
       ["--check", "apps/desktop/app.js"],
       ["--check", "apps/showcase/app.js"],
+      ["--check", "packages/core/src/release-verifications.js"],
       ["--check", "scripts/alpha-smoke.js"],
       ["--check", "scripts/release-verify.js"],
     ],
@@ -70,7 +71,7 @@ for (const step of steps) {
 
 const failed = results.find((result) => result.status !== "passed");
 const report = {
-  ...VERIFY_CONTRACT,
+  ...RELEASE_VERIFICATION_CONTRACT,
   startedAt,
   finishedAt: new Date().toISOString(),
   status: failed ? "failed" : "passed",
@@ -87,11 +88,13 @@ const report = {
     : ["Release verification passed. Continue with repository hygiene and release notes review."],
 };
 
+const finalReport = persistReport(report);
+
 console.log("");
 console.log("[release:verify] summary");
-console.log(JSON.stringify(report, null, 2));
+console.log(JSON.stringify(finalReport, null, 2));
 
-if (failed) process.exitCode = 1;
+if (finalReport.status !== "passed") process.exitCode = 1;
 
 async function runStep(step) {
   const started = Date.now();
@@ -220,5 +223,25 @@ function parseJsonFromOutput(output) {
     return JSON.parse(output.slice(start, end + 1));
   } catch {
     return null;
+  }
+}
+
+function persistReport(report) {
+  try {
+    const store = ensureStore(createStore(process.cwd()));
+    return persistReleaseVerificationReport(store, report);
+  } catch (error) {
+    return {
+      ...report,
+      status: "failed",
+      persistence: {
+        status: "failed",
+        error: String(error?.message || error),
+      },
+      nextActions: [
+        `Fix release verification persistence: ${String(error?.message || error)}`,
+        ...(report.nextActions || []),
+      ],
+    };
   }
 }

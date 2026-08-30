@@ -62,6 +62,19 @@ Read the runtime contract:
 npm run spruce -- gateway runtime-contract
 ```
 
+Run the full local release gate and record summarized evidence:
+
+```bash
+npm run release:verify
+```
+
+The report is written under:
+
+```text
+.spruceagent/release-verifications/
+.spruceagent/release-verification-index.jsonl
+```
+
 ## Gateway
 
 Unauthenticated health remains intentionally lightweight:
@@ -146,6 +159,15 @@ Deployment Preflight v0:
 - does not trigger Autopilot rules
 - does not expose Gateway token values
 - creates and removes only one temporary write-probe file under `.spruceagent`
+
+Release Verification v0:
+
+- does not publish or push source code
+- does not deploy to any remote environment
+- does not start Gateway
+- does not launch Agents
+- does not grant approvals
+- persists only summarized local gate evidence, not raw stdout or stderr
 
 Gateway Runtime v0:
 

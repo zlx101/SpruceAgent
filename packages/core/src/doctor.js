@@ -27,6 +27,7 @@ const REQUIRED_PATHS = [
   "packages/core/src/fleet-runs.js",
   "packages/core/src/gateway-runtime.js",
   "packages/core/src/llm-provider-registry.js",
+  "packages/core/src/release-verifications.js",
   "tests/core.test.js",
   "docs/open-source-alpha-quickstart.md",
   "docs/contextos-index-safety-v0.md",

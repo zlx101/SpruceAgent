@@ -105,6 +105,8 @@ import {
   getCandidateApprovalContract,
   getContextEvidenceContract,
   getDeploymentPreflightContract,
+  getReleaseVerification,
+  getReleaseVerificationContract,
   getCandidateExecutionContract,
   getPlannerPromotionContract,
   getRunInbox,
@@ -149,6 +151,7 @@ import {
   listAutopilots,
   listAutopilotTriggers,
   listDueAutopilots,
+  listReleaseVerifications,
   listLlmProviderConfigs,
   listSkillEvaluations,
   listSkillPackageImports,
@@ -185,6 +188,7 @@ import {
   runDeploymentPreflight,
   runDoctor,
   runDueAutopilots,
+  persistReleaseVerificationReport,
   setAutopilotEnabled,
   runAgent,
   runPreflight,
@@ -213,6 +217,8 @@ test("workspace store initializes core files", () => {
 
   assert.ok(fs.existsSync(path.join(store.root, "config.json")));
   assert.ok(fs.existsSync(path.join(store.root, "memory.jsonl")));
+  assert.ok(fs.existsSync(path.join(store.root, "release-verifications")));
+  assert.ok(fs.existsSync(path.join(store.root, "release-verification-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "trace-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "approval-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "execution-task-index.jsonl")));
@@ -629,6 +635,53 @@ test("deployment preflight reports local runtime readiness without exposing toke
   assert.equal(remoteBlocked.checks.some((check) => check.id === "gateway.host" && check.status === "failed"), true);
 });
 
+test("release verification reports persist summarized local gate evidence", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const record = persistReleaseVerificationReport(store, {
+    startedAt: "2026-08-30T00:00:00.000Z",
+    finishedAt: "2026-08-30T00:00:03.000Z",
+    status: "passed",
+    summary: {
+      stepCount: 5,
+      completedCount: 5,
+      passedCount: 5,
+      failedCount: 0,
+      skippedCount: 0,
+    },
+    results: [
+      {
+        id: "doctor",
+        label: "Doctor",
+        command: "node apps/cli/bin/spruce.js doctor",
+        operatorCommand: "npm run doctor",
+        status: "passed",
+        exitCode: 0,
+        durationMs: 100,
+        observed: {
+          status: "passed",
+          failedCount: 0,
+          warningCount: 0,
+        },
+      },
+    ],
+  }, { actor: "release-test" });
+  const loaded = getReleaseVerification(store, record.id);
+  const list = listReleaseVerifications(store);
+  const audit = fs.readFileSync(path.join(store.root, "audit.jsonl"), "utf8");
+
+  assert.equal(getReleaseVerificationContract().interface, "spruceagent.release-verification");
+  assert.equal(loaded.id, record.id);
+  assert.equal(loaded.status, "passed");
+  assert.equal(loaded.persistedBy, "release-test");
+  assert.equal(loaded.persistence.status, "recorded");
+  assert.equal(loaded.evidence.storeRelativePath, `release-verifications/${record.id}.json`);
+  assert.equal(list.summary.total, 1);
+  assert.equal(list.items[0].id, record.id);
+  assert.equal(Object.prototype.hasOwnProperty.call(loaded.results[0], "stdout"), false);
+  assert.match(audit, /release_verification\.recorded/);
+});
+
 test("release verification gate is shared by package scripts, CI, and docs", () => {
   const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8"));
   const ci = fs.readFileSync(path.resolve(".github", "workflows", "ci.yml"), "utf8");
@@ -642,6 +695,8 @@ test("release verification gate is shared by package scripts, CI, and docs", () 
   assert.match(checklist, /npm run release:verify/);
   assert.match(quickstart, /npm run release:verify/);
   assert.match(script, /spruceagent\.release-verification/);
+  assert.match(script, /persistReleaseVerificationReport/);
+  assert.match(packageJson.scripts.check, /packages\/core\/src\/release-verifications\.js/);
   for (const command of ["doctor", "deploy:preflight", "check", "test", "alpha:smoke"]) {
     assert.match(script, new RegExp(command.replace(":", ":")));
   }

@@ -25,7 +25,7 @@ npm run release:verify
 4. `npm test`
 5. `npm run alpha:smoke`
 
-It stops on the first failing command and prints a machine-readable `spruceagent.release-verification` summary.
+It stops on the first failing command, prints a machine-readable `spruceagent.release-verification` summary, and records the summarized result under the local `.spruceagent/release-verifications/` runtime store.
 
 Expected alpha baseline:
 
@@ -34,6 +34,7 @@ Expected alpha baseline:
 - `check` exits with code 0.
 - tests pass.
 - `alpha:smoke` returns `"ok": true`.
+- the release verification summary has `status: "passed"` and `summary.failedCount: 0`.
 
 ## 3. Trust Boundary Review
 
@@ -53,6 +54,7 @@ For each changed boundary, confirm that tests cover allowed and blocked behavior
 
 - `git status --short --ignored` does not show accidental source changes.
 - `.spruceagent/` is ignored.
+- release verification records remain local under `.spruceagent/release-verifications/` unless a sanitized release note intentionally summarizes them.
 - `*.skillpkg.json` is ignored unless intentionally published as sanitized sample data.
 - No API keys, tokens, credentials, local paths with secrets, or private workspace evidence are committed.
 - `README.md`, `README.zh-CN.md`, and relevant docs match the current behavior.

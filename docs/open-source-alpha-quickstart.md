@@ -34,7 +34,7 @@ For the same verification sequence used by CI:
 npm run release:verify
 ```
 
-This runs `doctor`, deployment preflight, syntax checks, the full test suite, and the alpha smoke flow. It stops on the first failing command and prints a machine-readable release verification summary.
+This runs `doctor`, deployment preflight, syntax checks, the full test suite, and the alpha smoke flow. It stops on the first failing command, prints a machine-readable release verification summary, and records the summarized result under `.spruceagent/release-verifications/`.
 
 ## Verify Deployment Readiness
 
