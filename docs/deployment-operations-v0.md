@@ -120,6 +120,8 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/release-verific
 curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/release-verifications/contract
 ```
 
+`<verificationId>` must be a single persisted release verification id, not a relative or absolute file path.
+
 ## Workbench
 
 The local Workbench System Overview also reads the authenticated deployment and runtime routes:

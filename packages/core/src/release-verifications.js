@@ -86,7 +86,8 @@ export function listReleaseVerifications(store, options = {}) {
 }
 
 function releaseVerificationPath(store, verificationId) {
-  return path.join(store.root, "release-verifications", `${verificationId}.json`);
+  const safeId = requiredVerificationId(verificationId);
+  return path.join(store.root, "release-verifications", `${safeId}.json`);
 }
 
 function releaseVerificationIndexPath(store) {
@@ -106,4 +107,12 @@ function releaseVerificationListItem(record) {
     skippedCount: record.summary?.skippedCount ?? null,
     storeRelativePath: record.evidence?.storeRelativePath ?? null,
   };
+}
+
+function requiredVerificationId(value) {
+  const id = String(value || "").trim();
+  if (!id || !/^[A-Za-z0-9_.-]+$/.test(id)) {
+    throw new Error("invalid release verification id");
+  }
+  return id;
 }

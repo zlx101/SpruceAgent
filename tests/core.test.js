@@ -679,6 +679,7 @@ test("release verification reports persist summarized local gate evidence", () =
   assert.equal(list.summary.total, 1);
   assert.equal(list.items[0].id, record.id);
   assert.equal(Object.prototype.hasOwnProperty.call(loaded.results[0], "stdout"), false);
+  assert.throws(() => getReleaseVerification(store, "../audit"), /invalid release verification id/);
   assert.match(audit, /release_verification\.recorded/);
 });
 

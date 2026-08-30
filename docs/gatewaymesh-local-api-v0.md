@@ -109,6 +109,8 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/release-verific
 curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/release-verifications/contract
 ```
 
+`<verificationId>` is a single persisted release verification id, not a file path.
+
 Workbench:
 
 ```text
