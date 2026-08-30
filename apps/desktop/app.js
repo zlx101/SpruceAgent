@@ -5,6 +5,7 @@ const state = {
   contextFreshness: null,
   deploymentPreflight: null,
   gatewayRuntime: null,
+  releaseVerifications: null,
   contextEvidence: null,
   inbox: null,
   skills: [],
@@ -498,11 +499,12 @@ async function refresh() {
   state.busy = true;
   setStatus("Loading");
   try {
-    const [status, contextFreshness, deploymentPreflight, gatewayRuntime, inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches, launchReviews, capabilityProbes, taskRoutes, fleetRuns, squads, executionTasks, autopilots, autopilotDue] = await Promise.all([
+    const [status, contextFreshness, deploymentPreflight, gatewayRuntime, releaseVerifications, inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches, launchReviews, capabilityProbes, taskRoutes, fleetRuns, squads, executionTasks, autopilots, autopilotDue] = await Promise.all([
       get("/v1/status"),
       get("/v1/context/freshness"),
       get("/v1/deployment/preflight"),
       get("/v1/gateway/runtime"),
+      get("/v1/release-verifications?limit=1"),
       get("/v1/inbox"),
       get("/v1/skills?status=approved"),
       get("/v1/skills?status=candidates"),
@@ -527,6 +529,7 @@ async function refresh() {
     state.contextFreshness = contextFreshness;
     state.deploymentPreflight = deploymentPreflight;
     state.gatewayRuntime = gatewayRuntime;
+    state.releaseVerifications = releaseVerifications;
     state.inbox = inbox;
     state.skills = skills;
     state.candidateSkills = candidateSkills;
@@ -597,10 +600,11 @@ async function handleDecisionQueueAction(button) {
 }
 
 async function refreshAfterRunControlAction() {
-  const [status, deploymentPreflight, gatewayRuntime, inbox, workflowInbox, approvalQueue, artifacts, fleetRuns, agentLaunches] = await Promise.all([
+  const [status, deploymentPreflight, gatewayRuntime, releaseVerifications, inbox, workflowInbox, approvalQueue, artifacts, fleetRuns, agentLaunches] = await Promise.all([
     get("/v1/status"),
     get("/v1/deployment/preflight"),
     get("/v1/gateway/runtime"),
+    get("/v1/release-verifications?limit=1"),
     get("/v1/inbox"),
     get("/v1/workflows/inbox"),
     get("/v1/approval-queue"),
@@ -611,6 +615,7 @@ async function refreshAfterRunControlAction() {
   state.status = status;
   state.deploymentPreflight = deploymentPreflight;
   state.gatewayRuntime = gatewayRuntime;
+  state.releaseVerifications = releaseVerifications;
   state.inbox = inbox;
   state.workflowInbox = workflowInbox;
   state.approvalQueue = approvalQueue;
@@ -1656,7 +1661,7 @@ function render() {
   nodes.autopilotState.textContent = `${autopilots.items.length} rules / ${autopilotDue.items.length} due`;
   nodes.autopilotRunDueButton.disabled = state.busy || !autopilotDue.items.length;
 
-  renderSystemOverview(state.status, state.contextFreshness, state.deploymentPreflight, state.gatewayRuntime);
+  renderSystemOverview(state.status, state.contextFreshness, state.deploymentPreflight, state.gatewayRuntime, state.releaseVerifications);
   renderContextEvidence(state.contextEvidence);
   renderSkills(skills);
   renderCandidateSkills(candidateSkills);
@@ -1695,13 +1700,14 @@ function render() {
   renderDetail(state.detail);
 }
 
-function renderSystemOverview(status, freshness, deploymentPreflight, gatewayRuntime) {
+function renderSystemOverview(status, freshness, deploymentPreflight, gatewayRuntime, releaseVerifications) {
   nodes.systemOverview.replaceChildren();
   const autopilotRunner = status?.autopilotRunner;
   const modules = [
     ["ContextOS", `${status?.indexedDocumentCount ?? 0} indexed`, freshness?.status ?? "unknown"],
     ["Deployment Preflight", deploymentPreflightSummary(deploymentPreflight), deploymentPreflightStatus(deploymentPreflight)],
     ["Gateway Runtime", gatewayRuntimeSummary(gatewayRuntime), gatewayRuntimeStatus(gatewayRuntime)],
+    ["Release Verification", releaseVerificationSummary(releaseVerifications, status), releaseVerificationStatus(releaseVerifications)],
     ["Memory", `${status?.memoryCount ?? 0} notes`, "available"],
     ["TrustKernel", `${status?.pendingApprovalCount ?? 0} pending`, status?.pendingApprovalCount ? "pending" : "clear"],
     ["SkillForge", `${status?.approvedSkillCount ?? 0} approved / ${status?.candidateSkillCount ?? 0} candidate`, "available"],
@@ -1723,6 +1729,25 @@ function renderSystemOverview(status, freshness, deploymentPreflight, gatewayRun
     );
     nodes.systemOverview.appendChild(item);
   }
+}
+
+function releaseVerificationSummary(records, status) {
+  const total = records?.summary?.total ?? status?.releaseVerificationCount ?? 0;
+  const latest = records?.items?.[0];
+  if (!latest) return `${total} records / no release gate evidence`;
+  const finished = formatTime(latest.finishedAt || latest.persistedAt);
+  const failed = Number(latest.failedCount || 0);
+  const passed = Number(latest.passedCount || 0);
+  const steps = Number(latest.stepCount || passed + failed || 0);
+  return `${total} records / latest ${latest.status} / ${passed}/${steps} steps / ${failed} failed / ${finished}`;
+}
+
+function releaseVerificationStatus(records) {
+  const latest = records?.items?.[0];
+  if (!latest) return "empty";
+  if (latest.status === "passed") return "passed";
+  if (latest.status === "failed") return "blocked";
+  return latest.status || "unknown";
 }
 
 function deploymentPreflightSummary(report) {
