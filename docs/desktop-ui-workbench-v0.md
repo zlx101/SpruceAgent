@@ -22,12 +22,13 @@ The HTML/CSS/JS assets are local static files. API calls still require the Gatew
 
 ## What It Shows
 
-The first screen is backed by Gateway routes including `GET /v1/status`, `GET /v1/context/freshness`, `GET /v1/deployment/preflight`, `GET /v1/gateway/runtime`, `GET /v1/release-verifications?limit=1`, `GET /v1/inbox`, and `GET /v1/fleet-runs`. It renders:
+The first screen is backed by Gateway routes including `GET /v1/status`, `GET /v1/context/freshness`, `GET /v1/deployment/preflight`, `GET /v1/gateway/runtime`, `GET /v1/release-verifications?limit=10`, `GET /v1/inbox`, and `GET /v1/fleet-runs`. It renders:
 
 - system overview across ContextOS, Memory, TrustKernel, SkillForge, Workflow, Agent Mesh, Fleet, and Artifacts
 - deployment preflight readiness counts
 - last recorded Gateway runtime status, base URL, and pid
 - latest recorded release verification status, step counts, failure count, and local record count
+- recent local release verification records and detail JSON for selected records
 - run launcher
 - context evidence search
 - workflow editor
@@ -101,6 +102,8 @@ Workbench v0 supports:
 - inspect Fleet Run orchestration records through `GET /v1/fleet-runs`
 - inspect a Fleet Run detail through `GET /v1/fleet-runs/:fleetRunId`
 - inspect the prioritized durable task board through `GET /v1/execution-tasks/board`
+- inspect recent release verification records through `GET /v1/release-verifications?limit=10`
+- inspect a selected release verification record through `GET /v1/release-verifications/:verificationId`
 - create, claim, update, and inspect Execution Tasks through the existing authenticated Gateway routes
 - hand off a claimed non-terminal Execution Task only after recording its current owner, a distinct incoming owner, bounded handoff context, and the next action; this remains local task control state
 - replace an Execution Task's typed local links through an explicit Workbench prompt; this only updates task metadata and audit history
@@ -144,7 +147,8 @@ Workbench v0 does not bypass TrustKernel.
 - detail calls use read-only `GET /v1/runs/:traceId`
 - artifact calls are read-only projections and do not copy workspace outputs
 - report export calls are read-only and compose existing trace evidence
-- deployment preflight, Gateway runtime, and release verification cards are read-only operator diagnostics
+- deployment preflight, Gateway runtime, and release verification views are read-only operator diagnostics
+- release verification detail views expose summarized local gate evidence and do not run the release gate
 - agent adapter plan calls do not execute external CLIs or create worktrees
 - agent workspace prepare calls may create local git worktrees under `.spruceagent/worktrees`, but do not execute external CLIs, commit, push, merge, or approve changes
 - agent launch preview calls do not execute commands from the browser UI

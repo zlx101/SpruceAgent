@@ -6,6 +6,7 @@ const state = {
   deploymentPreflight: null,
   gatewayRuntime: null,
   releaseVerifications: null,
+  releaseVerificationDetail: null,
   contextEvidence: null,
   inbox: null,
   skills: [],
@@ -96,6 +97,8 @@ const nodes = {
   statusLine: document.querySelector("#status-line"),
   systemState: document.querySelector("#system-state"),
   systemOverview: document.querySelector("#system-overview"),
+  releaseVerificationList: document.querySelector("#release-verification-list"),
+  releaseVerificationPanel: document.querySelector("#release-verification-panel"),
   launchState: document.querySelector("#launch-state"),
   contextEvidenceState: document.querySelector("#context-evidence-state"),
   workflowEditorState: document.querySelector("#workflow-editor-state"),
@@ -192,6 +195,14 @@ nodes.form.addEventListener("submit", async (event) => {
 });
 
 nodes.refreshButton.addEventListener("click", refresh);
+
+nodes.releaseVerificationList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action]");
+  if (!button) return;
+  if (button.dataset.action === "release-verification-view") {
+    await loadReleaseVerification(button.dataset.verificationId);
+  }
+});
 
 nodes.runForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -504,7 +515,7 @@ async function refresh() {
       get("/v1/context/freshness"),
       get("/v1/deployment/preflight"),
       get("/v1/gateway/runtime"),
-      get("/v1/release-verifications?limit=1"),
+      get("/v1/release-verifications?limit=10"),
       get("/v1/inbox"),
       get("/v1/skills?status=approved"),
       get("/v1/skills?status=candidates"),
@@ -604,7 +615,7 @@ async function refreshAfterRunControlAction() {
     get("/v1/status"),
     get("/v1/deployment/preflight"),
     get("/v1/gateway/runtime"),
-    get("/v1/release-verifications?limit=1"),
+    get("/v1/release-verifications?limit=10"),
     get("/v1/inbox"),
     get("/v1/workflows/inbox"),
     get("/v1/approval-queue"),
@@ -1662,6 +1673,8 @@ function render() {
   nodes.autopilotRunDueButton.disabled = state.busy || !autopilotDue.items.length;
 
   renderSystemOverview(state.status, state.contextFreshness, state.deploymentPreflight, state.gatewayRuntime, state.releaseVerifications);
+  renderReleaseVerifications(state.releaseVerifications);
+  renderReleaseVerificationPanel(state.releaseVerificationDetail);
   renderContextEvidence(state.contextEvidence);
   renderSkills(skills);
   renderCandidateSkills(candidateSkills);
@@ -1748,6 +1761,40 @@ function releaseVerificationStatus(records) {
   if (latest.status === "passed") return "passed";
   if (latest.status === "failed") return "blocked";
   return latest.status || "unknown";
+}
+
+function renderReleaseVerifications(records) {
+  const items = records?.items || [];
+  replaceList(nodes.releaseVerificationList, items, (item) => itemNode({
+    title: item.id,
+    meta: [
+      [statusClass(item.status), item.status],
+      ["steps", `${item.passedCount ?? 0}/${item.stepCount ?? 0} steps`],
+      ["failed", `${item.failedCount ?? 0} failed`],
+      ["updated", formatTime(item.finishedAt || item.persistedAt)],
+    ],
+    actions: [releaseVerificationViewButton(item.id)],
+  }));
+}
+
+function renderReleaseVerificationPanel(detail) {
+  if (!detail) {
+    nodes.releaseVerificationPanel.textContent = "{}";
+    return;
+  }
+  nodes.releaseVerificationPanel.textContent = JSON.stringify({
+    id: detail.id,
+    status: detail.status,
+    startedAt: detail.startedAt,
+    finishedAt: detail.finishedAt,
+    persistedAt: detail.persistedAt,
+    persistedBy: detail.persistedBy,
+    summary: detail.summary,
+    evidence: detail.evidence,
+    persistence: detail.persistence,
+    results: detail.results,
+    limits: detail.limits,
+  }, null, 2);
 }
 
 function deploymentPreflightSummary(report) {
@@ -2707,6 +2754,19 @@ async function loadArtifact(artifactId) {
   }
 }
 
+async function loadReleaseVerification(verificationId) {
+  if (!verificationId) return;
+  setStatus("Loading release verification");
+  try {
+    state.releaseVerificationDetail = await get(`/v1/release-verifications/${encodeURIComponent(verificationId)}`);
+    renderReleaseVerificationPanel(state.releaseVerificationDetail);
+    setStatus(`Loaded release verification - ${shortId(verificationId)}`);
+    document.querySelector("#system")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 async function loadTraceReport(traceId) {
   if (!traceId) return;
   setStatus("Exporting trace report");
@@ -3394,6 +3454,16 @@ function artifactViewButton(artifactId) {
   button.type = "button";
   button.dataset.action = "artifact-view";
   button.dataset.artifactId = artifactId;
+  button.innerHTML = '<span aria-hidden="true">&#128065;</span><span>View</span>';
+  return button;
+}
+
+function releaseVerificationViewButton(verificationId) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "release-verification-view";
+  button.dataset.verificationId = verificationId;
   button.innerHTML = '<span aria-hidden="true">&#128065;</span><span>View</span>';
   return button;
 }
