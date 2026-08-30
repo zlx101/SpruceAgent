@@ -27,6 +27,8 @@ npm run release:verify
 
 It stops on the first failing command, prints a machine-readable `spruceagent.release-verification` summary, and records the summarized result under the local `.spruceagent/release-verifications/` runtime store.
 
+The persisted record shape is documented in `schemas/release-verification.schema.json`.
+
 Inspect recorded release verification evidence locally:
 
 ```bash

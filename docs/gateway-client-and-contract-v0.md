@@ -155,6 +155,7 @@ This layer does not add new authority.
 - skill replay methods are static and do not execute tools
 - the route contract is descriptive, not a permission grant
 - release verification methods are read-only local evidence views; they do not run the release gate or persist new records
+- release verification records use the machine-readable schema at `schemas/release-verification.schema.json`
 - execution task methods only manage local control state; they do not create execution or approval authority
 
 ## Why It Matters

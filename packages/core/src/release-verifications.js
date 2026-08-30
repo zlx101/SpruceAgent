@@ -7,6 +7,7 @@ export const RELEASE_VERIFICATION_CONTRACT = Object.freeze({
   version: "0.1.0",
   interface: "spruceagent.release-verification",
   outputKind: "local_release_gate_report",
+  schema: "schemas/release-verification.schema.json",
   safetyBoundary: [
     "Release Verification records local release-gate evidence only; it does not publish, push, deploy, start Gateway, run Agents, approve tickets, or rotate tokens.",
     "Release Verification records are stored under the local .spruceagent runtime store and are not source-controlled release artifacts by default.",

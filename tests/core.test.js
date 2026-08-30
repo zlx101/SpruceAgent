@@ -671,6 +671,7 @@ test("release verification reports persist summarized local gate evidence", () =
   const audit = fs.readFileSync(path.join(store.root, "audit.jsonl"), "utf8");
 
   assert.equal(getReleaseVerificationContract().interface, "spruceagent.release-verification");
+  assert.equal(getReleaseVerificationContract().schema, "schemas/release-verification.schema.json");
   assert.equal(loaded.id, record.id);
   assert.equal(loaded.status, "passed");
   assert.equal(loaded.persistedBy, "release-test");
@@ -690,6 +691,7 @@ test("release verification gate is shared by package scripts, CI, and docs", () 
   const quickstart = fs.readFileSync(path.resolve("docs", "open-source-alpha-quickstart.md"), "utf8");
   const script = fs.readFileSync(path.resolve("scripts", "release-verify.js"), "utf8");
   const cli = fs.readFileSync(path.resolve("apps", "cli", "bin", "spruce.js"), "utf8");
+  const schema = JSON.parse(fs.readFileSync(path.resolve("schemas", "release-verification.schema.json"), "utf8"));
 
   assert.equal(packageJson.scripts["release:verify"], "node scripts/release-verify.js");
   assert.match(packageJson.scripts.check, /scripts\/release-verify\.js/);
@@ -701,6 +703,8 @@ test("release verification gate is shared by package scripts, CI, and docs", () 
   assert.match(packageJson.scripts.check, /packages\/core\/src\/release-verifications\.js/);
   assert.match(cli, /handleRelease/);
   assert.match(cli, /release list \[--limit 20\]/);
+  assert.equal(schema.properties.interface.const, "spruceagent.release-verification");
+  assert.equal(schema.properties.evidence.properties.indexRelativePath.const, "release-verification-index.jsonl");
   for (const command of ["doctor", "deploy:preflight", "check", "test", "alpha:smoke"]) {
     assert.match(script, new RegExp(command.replace(":", ":")));
   }

@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/release-verification.schema.json",
+  "title": "SpruceAgent Release Verification Record",
+  "type": "object",
+  "required": [
+    "id",
+    "version",
+    "interface",
+    "outputKind",
+    "status",
+    "startedAt",
+    "finishedAt",
+    "persistedAt",
+    "persistedBy",
+    "summary",
+    "results",
+    "evidence",
+    "persistence",
+    "limits"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+$"
+    },
+    "version": {
+      "type": "string"
+    },
+    "interface": {
+      "type": "string",
+      "const": "spruceagent.release-verification"
+    },
+    "outputKind": {
+      "type": "string",
+      "const": "local_release_gate_report"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["passed", "failed"]
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finishedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "persistedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "persistedBy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "summary": {
+      "type": "object",
+      "required": ["stepCount", "completedCount", "passedCount", "failedCount", "skippedCount"],
+      "additionalProperties": true,
+      "properties": {
+        "stepCount": { "type": "integer", "minimum": 0 },
+        "completedCount": { "type": "integer", "minimum": 0 },
+        "passedCount": { "type": "integer", "minimum": 0 },
+        "failedCount": { "type": "integer", "minimum": 0 },
+        "skippedCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "label", "command", "operatorCommand", "status"],
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "command": { "type": "string" },
+          "operatorCommand": { "type": "string" },
+          "status": { "type": "string", "enum": ["passed", "failed", "skipped"] },
+          "exitCode": { "type": ["integer", "null"] },
+          "durationMs": { "type": ["integer", "null"], "minimum": 0 },
+          "observed": { "type": "object", "additionalProperties": true }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["persisted", "storeRelativePath", "indexRelativePath"],
+      "additionalProperties": true,
+      "properties": {
+        "persisted": { "type": "boolean", "const": true },
+        "storeRelativePath": { "type": "string", "pattern": "^release-verifications/[A-Za-z0-9_.-]+\\.json$" },
+        "indexRelativePath": { "type": "string", "const": "release-verification-index.jsonl" }
+      }
+    },
+    "persistence": {
+      "type": "object",
+      "required": ["status", "persistedAt", "storeRelativePath", "indexRelativePath"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "string", "const": "recorded" },
+        "persistedAt": { "type": "string", "format": "date-time" },
+        "storeRelativePath": { "type": "string", "pattern": "^release-verifications/[A-Za-z0-9_.-]+\\.json$" },
+        "indexRelativePath": { "type": "string", "const": "release-verification-index.jsonl" }
+      }
+    },
+    "limits": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
