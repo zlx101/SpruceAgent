@@ -128,6 +128,7 @@ function checkStorePaths(store) {
     "trace-index.jsonl",
     "approval-index.jsonl",
     "execution-task-index.jsonl",
+    "execution-task-events",
     "autopilot-index.jsonl",
     "release-verification-index.jsonl",
     "release-artifact-index.jsonl",

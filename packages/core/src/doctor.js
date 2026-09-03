@@ -29,6 +29,7 @@ const REQUIRED_PATHS = [
   "packages/core/src/llm-provider-registry.js",
   "packages/core/src/release-verifications.js",
   "packages/core/src/release-artifacts.js",
+  "schemas/execution-task-event.schema.json",
   "schemas/release-artifact-manifest.schema.json",
   "tests/core.test.js",
   "docs/open-source-alpha-quickstart.md",
@@ -52,6 +53,7 @@ const REQUIRED_PATHS = [
   "docs/llm-provider-registry-v0.md",
   "docs/outcome-evaluation-suite-v1.md",
   "docs/deployment-operations-v0.md",
+  "docs/execution-tasks-v0.md",
   "docs/public-showcase-v0.md",
   "docs/release-checklist.md",
 ];

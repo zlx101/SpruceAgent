@@ -79,6 +79,8 @@ import {
   getExecutionTask,
   getExecutionTaskBoard,
   getExecutionTaskClosure,
+  getExecutionTaskEvents,
+  getExecutionTaskEventStreamContract,
   getExecutionTaskEvidence,
   getExecutionTaskLineage,
   getExecutionTaskContract,
@@ -228,6 +230,7 @@ test("workspace store initializes core files", () => {
   assert.ok(fs.existsSync(path.join(store.root, "trace-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "approval-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "execution-task-index.jsonl")));
+  assert.ok(fs.existsSync(path.join(store.root, "execution-task-events")));
   assert.ok(fs.existsSync(path.join(store.root, "evaluation-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "skill-evaluation-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "outcome-fixture-index.jsonl")));
@@ -374,6 +377,21 @@ test("execution tasks preserve ownership, gates, evidence, and operator attentio
   });
   assert.equal(cancelled.cancellation.summary, "Follow-up scope moved to another release");
   assert.equal(getExecutionTaskClosure(store, followUp.id).cancellation.evidenceSnapshot.interface, "spruceagent.execution-task-evidence");
+  const events = getExecutionTaskEvents(store, task.id);
+  assert.equal(getExecutionTaskEventStreamContract().interface, "spruceagent.execution-task-events");
+  assert.equal(getExecutionTaskEventStreamContract().schema, "schemas/execution-task-event.schema.json");
+  assert.equal(events.outputKind, "local_control_event_stream");
+  assert.equal(events.summary.total, 8);
+  assert.equal(events.items[0].type, "execution_task.created");
+  assert.equal(events.items.at(-1).type, "execution_task.updated");
+  assert.equal(events.items.at(-1).status, "completed");
+  assert.equal(events.items.at(-1).previousStatus, "completed");
+  assert.ok(events.items.some((event) => event.type === "execution_task.waiting_for_human"));
+  assert.ok(events.items.some((event) => event.type === "execution_task.blocked"));
+  assert.ok(events.items.some((event) => event.type === "execution_task.completed"));
+  assert.equal(events.items.find((event) => event.type === "execution_task.handed_off").previousOwner, "coding-agent");
+  assert.equal(getExecutionTaskEvents(store, task.id, { limit: 2 }).summary.returnedCount, 2);
+  assert.equal(getExecutionTaskEvents(store, followUp.id).items.at(-1).status, "cancelled");
 });
 
 test("autopilots persist due scheduling and idempotently create only local execution tasks", () => {
@@ -752,6 +770,7 @@ test("release verification gate is shared by package scripts, CI, and docs", () 
   const cli = fs.readFileSync(path.resolve("apps", "cli", "bin", "spruce.js"), "utf8");
   const schema = JSON.parse(fs.readFileSync(path.resolve("schemas", "release-verification.schema.json"), "utf8"));
   const artifactSchema = JSON.parse(fs.readFileSync(path.resolve("schemas", "release-artifact-manifest.schema.json"), "utf8"));
+  const executionTaskEventSchema = JSON.parse(fs.readFileSync(path.resolve("schemas", "execution-task-event.schema.json"), "utf8"));
 
   assert.equal(packageJson.scripts["release:verify"], "node scripts/release-verify.js");
   assert.match(packageJson.scripts.check, /scripts\/release-verify\.js/);
@@ -760,16 +779,23 @@ test("release verification gate is shared by package scripts, CI, and docs", () 
   assert.match(quickstart, /npm run release:verify/);
   assert.match(script, /spruceagent\.release-verification/);
   assert.match(script, /persistReleaseVerificationReport/);
+  assert.match(script, /packages\/core\/src\/execution-tasks\.js/);
   assert.match(script, /packages\/core\/src\/release-artifacts\.js/);
+  assert.match(packageJson.scripts.check, /packages\/core\/src\/execution-tasks\.js/);
   assert.match(packageJson.scripts.check, /packages\/core\/src\/release-verifications\.js/);
   assert.match(packageJson.scripts.check, /packages\/core\/src\/release-artifacts\.js/);
   assert.match(cli, /handleRelease/);
   assert.match(cli, /release list \[--limit 20\]/);
   assert.match(cli, /release manifest \[--verificationId <verificationId>\]/);
+  assert.match(cli, /task events <taskId> \[--limit 50\]/);
+  assert.match(cli, /task event-contract/);
   assert.equal(schema.properties.interface.const, "spruceagent.release-verification");
   assert.equal(schema.properties.evidence.properties.indexRelativePath.const, "release-verification-index.jsonl");
   assert.equal(artifactSchema.properties.interface.const, "spruceagent.release-artifact-manifest");
   assert.equal(artifactSchema.properties.evidence.properties.indexRelativePath.const, "release-artifact-index.jsonl");
+  assert.equal(executionTaskEventSchema.properties.interface.const, "spruceagent.execution-task-events");
+  assert.ok(executionTaskEventSchema.properties.type.enum.includes("execution_task.handed_off"));
+  assert.ok(executionTaskEventSchema.properties.type.enum.includes("execution_task.completed"));
   for (const command of ["doctor", "deploy:preflight", "check", "test", "alpha:smoke"]) {
     assert.match(script, new RegExp(command.replace(":", ":")));
   }
@@ -2554,9 +2580,9 @@ test("gateway serves workbench static assets without API auth", async () => {
     assert.equal(css.status, 200);
     assert.equal(js.status, 200);
     assert.equal(mark.status, 200);
-    assert.match(html.body, /System Overview|system-overview|Release Verification Records|release-verification-list|release-verification-panel|Release Artifact Manifests|release-artifact-list|release-artifact-panel|Launch Run|Context Evidence|context-evidence-list|context-evidence-panel|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Agent Adapters|agent-adapter-list|agent-plan-panel|Agent Workspaces|agent-workspace-list|agent-workspace-panel|Agent Launches|agent-launch-list|agent-launch-panel|Launch Reviews|launch-review-list|launch-review-panel|Agent Routing|capability-probe-button|task-route-button|task-route-list|task-route-panel|Fleet Runs|fleet-run-list|fleet-run-panel|Execution Tasks|execution-task-create-button|execution-task-list|execution-task-panel|Autopilots|autopilot-create-button|autopilot-run-due-button|autopilot-list|autopilot-panel|Workflow Versions|Workflow Runs|Decision Queue|decision-queue-list|Artifacts|artifact-list|artifact-panel|Run Detail/);
+    assert.match(html.body, /System Overview|system-overview|Release Verification Records|release-verification-list|release-verification-panel|Release Artifact Manifests|release-artifact-list|release-artifact-panel|Launch Run|Context Evidence|context-evidence-list|context-evidence-panel|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Agent Adapters|agent-adapter-list|agent-plan-panel|Agent Workspaces|agent-workspace-list|agent-workspace-panel|Agent Launches|agent-launch-list|agent-launch-panel|Launch Reviews|launch-review-list|launch-review-panel|Agent Routing|capability-probe-button|task-route-button|task-route-list|task-route-panel|Fleet Runs|fleet-run-list|fleet-run-panel|Execution Tasks|Execution Task events are append-only local control-state records|execution-task-create-button|execution-task-list|execution-task-panel|Autopilots|autopilot-create-button|autopilot-run-due-button|autopilot-list|autopilot-panel|Workflow Versions|Workflow Runs|Decision Queue|decision-queue-list|Artifacts|artifact-list|artifact-panel|Run Detail/);
     assert.match(css.body, /Agent Workbench|summary-grid|overview-grid|overview-item|work-section|detail-panel|run-form|draft-step-list|draft-step-fields|source-map-list|evaluation-preview|artifact-preview|evidence-preview|fleet-run-preview|agent-plan-preview|agent-workspace-preview|agent-launch-preview/);
-    assert.match(js.body, /submitRun|searchContextEvidenceFromWorkbench|renderSystemOverview|deploymentPreflightSummary|gatewayRuntimeSummary|\/v1\/deployment\/preflight|\/v1\/gateway\/runtime|renderContextEvidence|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|prepareAgentWorkspaceFromWorkbench|previewAgentLaunch|loadAgentWorkspace|loadAgentLaunch|createLaunchReviewFromWorkbench|loadLaunchReview|probeCapabilitiesFromWorkbench|routeTaskFromWorkbench|loadTaskRoute|renderAgentAdapters|renderAgentPlanPanel|renderAgentWorkspacePanel|renderAgentLaunches|renderAgentLaunchPanel|renderLaunchReviews|renderLaunchReviewPanel|renderCapabilityProbePanel|renderTaskRoutes|renderTaskRoutePanel|renderFleetRuns|renderFleetRunPanel|renderExecutionTasks|renderAutopilots|renderAutopilotPanel|runDueAutopilotsFromWorkbench|loadAutopilotTriggers|createExecutionTaskFromWorkbench|handleExecutionTaskAction|execution-task-links|execution-task-follow-up|execution-task-closure|execution-task-lineage|execution-task-handoff|execution-task-cancel|execution-task-block|execution-task-resume|execution-task-reference-view|loadExecutionTaskReference|completionSummary|cancellationSummary|resumptionSummary|handoffSummary|ifUpdatedAt|blocker|loadExecutionTasks|fleetRunViewButton|loadFleetRun|taskRouteViewButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|agentWorkspaces|agentLaunches|launchReviews|capabilityProbes|taskRoutes|fleetRuns|executionTasks|autopilots|resume|inbox|approval/i);
+    assert.match(js.body, /submitRun|searchContextEvidenceFromWorkbench|renderSystemOverview|deploymentPreflightSummary|gatewayRuntimeSummary|\/v1\/deployment\/preflight|\/v1\/gateway\/runtime|renderContextEvidence|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|prepareAgentWorkspaceFromWorkbench|previewAgentLaunch|loadAgentWorkspace|loadAgentLaunch|createLaunchReviewFromWorkbench|loadLaunchReview|probeCapabilitiesFromWorkbench|routeTaskFromWorkbench|loadTaskRoute|renderAgentAdapters|renderAgentPlanPanel|renderAgentWorkspacePanel|renderAgentLaunches|renderAgentLaunchPanel|renderLaunchReviews|renderLaunchReviewPanel|renderCapabilityProbePanel|renderTaskRoutes|renderTaskRoutePanel|renderFleetRuns|renderFleetRunPanel|renderExecutionTasks|renderAutopilots|renderAutopilotPanel|runDueAutopilotsFromWorkbench|loadAutopilotTriggers|createExecutionTaskFromWorkbench|handleExecutionTaskAction|execution-task-links|execution-task-follow-up|execution-task-closure|execution-task-lineage|execution-task-events|\/v1\/execution-tasks\/.*\/events\?limit=50|execution-task-handoff|execution-task-cancel|execution-task-block|execution-task-resume|execution-task-reference-view|loadExecutionTaskReference|completionSummary|cancellationSummary|resumptionSummary|handoffSummary|ifUpdatedAt|blocker|loadExecutionTasks|fleetRunViewButton|loadFleetRun|taskRouteViewButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|agentWorkspaces|agentLaunches|launchReviews|capabilityProbes|taskRoutes|fleetRuns|executionTasks|autopilots|resume|inbox|approval/i);
     assert.match(js.body, /Release Verification|renderReleaseVerifications|renderReleaseVerificationPanel|releaseVerificationSummary|releaseVerificationStatus|releaseVerificationViewButton|loadReleaseVerification|\/v1\/release-verifications\?limit=10/);
     assert.match(js.body, /Release Artifacts|renderReleaseArtifactManifests|renderReleaseArtifactManifestPanel|releaseArtifactManifestSummary|releaseArtifactManifestStatus|releaseArtifactManifestViewButton|loadReleaseArtifactManifest|\/v1\/release-artifacts\?limit=10/);
     assert.match(js.body, /setAutopilotEnabledFromWorkbench|editAutopilotFromWorkbench|autopilot-edit|autopilot-enable|autopilot-disable|ifUpdatedAt/);
@@ -2641,6 +2667,7 @@ test("gateway client reads status and route contract", async () => {
     const releaseVerifications = await client.releaseVerifications();
     const releaseArtifactManifestContract = await client.releaseArtifactManifestContract();
     const releaseArtifactManifests = await client.releaseArtifactManifests();
+    const executionTaskEventContract = await client.executionTaskEventContract();
 
     assert.equal(health.ok, true);
     assert.equal(health.runtime.status, "running");
@@ -2671,6 +2698,8 @@ test("gateway client reads status and route contract", async () => {
     assert.ok(contract.routes.some((route) => route.id === "release_artifacts.detail"));
     assert.ok(contract.routes.some((route) => route.id === "release_artifacts.create"));
     assert.ok(contract.routes.some((route) => route.id === "release_artifacts.contract"));
+    assert.ok(contract.routes.some((route) => route.id === "execution_tasks.events"));
+    assert.ok(contract.routes.some((route) => route.id === "execution_tasks.event_contract"));
     assert.equal(llmContract.interface, "spruceagent.llm-adapter");
     assert.equal(candidateContract.interface, "spruceagent.candidate-execution");
     assert.equal(candidateApprovalContract.interface, "spruceagent.candidate-approval");
@@ -2705,6 +2734,7 @@ test("gateway client reads status and route contract", async () => {
     assert.equal(releaseVerifications.summary.total, 0);
     assert.equal(releaseArtifactManifestContract.interface, "spruceagent.release-artifact-manifest");
     assert.equal(releaseArtifactManifests.summary.total, 0);
+    assert.equal(executionTaskEventContract.interface, "spruceagent.execution-task-events");
   } finally {
     await closeServer(gateway.server);
   }
@@ -2843,10 +2873,12 @@ test("gateway client manages durable execution task control without execution", 
       "listExecutionTasks",
       "executionTaskBoard",
       "executionTaskContract",
+      "executionTaskEventContract",
       "getExecutionTask",
       "executionTaskEvidence",
       "executionTaskClosure",
       "executionTaskLineage",
+      "executionTaskEvents",
       "createExecutionTask",
       "createExecutionTaskFollowUp",
       "claimExecutionTask",
@@ -2867,6 +2899,8 @@ test("gateway client manages durable execution task control without execution", 
     });
     const loaded = await client.getExecutionTask(task.id);
     const evidence = await client.executionTaskEvidence(task.id);
+    const events = await client.executionTaskEvents(task.id);
+    const eventContract = await client.executionTaskEventContract();
     const listed = await client.listExecutionTasks({ owner: "reviewer" });
     const board = await client.executionTaskBoard();
 
@@ -2876,6 +2910,9 @@ test("gateway client manages durable execution task control without execution", 
     assert.equal(waiting.humanGate, "Approve the release decision");
     assert.equal(loaded.id, task.id);
     assert.equal(evidence.interface, "spruceagent.execution-task-evidence");
+    assert.equal(eventContract.interface, "spruceagent.execution-task-events");
+    assert.equal(events.outputKind, "local_control_event_stream");
+    assert.equal(events.items.map((event) => event.type).join(","), "execution_task.created,execution_task.claimed,execution_task.waiting_for_human");
     assert.equal(listed.summary.total, 1);
     assert.equal(board.attention[0].id, task.id);
     assert.equal(board.attention[0].status, "waiting_for_human");
@@ -2900,6 +2937,7 @@ test("gateway client manages durable execution task control without execution", 
       completionSummary: "Gateway completion payload retained for audit",
     });
     assert.equal(completed.completion.summary, "Gateway completion payload retained for audit");
+    assert.equal((await client.executionTaskEvents(task.id, { limit: 1 })).items[0].type, "execution_task.completed");
     const closure = await client.executionTaskClosure(task.id);
     assert.equal(closure.completion.evidenceSnapshot.interface, "spruceagent.execution-task-evidence");
     const followUp = await client.createExecutionTaskFollowUp(task.id, { goal: "Gateway follow-up task" });

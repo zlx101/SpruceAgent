@@ -28,11 +28,12 @@ Records are stored in the user-owned workspace store:
 
 ```text
 .spruceagent/execution-tasks/<taskId>.json
+.spruceagent/execution-task-events/<taskId>.jsonl
 .spruceagent/execution-task-index.jsonl
 .spruceagent/audit.jsonl
 ```
 
-Each record includes a bounded goal, optional scope and owner, next action, concrete `humanGate`, evidence references, links, and append-only history. The list projection keeps the newest index entry per task id, so an update cannot make the same task appear multiple times.
+Each record includes a bounded goal, optional scope and owner, next action, concrete `humanGate`, evidence references, links, and append-only history. Each create or mutation also appends a per-task event to `execution-task-events/<taskId>.jsonl`. The list projection keeps the newest index entry per task id, so an update cannot make the same task appear multiple times.
 
 ## Invariants
 
@@ -48,7 +49,8 @@ Each record includes a bounded goal, optional scope and owner, next action, conc
 - On first completion or cancellation, the ledger captures a read-only snapshot of its typed local links and declared evidence references. Later record changes cannot rewrite the original terminal snapshot.
 - The first transition to `completed` requires a bounded `completionSummary`, retained with its recorder and timestamp. It is an operator's auditable outcome statement, not an execution authorization or a claim that the linked evidence was independently verified.
 - The first transition to `cancelled` likewise requires a bounded `cancellationSummary`, so a cancelled task is not an unexplained disappearance from the control ledger.
-- All create, claim, and update events are appended to the audit ledger.
+- All create, claim, resume, handoff, and update events are appended to the audit ledger and the per-task event stream.
+- The per-task event stream is an append-only progress projection with schema `schemas/execution-task-event.schema.json`; task JSON remains the source of current control state.
 - The board orders unresolved attention as `waiting_for_human`, `blocked`, `in_progress`, then `open`.
 - The board also exposes `evidenceAttention` for unresolved tasks whose typed links are missing or unsupported; this is diagnostic state only and never changes task or execution authority.
 
@@ -92,8 +94,10 @@ npm run spruce -- task update <taskId> \
 npm run spruce -- task follow-up <terminalTaskId> \
   --goal "Investigate the newly discovered regression"
 npm run spruce -- task closure <completedTaskId>
+npm run spruce -- task events <taskId> --limit 50
 npm run spruce -- task board
 npm run spruce -- task contract
+npm run spruce -- task event-contract
 ```
 
 `--evidenceRefs` and `--links` accept comma-separated values. Resolvable `--links` include `agent_launch:<id>`, `agent_trial:<id>`, `artifact:<id>`, `fleet_run:<id>`, `launch_review:<id>`, `task_route:<id>`, and `trace:<id>`; they return only local record presence and status, and never reinterpret evidence as authority.
@@ -113,18 +117,20 @@ All routes are local and require the existing Gateway Bearer token:
 | `GET` | `/v1/execution-tasks` | List, optionally filtering by `status` or `owner`. |
 | `GET` | `/v1/execution-tasks/board` | Read the prioritized unresolved-task board. |
 | `GET` | `/v1/execution-tasks/contract` | Read the safety contract. |
+| `GET` | `/v1/execution-tasks/events/contract` | Read the append-only task event stream contract. |
 | `POST` | `/v1/execution-tasks` | Create local control state. |
 | `POST` | `/v1/execution-tasks/:taskId/follow-up` | Create a fresh, linked task for a terminal task without reopening it. |
 | `GET` | `/v1/execution-tasks/:taskId` | Read one record. |
 | `GET` | `/v1/execution-tasks/:taskId/evidence` | Resolve typed local links as read-only evidence. |
 | `GET` | `/v1/execution-tasks/:taskId/closure` | Read a terminal task's completed or cancellation outcome and captured evidence snapshot. |
 | `GET` | `/v1/execution-tasks/:taskId/lineage` | Read the task's parent and Follow Up descendants as a diagnostic-only projection. |
+| `GET` | `/v1/execution-tasks/:taskId/events` | Read one task's local control-state events. |
 | `POST` | `/v1/execution-tasks/:taskId/claim` | Claim with an owner mutex. |
 | `POST` | `/v1/execution-tasks/:taskId/handoff` | Transfer a claimed non-terminal task through an auditable current-owner handoff. |
 | `POST` | `/v1/execution-tasks/:taskId/resume` | Resume a blocked or waiting task with an explanation and next action. |
 | `POST` | `/v1/execution-tasks/:taskId/update` | Update state, evidence, or a concrete human gate. |
 
-`createGatewayClient()` provides matching high-level methods: `listExecutionTasks`, `executionTaskBoard`, `executionTaskContract`, `getExecutionTask`, `executionTaskEvidence`, `executionTaskClosure`, `executionTaskLineage`, `createExecutionTask`, `createExecutionTaskFollowUp`, `claimExecutionTask`, `handoffExecutionTask`, `resumeExecutionTask`, and `updateExecutionTask`.
+`createGatewayClient()` provides matching high-level methods: `listExecutionTasks`, `executionTaskBoard`, `executionTaskContract`, `executionTaskEventContract`, `getExecutionTask`, `executionTaskEvidence`, `executionTaskClosure`, `executionTaskLineage`, `executionTaskEvents`, `createExecutionTask`, `createExecutionTaskFollowUp`, `claimExecutionTask`, `handoffExecutionTask`, `resumeExecutionTask`, and `updateExecutionTask`.
 
 ## Workbench
 
@@ -141,6 +147,7 @@ The local Workbench has an **Execution Tasks** section with summary count, task 
 - **Cancel** asks for browser confirmation plus a bounded cancellation reason; it only records task control state and never stops a running Agent or revokes an approval.
 - **Closure** reads a terminal outcome statement and its preserved evidence snapshot.
 - **Lineage** reads the parent and Follow Up chain of any task, including diagnostics for missing parent records or corrupted cycles.
+- **Events** reads the append-only local control-state event stream for the selected task.
 - **Follow Up** appears on a terminal task and creates a new, linked control-state record; it does not reopen or execute the original task.
 - **View** reads the stored ledger record.
 

@@ -59,6 +59,8 @@ import {
   getExecutionTask,
   getExecutionTaskEvidence,
   getExecutionTaskClosure,
+  getExecutionTaskEvents,
+  getExecutionTaskEventStreamContract,
   getExecutionTaskLineage,
   getExecutionTaskBoard,
   getExecutionTaskContract,
@@ -653,6 +655,11 @@ function handleExecutionTask(action, args) {
     return;
   }
 
+  if (action === "event-contract") {
+    printJson(getExecutionTaskEventStreamContract());
+    return;
+  }
+
   if (action === "get") {
     const [taskId] = args;
     if (!taskId) throw new Error("usage: spruce task get <taskId>");
@@ -678,6 +685,14 @@ function handleExecutionTask(action, args) {
     const [taskId] = args;
     if (!taskId) throw new Error("usage: spruce task lineage <taskId>");
     printJson(getExecutionTaskLineage(store, taskId));
+    return;
+  }
+
+  if (action === "events") {
+    const [taskId, ...flagArgs] = args;
+    if (!taskId) throw new Error("usage: spruce task events <taskId> [--limit 50]");
+    const flags = parseFlags(flagArgs);
+    printJson(getExecutionTaskEvents(store, taskId, { limit: flags.limit }));
     return;
   }
 
@@ -773,7 +788,7 @@ function handleExecutionTask(action, args) {
     return;
   }
 
-  throw new Error("usage: spruce task <list|board|contract|get|evidence|closure|lineage|create|follow-up|claim|handoff|resume|update>");
+  throw new Error("usage: spruce task <list|board|contract|event-contract|get|evidence|closure|lineage|events|create|follow-up|claim|handoff|resume|update>");
 }
 
 async function handleAutopilot(action, args) {
@@ -2402,7 +2417,9 @@ Usage:
   ${executable} task evidence <taskId>
   ${executable} task closure <taskId>
   ${executable} task lineage <taskId>
+  ${executable} task events <taskId> [--limit 50]
   ${executable} task contract
+  ${executable} task event-contract
   ${executable} autopilot runner [--intervalMs 60000] [--limit 100]
   ${executable} artifact list [--traceId <traceId>] [--kind tool_result]
   ${executable} artifact get <artifactId>

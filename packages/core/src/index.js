@@ -250,6 +250,8 @@ export {
   getExecutionTask,
   getExecutionTaskBoard,
   getExecutionTaskClosure,
+  getExecutionTaskEvents,
+  getExecutionTaskEventStreamContract,
   getExecutionTaskLineage,
   getExecutionTaskEvidence,
   getExecutionTaskContract,
@@ -259,6 +261,7 @@ export {
   updateExecutionTask,
   resumeExecutionTask,
   EXECUTION_TASK_CONTRACT,
+  EXECUTION_TASK_EVENT_STREAM_CONTRACT,
 } from "./execution-tasks.js";
 export {
   AUTOPILOT_CONTRACT,

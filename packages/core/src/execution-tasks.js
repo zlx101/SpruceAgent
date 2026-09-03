@@ -31,10 +31,37 @@ export const EXECUTION_TASK_CONTRACT = Object.freeze({
   ],
 });
 
+export const EXECUTION_TASK_EVENT_STREAM_CONTRACT = Object.freeze({
+  version: "0.1.0",
+  interface: "spruceagent.execution-task-events",
+  outputKind: "local_control_event_stream",
+  schema: "schemas/execution-task-event.schema.json",
+  eventTypes: [
+    "execution_task.created",
+    "execution_task.claimed",
+    "execution_task.updated",
+    "execution_task.waiting_for_human",
+    "execution_task.blocked",
+    "execution_task.completed",
+    "execution_task.cancelled",
+    "execution_task.resumed",
+    "execution_task.handed_off",
+  ],
+  safetyBoundary: [
+    "Execution Task Events v0 records local control-state transitions only; it never launches agents, executes tools, grants approvals, or resumes work.",
+    "Events are appended per task under the local .spruceagent runtime store and can be read through CLI, Gateway, or Workbench.",
+    "The event stream is an audit/progress projection; task JSON remains the source of current control state.",
+  ],
+});
+
 const STATUSES = new Set(EXECUTION_TASK_CONTRACT.statuses);
 
 export function getExecutionTaskContract() {
   return EXECUTION_TASK_CONTRACT;
+}
+
+export function getExecutionTaskEventStreamContract() {
+  return EXECUTION_TASK_EVENT_STREAM_CONTRACT;
 }
 
 export function createExecutionTask(store, input = {}) {
@@ -71,6 +98,11 @@ export function createExecutionTask(store, input = {}) {
   writeTask(store, task);
   appendJsonl(indexPath(store), taskSummary(task));
   audit(store, task, "execution_task.created", { by: task.createdBy, followUpOf });
+  appendExecutionTaskEvent(store, task, "created", {
+    actor: task.createdBy,
+    note: "task created",
+    followUpOf,
+  });
   return task;
 }
 
@@ -166,7 +198,7 @@ export function updateExecutionTask(store, taskId, input = {}) {
     cancellation,
     evidenceRefs,
     links,
-  }, "updated", input.actor, optionalText(input.note, 500) ?? `status ${task.status} -> ${status}`);
+  }, executionTaskUpdateEventType(task.status, status), input.actor, optionalText(input.note, 500) ?? `status ${task.status} -> ${status}`);
 }
 
 export function resumeExecutionTask(store, taskId, input = {}) {
@@ -322,6 +354,32 @@ export function getExecutionTaskLineage(store, taskId) {
   };
 }
 
+export function getExecutionTaskEvents(store, taskId, options = {}) {
+  const task = getExecutionTask(store, taskId);
+  const limit = Number.isSafeInteger(Number(options.limit)) && Number(options.limit) > 0
+    ? Math.min(Number(options.limit), 200)
+    : 50;
+  const all = readJsonl(eventsPath(store, task.id));
+  const items = all.slice(-limit);
+  return {
+    version: EXECUTION_TASK_EVENT_STREAM_CONTRACT.version,
+    interface: EXECUTION_TASK_EVENT_STREAM_CONTRACT.interface,
+    outputKind: EXECUTION_TASK_EVENT_STREAM_CONTRACT.outputKind,
+    taskId: task.id,
+    taskStatus: task.status,
+    taskUpdatedAt: task.updatedAt,
+    summary: {
+      total: all.length,
+      returnedCount: items.length,
+      latestType: all.at(-1)?.type ?? null,
+      latestAt: all.at(-1)?.createdAt ?? null,
+      terminal: ["completed", "cancelled"].includes(task.status),
+    },
+    items,
+    limits: EXECUTION_TASK_EVENT_STREAM_CONTRACT.safetyBoundary,
+  };
+}
+
 function captureEvidence(store, task, capturedAt) {
   return {
     version: EXECUTION_TASK_CONTRACT.version,
@@ -405,6 +463,13 @@ function updateTask(store, task, changes, type, actor, note) {
   writeTask(store, updated);
   appendJsonl(indexPath(store), taskSummary(updated));
   audit(store, updated, `execution_task.${type}`, { by, note, ...ownership });
+  appendExecutionTaskEvent(store, updated, type, {
+    actor: by,
+    note,
+    previousStatus: task.status,
+    previousOwner: task.owner,
+    ...ownership,
+  });
   return updated;
 }
 
@@ -421,6 +486,14 @@ function normalizeStatus(value) {
   const status = String(value ?? "").trim();
   if (!STATUSES.has(status)) throw new Error(`status must be one of: ${[...STATUSES].join(", ")}`);
   return status;
+}
+function executionTaskUpdateEventType(previousStatus, status) {
+  if (previousStatus === status) return "updated";
+  if (status === "waiting_for_human") return "waiting_for_human";
+  if (status === "blocked") return "blocked";
+  if (status === "completed") return "completed";
+  if (status === "cancelled") return "cancelled";
+  return "updated";
 }
 function normalizeRefs(value) { return normalizeList(value, 160, "evidenceRefs"); }
 function normalizeLinks(value) { return normalizeList(value, 240, "links"); }
@@ -480,5 +553,32 @@ function requiredTaskId(value, name = "taskId") {
 }
 function taskPath(store, id) { return path.join(store.root, "execution-tasks", `${requiredTaskId(id)}.json`); }
 function indexPath(store) { return path.join(store.root, "execution-task-index.jsonl"); }
+function eventsPath(store, id) { return path.join(store.root, "execution-task-events", `${requiredTaskId(id)}.jsonl`); }
 function writeTask(store, task) { writeJson(taskPath(store, task.id), task); }
 function audit(store, task, type, extra) { appendJsonl(path.join(store.root, "audit.jsonl"), { type, taskId: task.id, status: task.status, createdAt: nowIso(), ...extra }); }
+
+function appendExecutionTaskEvent(store, task, type, input = {}) {
+  const event = {
+    version: EXECUTION_TASK_EVENT_STREAM_CONTRACT.version,
+    interface: EXECUTION_TASK_EVENT_STREAM_CONTRACT.interface,
+    id: createId("execution_task_event"),
+    taskId: task.id,
+    type: `execution_task.${type}`,
+    createdAt: nowIso(),
+    actor: optionalText(input.actor, 120) ?? "local-user",
+    status: task.status,
+    previousStatus: input.previousStatus ?? null,
+    owner: task.owner,
+    previousOwner: input.previousOwner ?? null,
+    note: optionalText(input.note, 500),
+    followUpOf: input.followUpOf ?? task.followUpOf ?? null,
+    summary: {
+      historyCount: (task.history ?? []).length,
+      evidenceRefCount: (task.evidenceRefs ?? []).length,
+      linkCount: (task.links ?? []).length,
+      terminal: ["completed", "cancelled"].includes(task.status),
+    },
+  };
+  appendJsonl(eventsPath(store, task.id), event);
+  return event;
+}

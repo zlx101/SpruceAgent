@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/execution-task-event.schema.json",
+  "title": "SpruceAgent Execution Task Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "interface",
+    "id",
+    "taskId",
+    "type",
+    "createdAt",
+    "actor",
+    "status",
+    "previousStatus",
+    "owner",
+    "previousOwner",
+    "note",
+    "followUpOf",
+    "summary"
+  ],
+  "properties": {
+    "version": { "type": "string" },
+    "interface": { "const": "spruceagent.execution-task-events" },
+    "id": { "type": "string", "pattern": "^execution_task_event_[A-Za-z0-9_-]+$" },
+    "taskId": { "type": "string", "pattern": "^execution_task_[A-Za-z0-9_-]+$" },
+    "type": {
+      "enum": [
+        "execution_task.created",
+        "execution_task.claimed",
+        "execution_task.updated",
+        "execution_task.waiting_for_human",
+        "execution_task.blocked",
+        "execution_task.completed",
+        "execution_task.cancelled",
+        "execution_task.resumed",
+        "execution_task.handed_off"
+      ]
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "actor": { "type": "string" },
+    "status": {
+      "enum": ["open", "in_progress", "waiting_for_human", "blocked", "completed", "cancelled"]
+    },
+    "previousStatus": {
+      "type": ["string", "null"],
+      "enum": ["open", "in_progress", "waiting_for_human", "blocked", "completed", "cancelled", null]
+    },
+    "owner": { "type": ["string", "null"] },
+    "previousOwner": { "type": ["string", "null"] },
+    "note": { "type": ["string", "null"] },
+    "followUpOf": { "type": ["string", "null"] },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["historyCount", "evidenceRefCount", "linkCount", "terminal"],
+      "properties": {
+        "historyCount": { "type": "integer", "minimum": 0 },
+        "evidenceRefCount": { "type": "integer", "minimum": 0 },
+        "linkCount": { "type": "integer", "minimum": 0 },
+        "terminal": { "type": "boolean" }
+      }
+    }
+  }
+}

@@ -109,6 +109,7 @@ Workbench v0 supports:
 - inspect recent release artifact manifests through `GET /v1/release-artifacts?limit=10`
 - inspect a selected release artifact manifest through `GET /v1/release-artifacts/:manifestId`
 - create, claim, update, and inspect Execution Tasks through the existing authenticated Gateway routes
+- inspect one Execution Task's append-only local event stream through `GET /v1/execution-tasks/:taskId/events?limit=50`
 - hand off a claimed non-terminal Execution Task only after recording its current owner, a distinct incoming owner, bounded handoff context, and the next action; this remains local task control state
 - replace an Execution Task's typed local links through an explicit Workbench prompt; this only updates task metadata and audit history
 - mark an Execution Task completed only after explicitly recording the bounded outcome or verification basis; this remains task audit state, not an execution approval
@@ -160,6 +161,7 @@ Workbench v0 does not bypass TrustKernel.
 - Agent Launcher v0 external coding CLI execution remains disabled; only explicit `local-shell-agent` execution through CLI or Gateway payloads can run after TrustKernel policy checks
 - Fleet Run views are read-only; fleet creation, approvals, execution, and cancellation still require explicit Gateway or CLI calls
 - Execution Task controls only write durable local coordination state; they cannot launch Agents, execute tools, or grant approvals
+- Execution Task event views are read-only projections of local control-state history and cannot resume or mutate task work
 - tool execution still flows through TrustKernel
 
 ## Files

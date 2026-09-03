@@ -34,6 +34,7 @@ export function ensureStore(store) {
   fs.mkdirSync(path.join(store.root, "agent-trials"), { recursive: true });
   fs.mkdirSync(path.join(store.root, "squads"), { recursive: true });
   fs.mkdirSync(path.join(store.root, "execution-tasks"), { recursive: true });
+  fs.mkdirSync(path.join(store.root, "execution-task-events"), { recursive: true });
   fs.mkdirSync(path.join(store.root, "autopilots"), { recursive: true });
   fs.mkdirSync(path.join(store.root, "release-verifications"), { recursive: true });
   fs.mkdirSync(path.join(store.root, "release-artifacts"), { recursive: true });

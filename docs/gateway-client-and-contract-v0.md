@@ -45,10 +45,12 @@ The client includes high-level methods:
 - `listExecutionTasks(input)`
   - `executionTaskBoard()`
   - `executionTaskContract()`
+  - `executionTaskEventContract()`
   - `getExecutionTask(taskId)`
   - `executionTaskEvidence(taskId)`
   - `executionTaskClosure(taskId)`
   - `executionTaskLineage(taskId)`
+  - `executionTaskEvents(taskId, input)`
   - `createExecutionTask(input)`
   - `createExecutionTaskFollowUp(taskId, input)`
   - `claimExecutionTask(taskId, input)`
@@ -163,6 +165,7 @@ This layer does not add new authority.
 - release artifact manifest reads are read-only local evidence views; manifest creation records local metadata and does not package, publish, push, deploy, install dependencies, or run verification
 - release artifact manifests use the machine-readable schema at `schemas/release-artifact-manifest.schema.json`
 - execution task methods only manage local control state; they do not create execution or approval authority
+- execution task event methods read append-only local progress records from `schemas/execution-task-event.schema.json`; they do not launch Agents, execute tools, resume work, or grant approvals
 
 ## Why It Matters
 

@@ -740,6 +740,12 @@ async function handleExecutionTaskAction(button) {
       render();
       return;
     }
+    if (button.dataset.action === "execution-task-events") {
+      task = await get(`/v1/execution-tasks/${encodeURIComponent(taskId)}/events?limit=50`);
+      state.executionTaskDetail = task;
+      render();
+      return;
+    }
     if (button.dataset.action === "execution-task-origin") {
       const sourceTask = await get(`/v1/execution-tasks/${encodeURIComponent(taskId)}`);
       if (sourceTask.origin?.kind !== "autopilot") throw new Error("This task has no Autopilot origin");
@@ -2344,6 +2350,7 @@ function renderExecutionTasks(items, closureAttention = []) {
       executionTaskButton("execution-task-view", item.id, "&#128065;", "View", "secondary"),
       executionTaskButton("execution-task-evidence", item.id, "&#128269;", "Evidence", "secondary"),
       executionTaskButton("execution-task-lineage", item.id, "&#127795;", "Lineage", "secondary"),
+      executionTaskButton("execution-task-events", item.id, "&#128337;", "Events", "secondary"),
       ...(item.origin?.kind === "autopilot" ? [executionTaskButton("execution-task-origin", item.id, "&#128279;", "Autopilot Origin", "secondary")] : []),
       ... (["completed", "cancelled"].includes(item.status) ? [executionTaskButton("execution-task-closure", item.id, "&#128220;", "Closure", "secondary")] : []),
       executionTaskButton("execution-task-links", item.id, "&#128279;", "Update Links", "secondary"),

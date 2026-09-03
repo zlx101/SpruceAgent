@@ -29,6 +29,7 @@ Gateway v0 adds a local HTTP server with:
 - gateway runtime state endpoint for local process diagnostics
 - release verification endpoints for summarized local release-gate evidence
 - release artifact manifest endpoints for local publish-readiness metadata
+- execution task event endpoints for append-only local control-state progress
 - static Desktop UI Workbench at `/workbench`
 - status endpoint
 - inbox endpoint for Desktop UI workbench state
@@ -317,6 +318,15 @@ Read a trace-backed run detail:
 ```bash
 curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/runs/<traceId>
 ```
+
+Read Execution Task control-state events:
+
+```bash
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/execution-tasks/events/contract
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/execution-tasks/<taskId>/events?limit=50
+```
+
+`<taskId>` must be a single persisted execution task id, not a relative or absolute file path. These routes read append-only local progress records only; they do not launch Agents, execute tools, resume work, or grant approvals.
 
 Run a safe tool:
 

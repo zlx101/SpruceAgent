@@ -75,6 +75,7 @@ The report is written under:
 .spruceagent/release-verification-index.jsonl
 .spruceagent/release-artifacts/
 .spruceagent/release-artifact-index.jsonl
+.spruceagent/execution-task-events/
 ```
 
 After a verification record exists, record the local release material manifest:
@@ -141,6 +142,15 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/release-artifac
 
 `<manifestId>` must be a single persisted release artifact manifest id, not a relative or absolute file path.
 
+Authenticated Execution Task progress events:
+
+```bash
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/execution-tasks/events/contract
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/execution-tasks/<taskId>/events?limit=50
+```
+
+`<taskId>` must be a single persisted execution task id. Event reads are local audit/progress views only; they do not execute, resume, approve, or hand off work.
+
 ## Workbench
 
 The local Workbench System Overview also reads the authenticated deployment and runtime routes:
@@ -149,6 +159,7 @@ The local Workbench System Overview also reads the authenticated deployment and 
 - `GET /v1/gateway/runtime`
 - `GET /v1/release-verifications?limit=10`
 - `GET /v1/release-artifacts?limit=10`
+- `GET /v1/execution-tasks/:taskId/events?limit=50` when the operator selects Events on a task
 
 It displays:
 
@@ -157,8 +168,9 @@ It displays:
 - the active Gateway base URL and pid when present
 - recent release verification records
 - recent release artifact manifests
+- selected Execution Task control-state events
 
-This is an operator visibility surface only. It does not start Gateway, rotate tokens, kill stale processes, generate release manifests, launch Agents, approve tickets, or run workflows.
+This is an operator visibility surface only. It does not start Gateway, rotate tokens, kill stale processes, generate release manifests, launch Agents, approve tickets, run workflows, or mutate work from an event view.
 
 ## Gateway Runtime State
 

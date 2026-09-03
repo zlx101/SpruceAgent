@@ -64,7 +64,7 @@ import {
 } from "./task-router.js";
 import { approveTicket, getApprovalTicket, listApprovalTickets, rejectTicket } from "./approvals.js";
 import { getApprovalQueue, getApprovalQueueContract } from "./approval-queue.js";
-import { claimExecutionTask, createExecutionTask, createExecutionTaskFollowUp, getExecutionTask, getExecutionTaskBoard, getExecutionTaskClosure, getExecutionTaskContract, getExecutionTaskEvidence, getExecutionTaskLineage, handoffExecutionTask, listExecutionTasks, resumeExecutionTask, updateExecutionTask } from "./execution-tasks.js";
+import { claimExecutionTask, createExecutionTask, createExecutionTaskFollowUp, getExecutionTask, getExecutionTaskBoard, getExecutionTaskClosure, getExecutionTaskContract, getExecutionTaskEvents, getExecutionTaskEventStreamContract, getExecutionTaskEvidence, getExecutionTaskLineage, handoffExecutionTask, listExecutionTasks, resumeExecutionTask, updateExecutionTask } from "./execution-tasks.js";
 import { createAutopilot, getAutopilot, getAutopilotContract, listAutopilotFailures, listAutopilotTriggers, listAutopilots, listDueAutopilots, runDueAutopilots, setAutopilotEnabled, triggerAutopilot, updateAutopilot } from "./autopilots.js";
 import { createAutopilotRunner } from "./autopilot-runner.js";
 import { getArtifact, getArtifactContract, listArtifacts } from "./artifacts.js";
@@ -354,6 +354,13 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       description: "Read the Execution Tasks safety contract.",
     },
     {
+      id: "execution_tasks.event_contract",
+      method: "GET",
+      path: "/v1/execution-tasks/events/contract",
+      authRequired: true,
+      description: "Read the Execution Task Events append-only progress contract.",
+    },
+    {
       id: "execution_tasks.get",
       method: "GET",
       path: "/v1/execution-tasks/:taskId",
@@ -380,6 +387,13 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/execution-tasks/:taskId/lineage",
       authRequired: true,
       description: "Read parent and follow-up task lineage without changing task control state.",
+    },
+    {
+      id: "execution_tasks.events",
+      method: "GET",
+      path: "/v1/execution-tasks/:taskId/events",
+      authRequired: true,
+      description: "Read one task's append-only local control-state events without executing work.",
     },
     {
       id: "execution_tasks.create",
@@ -1735,9 +1749,11 @@ async function routeRequest(store, request, url, body, options = {}) {
   if (request.method === "GET" && url.pathname === "/v1/execution-tasks") return ok(listExecutionTasks(store, { status: url.searchParams.get("status") ?? undefined, owner: url.searchParams.get("owner") ?? undefined }));
   if (request.method === "GET" && url.pathname === "/v1/execution-tasks/board") return ok(getExecutionTaskBoard(store));
   if (request.method === "GET" && url.pathname === "/v1/execution-tasks/contract") return ok(getExecutionTaskContract());
+  if (request.method === "GET" && url.pathname === "/v1/execution-tasks/events/contract") return ok(getExecutionTaskEventStreamContract());
   if (request.method === "GET" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "evidence" && !pathParts[4]) return ok(getExecutionTaskEvidence(store, pathParts[2]));
   if (request.method === "GET" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "closure" && !pathParts[4]) return ok(getExecutionTaskClosure(store, pathParts[2]));
   if (request.method === "GET" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "lineage" && !pathParts[4]) return ok(getExecutionTaskLineage(store, pathParts[2]));
+  if (request.method === "GET" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "events" && !pathParts[4]) return ok(getExecutionTaskEvents(store, pathParts[2], { limit: url.searchParams.get("limit") ?? undefined }));
   if (request.method === "POST" && url.pathname === "/v1/execution-tasks") return ok(createExecutionTask(store, { ...body, actor: body.actor ?? "gateway-user" }));
   if (request.method === "POST" && pathParts[1] === "execution-tasks" && pathParts[2] && pathParts[3] === "follow-up" && !pathParts[4]) return ok(createExecutionTaskFollowUp(store, pathParts[2], { ...body, actor: body.actor ?? "gateway-user" }));
   if (request.method === "GET" && pathParts[1] === "execution-tasks" && pathParts[2] && !pathParts[3]) return ok(getExecutionTask(store, pathParts[2]));
