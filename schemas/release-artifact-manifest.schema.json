@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spruceagent.dev/schemas/release-artifact-manifest.schema.json",
+  "title": "SpruceAgent Release Artifact Manifest",
+  "type": "object",
+  "required": [
+    "id",
+    "version",
+    "interface",
+    "outputKind",
+    "schema",
+    "generatedAt",
+    "generatedBy",
+    "project",
+    "source",
+    "releaseVerification",
+    "summary",
+    "artifacts",
+    "evidence",
+    "persistence",
+    "limits"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+$"
+    },
+    "version": {
+      "type": "string"
+    },
+    "interface": {
+      "type": "string",
+      "const": "spruceagent.release-artifact-manifest"
+    },
+    "outputKind": {
+      "type": "string",
+      "const": "local_release_artifact_manifest"
+    },
+    "schema": {
+      "type": "string",
+      "const": "schemas/release-artifact-manifest.schema.json"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "generatedBy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "project": {
+      "type": "object",
+      "required": ["name", "version", "private", "cwdName"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": ["string", "null"] },
+        "private": { "type": ["boolean", "null"] },
+        "cwdName": { "type": "string" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["revision", "dirtyState", "revisionSource"],
+      "additionalProperties": false,
+      "properties": {
+        "revision": { "type": ["string", "null"] },
+        "dirtyState": { "type": "string", "enum": ["not_checked", "clean", "dirty", "unknown"] },
+        "revisionSource": { "type": "string", "enum": ["git_head_file", "input"] }
+      }
+    },
+    "releaseVerification": {
+      "type": ["object", "null"],
+      "required": ["id", "status", "startedAt", "finishedAt", "persistedAt", "summary", "storeRelativePath"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+$" },
+        "status": { "type": "string", "enum": ["passed", "failed"] },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "finishedAt": { "type": "string", "format": "date-time" },
+        "persistedAt": { "type": "string", "format": "date-time" },
+        "summary": { "type": "object", "additionalProperties": true },
+        "storeRelativePath": { "type": ["string", "null"], "pattern": "^release-verifications/[A-Za-z0-9_.-]+\\.json$" }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "status",
+        "artifactCount",
+        "includedCount",
+        "requiredCount",
+        "missingRequiredCount",
+        "missingOptionalCount",
+        "totalSizeBytes",
+        "releaseVerificationStatus"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "string", "enum": ["ready", "needs_attention"] },
+        "artifactCount": { "type": "integer", "minimum": 0 },
+        "includedCount": { "type": "integer", "minimum": 0 },
+        "requiredCount": { "type": "integer", "minimum": 0 },
+        "missingRequiredCount": { "type": "integer", "minimum": 0 },
+        "missingOptionalCount": { "type": "integer", "minimum": 0 },
+        "totalSizeBytes": { "type": "integer", "minimum": 0 },
+        "releaseVerificationStatus": { "type": "string" }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "path", "required", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": { "type": "string" },
+          "path": { "type": "string" },
+          "required": { "type": "boolean" },
+          "status": {
+            "type": "string",
+            "enum": ["included", "missing_optional", "missing_required", "blocked"]
+          },
+          "reason": { "type": "string" },
+          "sizeBytes": { "type": "integer", "minimum": 0 },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["persisted", "storeRelativePath", "indexRelativePath", "releaseVerificationId"],
+      "additionalProperties": false,
+      "properties": {
+        "persisted": { "type": "boolean", "const": true },
+        "storeRelativePath": { "type": "string", "pattern": "^release-artifacts/[A-Za-z0-9_.-]+\\.json$" },
+        "indexRelativePath": { "type": "string", "const": "release-artifact-index.jsonl" },
+        "releaseVerificationId": { "type": ["string", "null"], "pattern": "^[A-Za-z0-9_.-]+$" }
+      }
+    },
+    "persistence": {
+      "type": "object",
+      "required": ["status", "persistedAt", "storeRelativePath", "indexRelativePath"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "string", "const": "recorded" },
+        "persistedAt": { "type": "string", "format": "date-time" },
+        "storeRelativePath": { "type": "string", "pattern": "^release-artifacts/[A-Za-z0-9_.-]+\\.json$" },
+        "indexRelativePath": { "type": "string", "const": "release-artifact-index.jsonl" }
+      }
+    },
+    "limits": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

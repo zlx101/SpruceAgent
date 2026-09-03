@@ -27,6 +27,7 @@ import {
   createGatewayClient,
   createFleetRun,
   createOutcomeFixture,
+  createReleaseArtifactManifest,
   createStore,
   createWorkflow,
   createWorkflowFromDraft,
@@ -53,6 +54,8 @@ import {
   getDeploymentPreflightContract,
   getReleaseVerification,
   getReleaseVerificationContract,
+  getReleaseArtifactManifest,
+  getReleaseArtifactManifestContract,
   getExecutionTask,
   getExecutionTaskEvidence,
   getExecutionTaskClosure,
@@ -133,6 +136,7 @@ import {
   listAutopilotTriggers,
   listDueAutopilots,
   listReleaseVerifications,
+  listReleaseArtifactManifests,
   listFleetRuns,
   listOutcomeEvaluationResults,
   listOutcomeFixtures,
@@ -258,6 +262,7 @@ async function main() {
       skillPackageCount: listSkillPackages(store).length,
       skillPackageImportCount: listSkillPackageImports(store).length,
       releaseVerificationCount: listReleaseVerifications(store, { limit: 1 }).summary.total,
+      releaseArtifactManifestCount: listReleaseArtifactManifests(store, { limit: 1 }).summary.total,
       gateway: getGatewayAuthStatus(store),
     });
     return;
@@ -1622,6 +1627,35 @@ function handleDeployment(action, args = []) {
 }
 
 function handleRelease(action, args = []) {
+  if (action === "manifest") {
+    const flags = parseFlags(args);
+    printJson(createReleaseArtifactManifest(store, {
+      releaseVerificationId: flags.verificationId,
+      sourceRevision: flags.sourceRevision,
+      dirtyState: flags.dirtyState,
+      actor: flags.actor ?? "local-user",
+    }));
+    return;
+  }
+
+  if (action === "manifests" || action === "artifact-list") {
+    const flags = parseFlags(args);
+    printJson(listReleaseArtifactManifests(store, { limit: flags.limit }));
+    return;
+  }
+
+  if (action === "manifest-get" || action === "artifact") {
+    const [manifestId] = args;
+    if (!manifestId) throw new Error("usage: spruce release manifest-get <manifestId>");
+    printJson(getReleaseArtifactManifest(store, manifestId));
+    return;
+  }
+
+  if (action === "artifact-contract" || action === "manifest-contract") {
+    printJson(getReleaseArtifactManifestContract());
+    return;
+  }
+
   if (!action || action === "list") {
     const flags = parseFlags([action, ...args].filter(Boolean));
     printJson(listReleaseVerifications(store, { limit: flags.limit }));
@@ -1640,7 +1674,7 @@ function handleRelease(action, args = []) {
     return;
   }
 
-  throw new Error("usage: spruce release <list|get|contract> [verificationId]");
+  throw new Error("usage: spruce release <list|get|contract|manifest|manifests|manifest-get|manifest-contract> [id]");
 }
 
 function handleLlm(action, args = []) {
@@ -2482,6 +2516,10 @@ Usage:
   ${executable} release list [--limit 20]
   ${executable} release get <verificationId>
   ${executable} release contract
+  ${executable} release manifest [--verificationId <verificationId>]
+  ${executable} release manifests [--limit 20]
+  ${executable} release manifest-get <manifestId>
+  ${executable} release manifest-contract
 
 Workspace:
   ${path.join(process.cwd(), ".spruceagent")}

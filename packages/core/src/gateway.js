@@ -78,6 +78,12 @@ import {
   listReleaseVerifications,
 } from "./release-verifications.js";
 import {
+  createReleaseArtifactManifest,
+  getReleaseArtifactManifest,
+  getReleaseArtifactManifestContract,
+  listReleaseArtifactManifests,
+} from "./release-artifacts.js";
+import {
   gatewayRuntimeHealth,
   getGatewayRuntimeContract,
   getGatewayRuntimeState,
@@ -262,6 +268,34 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/release-verifications/contract",
       authRequired: true,
       description: "Read the Release Verification contract.",
+    },
+    {
+      id: "release_artifacts.list",
+      method: "GET",
+      path: "/v1/release-artifacts",
+      authRequired: true,
+      description: "List local release artifact manifest records.",
+    },
+    {
+      id: "release_artifacts.detail",
+      method: "GET",
+      path: "/v1/release-artifacts/:manifestId",
+      authRequired: true,
+      description: "Read one local release artifact manifest record.",
+    },
+    {
+      id: "release_artifacts.create",
+      method: "POST",
+      path: "/v1/release-artifacts/manifest",
+      authRequired: true,
+      description: "Create a local release artifact manifest without publishing or deploying.",
+    },
+    {
+      id: "release_artifacts.contract",
+      method: "GET",
+      path: "/v1/release-artifacts/contract",
+      authRequired: true,
+      description: "Read the Release Artifact Manifest contract.",
     },
     {
       id: "context.freshness",
@@ -1652,6 +1686,30 @@ async function routeRequest(store, request, url, body, options = {}) {
     return ok(getReleaseVerification(store, pathParts[2]));
   }
 
+  if (request.method === "GET" && url.pathname === "/v1/release-artifacts") {
+    return ok(listReleaseArtifactManifests(store, {
+      limit: url.searchParams.get("limit") ?? undefined,
+    }));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/release-artifacts/contract") {
+    return ok(getReleaseArtifactManifestContract());
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/release-artifacts/manifest") {
+    return ok(createReleaseArtifactManifest(store, {
+      releaseVerificationId: body.releaseVerificationId,
+      sourceRevision: body.sourceRevision,
+      dirtyState: body.dirtyState,
+      artifacts: body.artifacts,
+      actor: body.actor ?? "gateway-user",
+    }));
+  }
+
+  if (request.method === "GET" && pathParts[1] === "release-artifacts" && pathParts[2] && !pathParts[3]) {
+    return ok(getReleaseArtifactManifest(store, pathParts[2]));
+  }
+
   if (request.method === "GET" && url.pathname === "/v1/inbox") {
     return ok(getRunInbox(store, {
       limit: url.searchParams.get("limit") ?? undefined,
@@ -2530,6 +2588,7 @@ function gatewayStatus(store, autopilotRunner = null) {
   const dueAutopilots = listDueAutopilots(store);
   const agentWorkspaces = listAgentWorkspaces(store);
   const releaseVerifications = listReleaseVerifications(store, { limit: 1 });
+  const releaseArtifactManifests = listReleaseArtifactManifests(store, { limit: 1 });
   return {
     root: store.root,
     auth: getGatewayAuthStatus(store),
@@ -2558,6 +2617,7 @@ function gatewayStatus(store, autopilotRunner = null) {
     autopilotDueCount: dueAutopilots.items.length,
     autopilotRunner: autopilotRunner?.snapshot() ?? null,
     releaseVerificationCount: releaseVerifications.summary.total,
+    releaseArtifactManifestCount: releaseArtifactManifests.summary.total,
     fleetRunCount: listFleetRuns(store).summary.total,
     artifactCount: listArtifacts(store).summary.total,
     evaluationCount: listEvaluations(store).length,

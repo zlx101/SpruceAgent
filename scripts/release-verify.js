@@ -35,10 +35,11 @@ const steps = Object.freeze([
       ["--check", "apps/desktop/app.js"],
       ["--check", "apps/showcase/app.js"],
       ["--check", "packages/core/src/release-verifications.js"],
+      ["--check", "packages/core/src/release-artifacts.js"],
       ["--check", "scripts/alpha-smoke.js"],
       ["--check", "scripts/release-verify.js"],
     ],
-    expected: "CLI, Workbench, showcase, and release verification scripts parse cleanly.",
+    expected: "CLI, Workbench, showcase, release verification, and release artifact scripts parse cleanly.",
   },
   {
     id: "test",

@@ -73,6 +73,14 @@ The report is written under:
 ```text
 .spruceagent/release-verifications/
 .spruceagent/release-verification-index.jsonl
+.spruceagent/release-artifacts/
+.spruceagent/release-artifact-index.jsonl
+```
+
+After a verification record exists, record the local release material manifest:
+
+```bash
+npm run spruce -- release manifest --verificationId <verificationId>
 ```
 
 ## Gateway
@@ -122,20 +130,35 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/release-verific
 
 `<verificationId>` must be a single persisted release verification id, not a relative or absolute file path.
 
+Authenticated release artifact manifests:
+
+```bash
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/release-artifacts
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/release-artifacts/<manifestId>
+curl -H "Authorization: Bearer <token>" -X POST http://127.0.0.1:7357/v1/release-artifacts/manifest
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/release-artifacts/contract
+```
+
+`<manifestId>` must be a single persisted release artifact manifest id, not a relative or absolute file path.
+
 ## Workbench
 
 The local Workbench System Overview also reads the authenticated deployment and runtime routes:
 
 - `GET /v1/deployment/preflight`
 - `GET /v1/gateway/runtime`
+- `GET /v1/release-verifications?limit=10`
+- `GET /v1/release-artifacts?limit=10`
 
 It displays:
 
 - deployment preflight pass/fail/warning counts
 - the last recorded Gateway runtime status
 - the active Gateway base URL and pid when present
+- recent release verification records
+- recent release artifact manifests
 
-This is an operator visibility surface only. It does not start Gateway, rotate tokens, kill stale processes, launch Agents, approve tickets, or run workflows.
+This is an operator visibility surface only. It does not start Gateway, rotate tokens, kill stale processes, generate release manifests, launch Agents, approve tickets, or run workflows.
 
 ## Gateway Runtime State
 

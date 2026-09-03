@@ -49,6 +49,13 @@ export {
   persistReleaseVerificationReport,
 } from "./release-verifications.js";
 export {
+  RELEASE_ARTIFACT_MANIFEST_CONTRACT,
+  createReleaseArtifactManifest,
+  getReleaseArtifactManifest,
+  getReleaseArtifactManifestContract,
+  listReleaseArtifactManifests,
+} from "./release-artifacts.js";
+export {
   createAnthropicLlmProvider,
   createDeepSeekLlmProvider,
   createLlmProvider,

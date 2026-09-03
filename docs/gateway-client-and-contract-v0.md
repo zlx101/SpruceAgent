@@ -36,6 +36,10 @@ The client includes high-level methods:
 - `releaseVerifications(input)`
 - `releaseVerification(verificationId)`
 - `releaseVerificationContract()`
+- `releaseArtifactManifests(input)`
+- `releaseArtifactManifest(manifestId)`
+- `createReleaseArtifactManifest(input)`
+- `releaseArtifactManifestContract()`
 - `inbox(input)`
 - `inboxContract()`
 - `listExecutionTasks(input)`
@@ -156,6 +160,8 @@ This layer does not add new authority.
 - the route contract is descriptive, not a permission grant
 - release verification methods are read-only local evidence views; they do not run the release gate or persist new records
 - release verification records use the machine-readable schema at `schemas/release-verification.schema.json`
+- release artifact manifest reads are read-only local evidence views; manifest creation records local metadata and does not package, publish, push, deploy, install dependencies, or run verification
+- release artifact manifests use the machine-readable schema at `schemas/release-artifact-manifest.schema.json`
 - execution task methods only manage local control state; they do not create execution or approval authority
 
 ## Why It Matters

@@ -36,6 +36,16 @@ npm run spruce -- release list
 npm run spruce -- release get <verificationId>
 ```
 
+Record a local release artifact manifest after the verification record exists:
+
+```bash
+npm run spruce -- release manifest --verificationId <verificationId>
+npm run spruce -- release manifests
+npm run spruce -- release manifest-get <manifestId>
+```
+
+The artifact manifest records local release material paths, byte sizes, SHA-256 checksums, source revision, and the linked release verification summary. It does not package, publish, push, deploy, install dependencies, or rerun verification. Its persisted shape is documented in `schemas/release-artifact-manifest.schema.json`.
+
 Expected alpha baseline:
 
 - `doctor` status is `passed`.
@@ -64,6 +74,7 @@ For each changed boundary, confirm that tests cover allowed and blocked behavior
 - `git status --short --ignored` does not show accidental source changes.
 - `.spruceagent/` is ignored.
 - release verification records remain local under `.spruceagent/release-verifications/` unless a sanitized release note intentionally summarizes them.
+- release artifact manifests remain local under `.spruceagent/release-artifacts/` unless a sanitized release note intentionally summarizes checksums.
 - `*.skillpkg.json` is ignored unless intentionally published as sanitized sample data.
 - No API keys, tokens, credentials, local paths with secrets, or private workspace evidence are committed.
 - `README.md`, `README.zh-CN.md`, and relevant docs match the current behavior.

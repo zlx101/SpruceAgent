@@ -7,6 +7,8 @@ const state = {
   gatewayRuntime: null,
   releaseVerifications: null,
   releaseVerificationDetail: null,
+  releaseArtifactManifests: null,
+  releaseArtifactManifestDetail: null,
   contextEvidence: null,
   inbox: null,
   skills: [],
@@ -99,6 +101,8 @@ const nodes = {
   systemOverview: document.querySelector("#system-overview"),
   releaseVerificationList: document.querySelector("#release-verification-list"),
   releaseVerificationPanel: document.querySelector("#release-verification-panel"),
+  releaseArtifactList: document.querySelector("#release-artifact-list"),
+  releaseArtifactPanel: document.querySelector("#release-artifact-panel"),
   launchState: document.querySelector("#launch-state"),
   contextEvidenceState: document.querySelector("#context-evidence-state"),
   workflowEditorState: document.querySelector("#workflow-editor-state"),
@@ -201,6 +205,14 @@ nodes.releaseVerificationList.addEventListener("click", async (event) => {
   if (!button) return;
   if (button.dataset.action === "release-verification-view") {
     await loadReleaseVerification(button.dataset.verificationId);
+  }
+});
+
+nodes.releaseArtifactList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-action]");
+  if (!button) return;
+  if (button.dataset.action === "release-artifact-view") {
+    await loadReleaseArtifactManifest(button.dataset.manifestId);
   }
 });
 
@@ -510,12 +522,13 @@ async function refresh() {
   state.busy = true;
   setStatus("Loading");
   try {
-    const [status, contextFreshness, deploymentPreflight, gatewayRuntime, releaseVerifications, inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches, launchReviews, capabilityProbes, taskRoutes, fleetRuns, squads, executionTasks, autopilots, autopilotDue] = await Promise.all([
+    const [status, contextFreshness, deploymentPreflight, gatewayRuntime, releaseVerifications, releaseArtifactManifests, inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches, launchReviews, capabilityProbes, taskRoutes, fleetRuns, squads, executionTasks, autopilots, autopilotDue] = await Promise.all([
       get("/v1/status"),
       get("/v1/context/freshness"),
       get("/v1/deployment/preflight"),
       get("/v1/gateway/runtime"),
       get("/v1/release-verifications?limit=10"),
+      get("/v1/release-artifacts?limit=10"),
       get("/v1/inbox"),
       get("/v1/skills?status=approved"),
       get("/v1/skills?status=candidates"),
@@ -541,6 +554,7 @@ async function refresh() {
     state.deploymentPreflight = deploymentPreflight;
     state.gatewayRuntime = gatewayRuntime;
     state.releaseVerifications = releaseVerifications;
+    state.releaseArtifactManifests = releaseArtifactManifests;
     state.inbox = inbox;
     state.skills = skills;
     state.candidateSkills = candidateSkills;
@@ -611,11 +625,12 @@ async function handleDecisionQueueAction(button) {
 }
 
 async function refreshAfterRunControlAction() {
-  const [status, deploymentPreflight, gatewayRuntime, releaseVerifications, inbox, workflowInbox, approvalQueue, artifacts, fleetRuns, agentLaunches] = await Promise.all([
+  const [status, deploymentPreflight, gatewayRuntime, releaseVerifications, releaseArtifactManifests, inbox, workflowInbox, approvalQueue, artifacts, fleetRuns, agentLaunches] = await Promise.all([
     get("/v1/status"),
     get("/v1/deployment/preflight"),
     get("/v1/gateway/runtime"),
     get("/v1/release-verifications?limit=10"),
+    get("/v1/release-artifacts?limit=10"),
     get("/v1/inbox"),
     get("/v1/workflows/inbox"),
     get("/v1/approval-queue"),
@@ -627,6 +642,7 @@ async function refreshAfterRunControlAction() {
   state.deploymentPreflight = deploymentPreflight;
   state.gatewayRuntime = gatewayRuntime;
   state.releaseVerifications = releaseVerifications;
+  state.releaseArtifactManifests = releaseArtifactManifests;
   state.inbox = inbox;
   state.workflowInbox = workflowInbox;
   state.approvalQueue = approvalQueue;
@@ -1672,9 +1688,11 @@ function render() {
   nodes.autopilotState.textContent = `${autopilots.items.length} rules / ${autopilotDue.items.length} due`;
   nodes.autopilotRunDueButton.disabled = state.busy || !autopilotDue.items.length;
 
-  renderSystemOverview(state.status, state.contextFreshness, state.deploymentPreflight, state.gatewayRuntime, state.releaseVerifications);
+  renderSystemOverview(state.status, state.contextFreshness, state.deploymentPreflight, state.gatewayRuntime, state.releaseVerifications, state.releaseArtifactManifests);
   renderReleaseVerifications(state.releaseVerifications);
   renderReleaseVerificationPanel(state.releaseVerificationDetail);
+  renderReleaseArtifactManifests(state.releaseArtifactManifests);
+  renderReleaseArtifactManifestPanel(state.releaseArtifactManifestDetail);
   renderContextEvidence(state.contextEvidence);
   renderSkills(skills);
   renderCandidateSkills(candidateSkills);
@@ -1713,7 +1731,7 @@ function render() {
   renderDetail(state.detail);
 }
 
-function renderSystemOverview(status, freshness, deploymentPreflight, gatewayRuntime, releaseVerifications) {
+function renderSystemOverview(status, freshness, deploymentPreflight, gatewayRuntime, releaseVerifications, releaseArtifactManifests) {
   nodes.systemOverview.replaceChildren();
   const autopilotRunner = status?.autopilotRunner;
   const modules = [
@@ -1721,6 +1739,7 @@ function renderSystemOverview(status, freshness, deploymentPreflight, gatewayRun
     ["Deployment Preflight", deploymentPreflightSummary(deploymentPreflight), deploymentPreflightStatus(deploymentPreflight)],
     ["Gateway Runtime", gatewayRuntimeSummary(gatewayRuntime), gatewayRuntimeStatus(gatewayRuntime)],
     ["Release Verification", releaseVerificationSummary(releaseVerifications, status), releaseVerificationStatus(releaseVerifications)],
+    ["Release Artifacts", releaseArtifactManifestSummary(releaseArtifactManifests, status), releaseArtifactManifestStatus(releaseArtifactManifests)],
     ["Memory", `${status?.memoryCount ?? 0} notes`, "available"],
     ["TrustKernel", `${status?.pendingApprovalCount ?? 0} pending`, status?.pendingApprovalCount ? "pending" : "clear"],
     ["SkillForge", `${status?.approvedSkillCount ?? 0} approved / ${status?.candidateSkillCount ?? 0} candidate`, "available"],
@@ -1793,6 +1812,57 @@ function renderReleaseVerificationPanel(detail) {
     evidence: detail.evidence,
     persistence: detail.persistence,
     results: detail.results,
+    limits: detail.limits,
+  }, null, 2);
+}
+
+function releaseArtifactManifestSummary(records, status) {
+  const total = records?.summary?.total ?? status?.releaseArtifactManifestCount ?? 0;
+  const latest = records?.items?.[0];
+  if (!latest) return `${total} manifests / no artifact manifest`;
+  return `${total} manifests / latest ${latest.status} / ${latest.includedCount ?? 0}/${latest.artifactCount ?? 0} files / ${latest.missingRequiredCount ?? 0} missing / ${shortRevision(latest.sourceRevision)} / ${formatTime(latest.generatedAt)}`;
+}
+
+function releaseArtifactManifestStatus(records) {
+  const latest = records?.items?.[0];
+  if (!latest) return "empty";
+  if (latest.status === "ready") return "passed";
+  if (latest.status === "needs_attention") return "pending";
+  return latest.status || "unknown";
+}
+
+function renderReleaseArtifactManifests(records) {
+  const items = records?.items || [];
+  replaceList(nodes.releaseArtifactList, items, (item) => itemNode({
+    title: item.id,
+    meta: [
+      [statusClass(item.status), item.status],
+      ["files", `${item.includedCount ?? 0}/${item.artifactCount ?? 0}`],
+      ["missing", `${item.missingRequiredCount ?? 0} required`],
+      ["commit", shortRevision(item.sourceRevision)],
+      ["updated", formatTime(item.generatedAt)],
+    ],
+    actions: [releaseArtifactManifestViewButton(item.id)],
+  }));
+}
+
+function renderReleaseArtifactManifestPanel(detail) {
+  if (!detail) {
+    nodes.releaseArtifactPanel.textContent = "{}";
+    return;
+  }
+  nodes.releaseArtifactPanel.textContent = JSON.stringify({
+    id: detail.id,
+    status: detail.summary?.status,
+    generatedAt: detail.generatedAt,
+    generatedBy: detail.generatedBy,
+    project: detail.project,
+    source: detail.source,
+    releaseVerification: detail.releaseVerification,
+    summary: detail.summary,
+    artifacts: detail.artifacts,
+    evidence: detail.evidence,
+    persistence: detail.persistence,
     limits: detail.limits,
   }, null, 2);
 }
@@ -2767,6 +2837,19 @@ async function loadReleaseVerification(verificationId) {
   }
 }
 
+async function loadReleaseArtifactManifest(manifestId) {
+  if (!manifestId) return;
+  setStatus("Loading release artifact manifest");
+  try {
+    state.releaseArtifactManifestDetail = await get(`/v1/release-artifacts/${encodeURIComponent(manifestId)}`);
+    renderReleaseArtifactManifestPanel(state.releaseArtifactManifestDetail);
+    setStatus(`Loaded release artifact manifest - ${shortId(manifestId)}`);
+    document.querySelector("#system")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 async function loadTraceReport(traceId) {
   if (!traceId) return;
   setStatus("Exporting trace report");
@@ -3468,6 +3551,16 @@ function releaseVerificationViewButton(verificationId) {
   return button;
 }
 
+function releaseArtifactManifestViewButton(manifestId) {
+  const button = document.createElement("button");
+  button.className = "item-action secondary";
+  button.type = "button";
+  button.dataset.action = "release-artifact-view";
+  button.dataset.manifestId = manifestId;
+  button.innerHTML = '<span aria-hidden="true">&#128065;</span><span>View</span>';
+  return button;
+}
+
 function artifactRunDetailButton(item) {
   const button = document.createElement("button");
   button.className = "item-action secondary";
@@ -3669,10 +3762,16 @@ function shortId(value) {
   return text.length <= 18 ? text : `${text.slice(0, 10)}...${text.slice(-6)}`;
 }
 
+function shortRevision(value) {
+  if (!value) return "-";
+  const text = String(value);
+  return /^[a-f0-9]{40}$/i.test(text) ? text.slice(0, 12) : shortId(text);
+}
+
 function statusClass(value) {
-  if (["available", "allowed", "clear", "completed", "dry_run", "approved", "passed", "recorded", "fresh", "not_required"].includes(value)) return "completed";
+  if (["available", "allowed", "clear", "completed", "dry_run", "approved", "passed", "recorded", "ready", "fresh", "not_required"].includes(value)) return "completed";
   if (["failed", "blocked", "completed_with_blockers", "quarantined", "stale"].includes(value)) return "failed";
-  if (["requires_approval", "action_required", "pending_decision", "candidate", "needs_review", "planned", "passed_with_stale_evidence"].includes(value)) return "pending";
+  if (["requires_approval", "action_required", "pending_decision", "candidate", "needs_review", "needs_attention", "planned", "passed_with_stale_evidence"].includes(value)) return "pending";
   if (["ready_to_resume", "approved_unresumable"].includes(value)) return "ready";
   return "";
 }

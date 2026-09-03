@@ -30,6 +30,7 @@ import {
   createFleetRun,
   createSquad,
   createOutcomeFixture,
+  createReleaseArtifactManifest,
   createLaunchReview,
   createTaskRoute,
   createSkillReplayFixture,
@@ -107,6 +108,8 @@ import {
   getDeploymentPreflightContract,
   getReleaseVerification,
   getReleaseVerificationContract,
+  getReleaseArtifactManifest,
+  getReleaseArtifactManifestContract,
   getCandidateExecutionContract,
   getPlannerPromotionContract,
   getRunInbox,
@@ -152,6 +155,7 @@ import {
   listAutopilotTriggers,
   listDueAutopilots,
   listReleaseVerifications,
+  listReleaseArtifactManifests,
   listLlmProviderConfigs,
   listSkillEvaluations,
   listSkillPackageImports,
@@ -218,7 +222,9 @@ test("workspace store initializes core files", () => {
   assert.ok(fs.existsSync(path.join(store.root, "config.json")));
   assert.ok(fs.existsSync(path.join(store.root, "memory.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "release-verifications")));
+  assert.ok(fs.existsSync(path.join(store.root, "release-artifacts")));
   assert.ok(fs.existsSync(path.join(store.root, "release-verification-index.jsonl")));
+  assert.ok(fs.existsSync(path.join(store.root, "release-artifact-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "trace-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "approval-index.jsonl")));
   assert.ok(fs.existsSync(path.join(store.root, "execution-task-index.jsonl")));
@@ -680,8 +686,61 @@ test("release verification reports persist summarized local gate evidence", () =
   assert.equal(list.summary.total, 1);
   assert.equal(list.items[0].id, record.id);
   assert.equal(Object.prototype.hasOwnProperty.call(loaded.results[0], "stdout"), false);
-  assert.throws(() => getReleaseVerification(store, "../audit"), /invalid release verification id/);
+  const invalidVerificationId = assert.throws(() => getReleaseVerification(store, "../audit"), /invalid release verification id/);
+  assert.equal(invalidVerificationId.statusCode, 400);
   assert.match(audit, /release_verification\.recorded/);
+});
+
+test("release artifact manifest records local checksums and release evidence link", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "spruceagent-test", version: "0.1.0", private: true }), "utf8");
+  fs.writeFileSync(path.join(dir, "README.md"), "Release manifest fixture.", "utf8");
+  const store = ensureStore(createStore(dir));
+  const verification = persistReleaseVerificationReport(store, {
+    startedAt: "2026-08-30T00:00:00.000Z",
+    finishedAt: "2026-08-30T00:00:03.000Z",
+    status: "passed",
+    summary: {
+      stepCount: 2,
+      completedCount: 2,
+      passedCount: 2,
+      failedCount: 0,
+      skippedCount: 0,
+    },
+    results: [],
+  }, { actor: "release-test" });
+  const manifest = createReleaseArtifactManifest(store, {
+    releaseVerificationId: verification.id,
+    sourceRevision: "abcdef1234567890abcdef1234567890abcdef12",
+    dirtyState: "clean",
+    actor: "manifest-test",
+    artifacts: [
+      { kind: "manifest", path: "package.json" },
+      { kind: "readme", path: "README.md" },
+    ],
+  });
+  const loaded = getReleaseArtifactManifest(store, manifest.id);
+  const list = listReleaseArtifactManifests(store);
+  const audit = fs.readFileSync(path.join(store.root, "audit.jsonl"), "utf8");
+
+  assert.equal(getReleaseArtifactManifestContract().interface, "spruceagent.release-artifact-manifest");
+  assert.equal(getReleaseArtifactManifestContract().schema, "schemas/release-artifact-manifest.schema.json");
+  assert.equal(loaded.id, manifest.id);
+  assert.equal(loaded.summary.status, "ready");
+  assert.equal(loaded.releaseVerification.id, verification.id);
+  assert.equal(loaded.source.revision, "abcdef1234567890abcdef1234567890abcdef12");
+  assert.equal(loaded.artifacts.length, 2);
+  assert.match(loaded.artifacts[0].sha256, /^[a-f0-9]{64}$/);
+  assert.equal(list.summary.total, 1);
+  assert.equal(list.items[0].id, manifest.id);
+  const invalidManifestId = assert.throws(() => getReleaseArtifactManifest(store, "../audit"), /invalid release artifact manifest id/);
+  assert.equal(invalidManifestId.statusCode, 400);
+  const invalidArtifacts = assert.throws(() => createReleaseArtifactManifest(store, {
+    releaseVerificationId: verification.id,
+    artifacts: "package.json",
+  }), /release artifact definitions must be an array/);
+  assert.equal(invalidArtifacts.statusCode, 400);
+  assert.match(audit, /release_artifact_manifest\.recorded/);
 });
 
 test("release verification gate is shared by package scripts, CI, and docs", () => {
@@ -692,6 +751,7 @@ test("release verification gate is shared by package scripts, CI, and docs", () 
   const script = fs.readFileSync(path.resolve("scripts", "release-verify.js"), "utf8");
   const cli = fs.readFileSync(path.resolve("apps", "cli", "bin", "spruce.js"), "utf8");
   const schema = JSON.parse(fs.readFileSync(path.resolve("schemas", "release-verification.schema.json"), "utf8"));
+  const artifactSchema = JSON.parse(fs.readFileSync(path.resolve("schemas", "release-artifact-manifest.schema.json"), "utf8"));
 
   assert.equal(packageJson.scripts["release:verify"], "node scripts/release-verify.js");
   assert.match(packageJson.scripts.check, /scripts\/release-verify\.js/);
@@ -700,11 +760,16 @@ test("release verification gate is shared by package scripts, CI, and docs", () 
   assert.match(quickstart, /npm run release:verify/);
   assert.match(script, /spruceagent\.release-verification/);
   assert.match(script, /persistReleaseVerificationReport/);
+  assert.match(script, /packages\/core\/src\/release-artifacts\.js/);
   assert.match(packageJson.scripts.check, /packages\/core\/src\/release-verifications\.js/);
+  assert.match(packageJson.scripts.check, /packages\/core\/src\/release-artifacts\.js/);
   assert.match(cli, /handleRelease/);
   assert.match(cli, /release list \[--limit 20\]/);
+  assert.match(cli, /release manifest \[--verificationId <verificationId>\]/);
   assert.equal(schema.properties.interface.const, "spruceagent.release-verification");
   assert.equal(schema.properties.evidence.properties.indexRelativePath.const, "release-verification-index.jsonl");
+  assert.equal(artifactSchema.properties.interface.const, "spruceagent.release-artifact-manifest");
+  assert.equal(artifactSchema.properties.evidence.properties.indexRelativePath.const, "release-artifact-index.jsonl");
   for (const command of ["doctor", "deploy:preflight", "check", "test", "alpha:smoke"]) {
     assert.match(script, new RegExp(command.replace(":", ":")));
   }
@@ -2489,10 +2554,11 @@ test("gateway serves workbench static assets without API auth", async () => {
     assert.equal(css.status, 200);
     assert.equal(js.status, 200);
     assert.equal(mark.status, 200);
-    assert.match(html.body, /System Overview|system-overview|Release Verification Records|release-verification-list|release-verification-panel|Launch Run|Context Evidence|context-evidence-list|context-evidence-panel|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Agent Adapters|agent-adapter-list|agent-plan-panel|Agent Workspaces|agent-workspace-list|agent-workspace-panel|Agent Launches|agent-launch-list|agent-launch-panel|Launch Reviews|launch-review-list|launch-review-panel|Agent Routing|capability-probe-button|task-route-button|task-route-list|task-route-panel|Fleet Runs|fleet-run-list|fleet-run-panel|Execution Tasks|execution-task-create-button|execution-task-list|execution-task-panel|Autopilots|autopilot-create-button|autopilot-run-due-button|autopilot-list|autopilot-panel|Workflow Versions|Workflow Runs|Decision Queue|decision-queue-list|Artifacts|artifact-list|artifact-panel|Run Detail/);
+    assert.match(html.body, /System Overview|system-overview|Release Verification Records|release-verification-list|release-verification-panel|Release Artifact Manifests|release-artifact-list|release-artifact-panel|Launch Run|Context Evidence|context-evidence-list|context-evidence-panel|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Agent Adapters|agent-adapter-list|agent-plan-panel|Agent Workspaces|agent-workspace-list|agent-workspace-panel|Agent Launches|agent-launch-list|agent-launch-panel|Launch Reviews|launch-review-list|launch-review-panel|Agent Routing|capability-probe-button|task-route-button|task-route-list|task-route-panel|Fleet Runs|fleet-run-list|fleet-run-panel|Execution Tasks|execution-task-create-button|execution-task-list|execution-task-panel|Autopilots|autopilot-create-button|autopilot-run-due-button|autopilot-list|autopilot-panel|Workflow Versions|Workflow Runs|Decision Queue|decision-queue-list|Artifacts|artifact-list|artifact-panel|Run Detail/);
     assert.match(css.body, /Agent Workbench|summary-grid|overview-grid|overview-item|work-section|detail-panel|run-form|draft-step-list|draft-step-fields|source-map-list|evaluation-preview|artifact-preview|evidence-preview|fleet-run-preview|agent-plan-preview|agent-workspace-preview|agent-launch-preview/);
     assert.match(js.body, /submitRun|searchContextEvidenceFromWorkbench|renderSystemOverview|deploymentPreflightSummary|gatewayRuntimeSummary|\/v1\/deployment\/preflight|\/v1\/gateway\/runtime|renderContextEvidence|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|prepareAgentWorkspaceFromWorkbench|previewAgentLaunch|loadAgentWorkspace|loadAgentLaunch|createLaunchReviewFromWorkbench|loadLaunchReview|probeCapabilitiesFromWorkbench|routeTaskFromWorkbench|loadTaskRoute|renderAgentAdapters|renderAgentPlanPanel|renderAgentWorkspacePanel|renderAgentLaunches|renderAgentLaunchPanel|renderLaunchReviews|renderLaunchReviewPanel|renderCapabilityProbePanel|renderTaskRoutes|renderTaskRoutePanel|renderFleetRuns|renderFleetRunPanel|renderExecutionTasks|renderAutopilots|renderAutopilotPanel|runDueAutopilotsFromWorkbench|loadAutopilotTriggers|createExecutionTaskFromWorkbench|handleExecutionTaskAction|execution-task-links|execution-task-follow-up|execution-task-closure|execution-task-lineage|execution-task-handoff|execution-task-cancel|execution-task-block|execution-task-resume|execution-task-reference-view|loadExecutionTaskReference|completionSummary|cancellationSummary|resumptionSummary|handoffSummary|ifUpdatedAt|blocker|loadExecutionTasks|fleetRunViewButton|loadFleetRun|taskRouteViewButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|agentWorkspaces|agentLaunches|launchReviews|capabilityProbes|taskRoutes|fleetRuns|executionTasks|autopilots|resume|inbox|approval/i);
     assert.match(js.body, /Release Verification|renderReleaseVerifications|renderReleaseVerificationPanel|releaseVerificationSummary|releaseVerificationStatus|releaseVerificationViewButton|loadReleaseVerification|\/v1\/release-verifications\?limit=10/);
+    assert.match(js.body, /Release Artifacts|renderReleaseArtifactManifests|renderReleaseArtifactManifestPanel|releaseArtifactManifestSummary|releaseArtifactManifestStatus|releaseArtifactManifestViewButton|loadReleaseArtifactManifest|\/v1\/release-artifacts\?limit=10/);
     assert.match(js.body, /setAutopilotEnabledFromWorkbench|editAutopilotFromWorkbench|autopilot-edit|autopilot-enable|autopilot-disable|ifUpdatedAt/);
     assert.match(js.body, /Autopilot Runner/);
     assert.match(js.body, /execution-task-origin|autopilot-last-task|Autopilot Origin|Last Task|autopilot-failures|Failures/);
@@ -2573,6 +2639,8 @@ test("gateway client reads status and route contract", async () => {
     const gatewayRuntimeContract = await client.gatewayRuntimeContract();
     const releaseVerificationContract = await client.releaseVerificationContract();
     const releaseVerifications = await client.releaseVerifications();
+    const releaseArtifactManifestContract = await client.releaseArtifactManifestContract();
+    const releaseArtifactManifests = await client.releaseArtifactManifests();
 
     assert.equal(health.ok, true);
     assert.equal(health.runtime.status, "running");
@@ -2599,6 +2667,10 @@ test("gateway client reads status and route contract", async () => {
     assert.ok(contract.routes.some((route) => route.id === "release_verifications.list"));
     assert.ok(contract.routes.some((route) => route.id === "release_verifications.detail"));
     assert.ok(contract.routes.some((route) => route.id === "release_verifications.contract"));
+    assert.ok(contract.routes.some((route) => route.id === "release_artifacts.list"));
+    assert.ok(contract.routes.some((route) => route.id === "release_artifacts.detail"));
+    assert.ok(contract.routes.some((route) => route.id === "release_artifacts.create"));
+    assert.ok(contract.routes.some((route) => route.id === "release_artifacts.contract"));
     assert.equal(llmContract.interface, "spruceagent.llm-adapter");
     assert.equal(candidateContract.interface, "spruceagent.candidate-execution");
     assert.equal(candidateApprovalContract.interface, "spruceagent.candidate-approval");
@@ -2618,6 +2690,7 @@ test("gateway client reads status and route contract", async () => {
     assert.equal(status.autopilotDueCount, 0);
     assert.equal(status.autopilotRunner, null);
     assert.equal(status.releaseVerificationCount, 0);
+    assert.equal(status.releaseArtifactManifestCount, 0);
     assert.equal(status.outcomeFixtureCount, 0);
     assert.equal(status.outcomeResultCount, 0);
     assert.equal(artifacts.status, "empty");
@@ -2630,6 +2703,8 @@ test("gateway client reads status and route contract", async () => {
     assert.equal(gatewayRuntimeContract.interface, "spruceagent.gateway-runtime");
     assert.equal(releaseVerificationContract.interface, "spruceagent.release-verification");
     assert.equal(releaseVerifications.summary.total, 0);
+    assert.equal(releaseArtifactManifestContract.interface, "spruceagent.release-artifact-manifest");
+    assert.equal(releaseArtifactManifests.summary.total, 0);
   } finally {
     await closeServer(gateway.server);
   }
@@ -2697,6 +2772,57 @@ test("gateway client reads persisted release verification evidence", async () =>
     assert.equal(detail.id, record.id);
     assert.equal(detail.persistence.status, "recorded");
     assert.equal(status.releaseVerificationCount, 1);
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
+
+test("gateway client creates and reads release artifact manifests", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "spruceagent-test", version: "0.1.0", private: true }), "utf8");
+  fs.writeFileSync(path.join(dir, "README.md"), "Gateway manifest fixture.", "utf8");
+  const store = ensureStore(createStore(dir));
+  const verification = persistReleaseVerificationReport(store, {
+    startedAt: "2026-08-30T01:00:00.000Z",
+    finishedAt: "2026-08-30T01:00:05.000Z",
+    status: "passed",
+    summary: {
+      stepCount: 2,
+      completedCount: 2,
+      passedCount: 2,
+      failedCount: 0,
+      skippedCount: 0,
+    },
+    results: [],
+  });
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const client = createGatewayClient({
+    baseUrl: `http://${gateway.host}:${gateway.port}`,
+    token: gateway.token,
+  });
+
+  try {
+    const manifest = await client.createReleaseArtifactManifest({
+      releaseVerificationId: verification.id,
+      sourceRevision: "abcdef1234567890abcdef1234567890abcdef12",
+      dirtyState: "clean",
+      artifacts: [
+        { kind: "manifest", path: "package.json" },
+        { kind: "readme", path: "README.md" },
+      ],
+    });
+    const list = await client.releaseArtifactManifests({ limit: 5 });
+    const detail = await client.releaseArtifactManifest(manifest.id);
+    const contract = await client.releaseArtifactManifestContract();
+    const status = await client.status();
+
+    assert.equal(contract.interface, "spruceagent.release-artifact-manifest");
+    assert.equal(manifest.summary.status, "ready");
+    assert.equal(list.summary.total, 1);
+    assert.equal(list.items[0].id, manifest.id);
+    assert.equal(detail.id, manifest.id);
+    assert.equal(detail.releaseVerification.id, verification.id);
+    assert.equal(status.releaseArtifactManifestCount, 1);
   } finally {
     await closeServer(gateway.server);
   }

@@ -36,6 +36,14 @@ npm run release:verify
 
 This runs `doctor`, deployment preflight, syntax checks, the full test suite, and the alpha smoke flow. It stops on the first failing command, prints a machine-readable release verification summary, and records the summarized result under `.spruceagent/release-verifications/`.
 
+After a verification record exists, capture a local release artifact manifest:
+
+```bash
+npm run spruce -- release manifest --verificationId <verificationId>
+```
+
+This records release material paths, sizes, SHA-256 checksums, source revision, and the linked verification summary under `.spruceagent/release-artifacts/`. It does not publish, push, deploy, install dependencies, or rerun verification.
+
 ## Verify Deployment Readiness
 
 ```bash

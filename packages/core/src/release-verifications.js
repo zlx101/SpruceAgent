@@ -61,7 +61,7 @@ export function persistReleaseVerificationReport(store, report, input = {}) {
 
 export function getReleaseVerification(store, verificationId) {
   const filePath = releaseVerificationPath(store, verificationId);
-  if (!fs.existsSync(filePath)) throw new Error(`release verification not found: ${verificationId}`);
+  if (!fs.existsSync(filePath)) throw notFound(`release verification not found: ${verificationId}`);
   return readJson(filePath);
 }
 
@@ -113,7 +113,19 @@ function releaseVerificationListItem(record) {
 function requiredVerificationId(value) {
   const id = String(value || "").trim();
   if (!id || !/^[A-Za-z0-9_.-]+$/.test(id)) {
-    throw new Error("invalid release verification id");
+    throw invalidInput("invalid release verification id");
   }
   return id;
+}
+
+function invalidInput(message) {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+}
+
+function notFound(message) {
+  const error = new Error(message);
+  error.statusCode = 404;
+  return error;
 }

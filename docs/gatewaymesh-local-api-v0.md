@@ -28,6 +28,7 @@ Gateway v0 adds a local HTTP server with:
 - deployment preflight endpoint for local long-running readiness
 - gateway runtime state endpoint for local process diagnostics
 - release verification endpoints for summarized local release-gate evidence
+- release artifact manifest endpoints for local publish-readiness metadata
 - static Desktop UI Workbench at `/workbench`
 - status endpoint
 - inbox endpoint for Desktop UI workbench state
@@ -110,6 +111,17 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/release-verific
 ```
 
 `<verificationId>` is a single persisted release verification id, not a file path.
+
+Release artifact manifests:
+
+```bash
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/release-artifacts
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/release-artifacts/<manifestId>
+curl -H "Authorization: Bearer <token>" -X POST http://127.0.0.1:7357/v1/release-artifacts/manifest
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/release-artifacts/contract
+```
+
+`<manifestId>` is a single persisted release artifact manifest id, not a file path.
 
 Workbench:
 
