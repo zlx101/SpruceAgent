@@ -6,44 +6,37 @@ import { consumeApprovalTicket, createApprovalTicket, getApprovalTicket } from "
 import {
   buildExternalCliInvocation,
   executeExternalCliInvocation,
+  EXTERNAL_CLI_EXECUTABLE_ADAPTERS,
+  isExternalCliExecutableAdapter,
   publicExternalCliInvocation,
 } from "./external-cli-launcher.js";
 import { assertAgentWorkspaceLaunchable, getAgentWorkspace } from "./agent-workspaces.js";
 import { createId, nowIso } from "./id.js";
 import { auditPolicyDecision, evaluatePolicy } from "./policy.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { commandMatchesGitMutation } from "./forbidden-commands.js";
+import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 import { appendTraceEvent, startTrace } from "./trace.js";
 
 const execAsync = promisify(exec);
 
 export const AGENT_LAUNCHER_CONTRACT = Object.freeze({
-  version: "0.2.0",
+  version: "0.3.0",
   interface: "spruceagent.agent-launcher",
   sourceKind: "isolated_agent_workspace",
   outputKind: "gated_agent_launch_record",
-  executableAdaptersInV1: ["local-shell-agent", "codex-cli"],
+  executableAdaptersInV1: ["local-shell-agent", ...EXTERNAL_CLI_EXECUTABLE_ADAPTERS],
   safetyBoundary: [
     "Agent Launcher v0 records and gates launches from prepared Agent Workspaces.",
-    "Codex CLI v1 executes only through an internally generated, shell-free invocation in a prepared Git worktree.",
-    "Other external coding CLI adapters remain preview-only.",
+    "External coding CLIs execute only through internally generated, shell-free invocations in a prepared Git worktree.",
+    "An external adapter stays preview-only until its installed CLI contract is independently verified.",
     "Only local-shell-agent can execute a user-supplied command.",
     "Commands flow through TrustKernel policy and approval tickets.",
     "Git commit, push, merge, rebase, reset, and worktree mutation are blocked in user-supplied local-shell commands.",
-    "External-agent subprocess choices are controlled by worktree isolation, Codex sandboxing, prompt constraints, Git evidence, and mandatory review rather than per-command interception.",
+    "External-agent subprocess choices are controlled by worktree isolation, adapter sandbox or permission mode, prompt constraints, Git evidence, and mandatory review rather than per-command interception.",
     "Retired Agent Workspaces cannot be previewed, approved, or executed.",
     "Launcher records terminal logs, git status, and diff summaries, but never commits, pushes, merges, or approves changes.",
   ],
 });
-
-const FORBIDDEN_COMMAND_PATTERNS = [
-  /\bgit\s+commit\b/i,
-  /\bgit\s+push\b/i,
-  /\bgit\s+merge\b/i,
-  /\bgit\s+rebase\b/i,
-  /\bgit\s+reset\b/i,
-  /\bgit\s+worktree\b/i,
-  /\bgh\s+pr\s+merge\b/i,
-];
 
 export function getAgentLauncherContract() {
   return AGENT_LAUNCHER_CONTRACT;
@@ -117,7 +110,7 @@ export async function launchAgentWorkspace(store, input = {}, runtime = {}) {
     return record;
   }
 
-  const externalInvocation = workspace.adapter.id === "codex-cli"
+  const externalInvocation = isExternalCliExecutableAdapter(workspace.adapter.id)
     ? buildExternalCliInvocation(workspace, input, runtime.externalCli ?? {})
     : null;
   const command = externalInvocation
@@ -255,7 +248,7 @@ export async function launchAgentWorkspace(store, input = {}, runtime = {}) {
     },
     notes: [
       externalInvocation
-        ? "Executed codex-cli through the shell-free External CLI Launcher v1 contract."
+        ? `Executed ${workspace.adapter.id} through the shell-free External CLI Launcher v1 contract.`
         : "Executed local-shell-agent command through Agent Launcher.",
       "Review required before any merge or promotion.",
     ],
@@ -290,7 +283,7 @@ export function listAgentLaunches(store, options = {}) {
 
 export function getAgentLaunch(store, launchId) {
   if (!launchId) throw new Error("launchId is required");
-  const filePath = path.join(store.root, "agent-launches", `${launchId}.json`);
+  const filePath = storeItemPath(store, "agent-launches", launchId);
   if (!fs.existsSync(filePath)) throw new Error(`agent launch not found: ${launchId}`);
   return readJson(filePath);
 }
@@ -330,7 +323,7 @@ function buildLaunchRecord(input) {
 }
 
 function persistLaunch(store, record) {
-  writeJson(path.join(store.root, "agent-launches", `${record.id}.json`), record);
+  writeJson(storeItemPath(store, "agent-launches", record.id), record);
   appendJsonl(launchIndexPath(store), {
     id: record.id,
     createdAt: record.createdAt,
@@ -387,8 +380,8 @@ async function runCommand(command, cwd, input) {
 }
 
 function writeTerminalLog(store, launchId, input) {
-  const relativePath = path.join("agent-launches", `${launchId}.log`);
-  const logPath = path.join(store.root, relativePath);
+  const logPath = storeItemPath(store, "agent-launches", launchId, ".log");
+  const relativePath = path.relative(store.root, logPath);
   const content = [
     `launchId: ${launchId}`,
     `cwd: ${input.cwd}`,
@@ -441,8 +434,7 @@ function runGit(cwd, args) {
 }
 
 function assertAllowedLauncherCommand(command) {
-  const blocked = FORBIDDEN_COMMAND_PATTERNS.find((pattern) => pattern.test(command));
-  if (blocked) {
+  if (commandMatchesGitMutation(command)) {
     throw new Error("agent launcher blocks git mutation commands in v0");
   }
 }

@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { createId, nowIso } from "./id.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 import { getReleaseVerification, listReleaseVerifications } from "./release-verifications.js";
 
 export const RELEASE_ARTIFACT_MANIFEST_CONTRACT = Object.freeze({
@@ -248,8 +248,7 @@ function readPackedRef(gitDir, ref) {
 }
 
 function releaseArtifactManifestPath(store, manifestId) {
-  const safeId = requiredManifestId(manifestId);
-  return path.join(store.root, "release-artifacts", `${safeId}.json`);
+  return storeItemPath(store, "release-artifacts", requiredManifestId(manifestId));
 }
 
 function releaseArtifactManifestIndexPath(store) {

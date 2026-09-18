@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createId, nowIso } from "./id.js";
 import { readTraceEvents } from "./trace.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 
 export function evaluateTrace(store, traceId) {
   const events = readTraceEvents(store, traceId);
@@ -196,7 +196,7 @@ function lastEvent(events, type) {
 }
 
 function evaluationPath(store, evaluationId) {
-  return path.join(store.root, "evaluations", `${evaluationId}.json`);
+  return storeItemPath(store, "evaluations", evaluationId);
 }
 
 function v0Limits() {

@@ -28,7 +28,7 @@ npm test
 npm run alpha:smoke
 ```
 
-`npm run doctor` verifies the alpha release surface. `npm run alpha:smoke` runs a complete local flow from workspace index to skill package export.
+`npm run doctor` verifies the alpha release surface. `npm run check` parses every JavaScript file under `apps/`, `packages/core/src/`, `scripts/`, and `tests/`. `npm run alpha:smoke` runs a complete local flow from workspace index to skill package export.
 
 ## Pull Request Rules
 

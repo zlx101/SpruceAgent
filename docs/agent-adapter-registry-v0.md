@@ -10,6 +10,8 @@ Built-in adapter specs:
 
 - Codex CLI
 - Claude Code
+- Cursor Agent
+- Grok CLI
 - OpenCode
 - Hermes Agent
 - Gemini CLI
@@ -106,7 +108,7 @@ Adapter Registry v0 is intentionally conservative:
 
 Agent Workspace v0 is the separate, explicit step that may create a local git worktree. It still does not execute external CLI agents, commit, push, merge, or approve changes.
 
-Agent Launcher v0.2 is the separate, explicit step after workspace preparation. It executes `local-shell-agent` commands and Codex CLI through External CLI Launcher v1 after TrustKernel policy and exact approval. Other external coding CLI adapters remain preview-only.
+Agent Launcher v0.2 is the separate, explicit step after workspace preparation. It executes `local-shell-agent` commands and verified external CLIs (currently Codex CLI and Claude Code) through External CLI Launcher v1 after TrustKernel policy and exact approval. Cursor Agent, Grok CLI, and other external coding CLI adapters remain preview-only until their installed command contracts are independently verified.
 
 All external execution must go through TrustKernel, isolated workspaces, artifact capture, diff review, and Trace Report export. See `docs/external-cli-launcher-v1.md`.
 

@@ -31,16 +31,9 @@ const steps = Object.freeze([
     label: "Syntax Check",
     operatorCommand: "npm run check",
     commands: [
-      ["--check", "apps/cli/bin/spruce.js"],
-      ["--check", "apps/desktop/app.js"],
-      ["--check", "apps/showcase/app.js"],
-      ["--check", "packages/core/src/execution-tasks.js"],
-      ["--check", "packages/core/src/release-verifications.js"],
-      ["--check", "packages/core/src/release-artifacts.js"],
-      ["--check", "scripts/alpha-smoke.js"],
-      ["--check", "scripts/release-verify.js"],
+      ["scripts/syntax-check.js"],
     ],
-    expected: "CLI, Workbench, showcase, execution task, release verification, and release artifact scripts parse cleanly.",
+    expected: "All JavaScript files under apps, packages/core/src, scripts, and tests parse cleanly.",
   },
   {
     id: "test",

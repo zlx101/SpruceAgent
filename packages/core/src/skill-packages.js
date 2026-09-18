@@ -10,7 +10,8 @@ import {
   listSkillReplayResults,
 } from "./skill-replay.js";
 import { getSkill, getSkillVersion, listSkillVersions, proposeSkill } from "./skills.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { resolveProjectPath } from "./executor.js";
+import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 
 export const SKILL_PACKAGE_CONTRACT = Object.freeze({
   version: "0.1.0",
@@ -22,6 +23,7 @@ export const SKILL_PACKAGE_CONTRACT = Object.freeze({
     "Skill Package v0 exports portable skill definitions and local evidence.",
     "Skill Package v0 import never approves or executes imported skills.",
     "Imported skills must pass local evaluation and promotion before use.",
+    "Optional export files must remain inside the current workspace.",
     "Source trace ids are preserved as metadata by default because traces may not exist in the target workspace.",
   ],
 });
@@ -75,6 +77,7 @@ export function exportSkillPackage(store, skillId, input = {}) {
       "Skill Package v0 is JSON only.",
       "Packages do not grant execution authority.",
       "Imported packages become candidate skills and must pass local gates.",
+      "Export files must stay inside the current workspace and cannot write .spruceagent internals.",
     ],
   });
 
@@ -88,7 +91,7 @@ export function exportSkillPackage(store, skillId, input = {}) {
     integrityHash: pkg.integrity.sha256,
   });
   if (input.file) {
-    writeJson(path.resolve(store.cwd, input.file), pkg);
+    writeJson(resolveProjectPath(store, input.file), pkg);
   }
   return pkg;
 }
@@ -250,9 +253,9 @@ function skillPackageImportIndexPath(store) {
 }
 
 function skillPackagePath(store, packageId) {
-  return path.join(store.root, "skill-packages", `${packageId}.json`);
+  return storeItemPath(store, "skill-packages", packageId);
 }
 
 function skillImportPath(store, importId) {
-  return path.join(store.root, "skill-imports", `${importId}.json`);
+  return storeItemPath(store, "skill-imports", importId);
 }

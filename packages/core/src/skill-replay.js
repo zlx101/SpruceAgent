@@ -3,7 +3,7 @@ import path from "node:path";
 import { createId, nowIso } from "./id.js";
 import { evaluateSkillCandidate, getSkillEvaluation } from "./skill-evaluations.js";
 import { compileExecutableSteps, getSkill } from "./skills.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 
 export const SKILL_REPLAY_CONTRACT = Object.freeze({
   version: "0.1.0",
@@ -199,9 +199,9 @@ function skillReplayResultIndexPath(store) {
 }
 
 function skillReplayFixturePath(store, fixtureId) {
-  return path.join(store.root, "skill-replay-fixtures", `${fixtureId}.json`);
+  return storeItemPath(store, "skill-replay-fixtures", fixtureId);
 }
 
 function skillReplayResultPath(store, resultId) {
-  return path.join(store.root, "skill-replay-results", `${resultId}.json`);
+  return storeItemPath(store, "skill-replay-results", resultId);
 }

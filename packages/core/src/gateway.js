@@ -127,6 +127,7 @@ import {
   replaySkillFixture,
 } from "./skill-replay.js";
 import { executeTool } from "./executor.js";
+import { normalizeGatewayTrustMode } from "./policy.js";
 import { listMemory } from "./memory.js";
 import {
   executeApprovedCandidateStep,
@@ -187,6 +188,7 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
   version: "0.1.0",
   basePath: "/v1",
   localOnly: true,
+  executionTrustModes: ["observe", "draft", "approve"],
   auth: {
     type: "bearer-token",
     requiredForV1: true,
@@ -1087,7 +1089,7 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       method: "POST",
       path: "/v1/tools/run",
       authRequired: true,
-      description: "Execute a tool through TrustKernel policy and approval gates.",
+      description: "Execute a tool through TrustKernel policy and approval gates. Gateway trustMode is limited to observe, draft, and approve.",
     },
     {
       id: "preflight.run",
@@ -2242,7 +2244,7 @@ async function routeRequest(store, request, url, body, options = {}) {
     return ok(await executeTool(store, {
       toolName: body.toolName,
       input: body.input ?? {},
-      trustMode: body.trustMode ?? "approve",
+      trustMode: normalizeGatewayTrustMode(body.trustMode),
       approvalId: body.approvalId,
       traceId: body.traceId,
       timeoutMs: body.timeoutMs,
@@ -2264,7 +2266,7 @@ async function routeRequest(store, request, url, body, options = {}) {
   if (request.method === "POST" && url.pathname === "/v1/preflight/risk") {
     return ok(assessRunRisk(store, {
       kind: body.kind ?? "gateway.risk_preflight",
-      trustMode: body.trustMode ?? "approve",
+      trustMode: normalizeGatewayTrustMode(body.trustMode),
       plan: body.plan,
       workflow: body.workflow,
       steps: body.steps,
@@ -2319,7 +2321,7 @@ async function routeRequest(store, request, url, body, options = {}) {
     return ok(await runAgent(store, {
       goal: body.goal,
       contextQuery: body.contextQuery ?? body.context,
-      trustMode: body.trustMode ?? "approve",
+      trustMode: normalizeGatewayTrustMode(body.trustMode),
       dryRun: Boolean(body.dryRun),
       contextLimit: body.contextLimit ?? body.limit,
       skillId: body.skillId,
@@ -2390,7 +2392,7 @@ async function routeRequest(store, request, url, body, options = {}) {
       stepId: body.stepId,
       approvalId: body.approvalId,
       approvalIds: body.approvalIds,
-      trustMode: body.trustMode ?? "approve",
+      trustMode: normalizeGatewayTrustMode(body.trustMode),
       actor: body.actor ?? "gateway-user",
       timeoutMs: body.timeoutMs,
     }));
@@ -2400,7 +2402,7 @@ async function routeRequest(store, request, url, body, options = {}) {
     return ok(requestCandidateApprovals(store, {
       candidatePlan: body.candidatePlan,
       traceId: body.traceId,
-      trustMode: body.trustMode ?? "approve",
+      trustMode: normalizeGatewayTrustMode(body.trustMode),
       actor: body.actor ?? "gateway-user",
     }));
   }
@@ -2411,7 +2413,7 @@ async function routeRequest(store, request, url, body, options = {}) {
       stepId: body.stepId,
       approvalId: body.approvalId,
       traceId: body.traceId,
-      trustMode: body.trustMode ?? "approve",
+      trustMode: normalizeGatewayTrustMode(body.trustMode),
       actor: body.actor ?? "gateway-user",
       timeoutMs: body.timeoutMs,
     }));
@@ -2463,7 +2465,7 @@ async function routeRequest(store, request, url, body, options = {}) {
       stepId: body.stepId,
       approvalId: body.approvalId,
       approvalIds: body.approvalIds,
-      trustMode: body.trustMode ?? "approve",
+      trustMode: normalizeGatewayTrustMode(body.trustMode),
       actor: body.actor ?? "gateway-user",
     }));
   }
@@ -2509,7 +2511,7 @@ async function routeRequest(store, request, url, body, options = {}) {
   if (request.method === "POST" && pathParts[1] === "workflows" && pathParts[2] && pathParts[3] === "run") {
     return ok(await runWorkflow(store, pathParts[2], {
       goal: body.goal,
-      trustMode: body.trustMode ?? "approve",
+      trustMode: normalizeGatewayTrustMode(body.trustMode),
       dryRun: Boolean(body.dryRun),
       requireFreshContext: Boolean(body.requireFreshContext),
       refreshContext: Boolean(body.refreshContext),

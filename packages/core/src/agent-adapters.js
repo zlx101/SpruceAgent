@@ -1,9 +1,10 @@
 import path from "node:path";
 import { createContextPack, createSourceMap } from "./context.js";
+import { isExternalCliExecutableAdapter } from "./external-cli-launcher.js";
 import { createId, nowIso } from "./id.js";
 
 export const AGENT_ADAPTER_CONTRACT = Object.freeze({
-  version: "0.2.0",
+  version: "0.3.0",
   interface: "spruceagent.agent-adapters",
   sourceKind: "cli_agent_adapter_registry",
   outputKind: "agent_fleet_control_plane",
@@ -11,7 +12,8 @@ export const AGENT_ADAPTER_CONTRACT = Object.freeze({
     "Agent Adapter Registry v0 is read-only except for returning an execution plan object.",
     "It does not start external CLI agents; execution flows through Agent Launcher.",
     "It does not create git worktrees, branches, commits, or pull requests.",
-    "Codex CLI plans can flow through the TrustKernel-approved External CLI Launcher v1; other external adapters remain preview-only.",
+    "Codex CLI and Claude Code plans can flow through the TrustKernel-approved External CLI Launcher v1 after their installed CLI contracts are verified.",
+    "Cursor Agent and Grok CLI are first-class coding adapters; they stay launch-disabled until a native argv contract is independently verified.",
   ],
   adapterKinds: ["coding_cli", "local_cli", "research_cli"],
   plannedIsolationModes: ["git_worktree", "current_workspace_approved", "current_workspace_readonly"],
@@ -43,11 +45,50 @@ const BUILTIN_ADAPTERS = Object.freeze([
     kind: "coding_cli",
     provider: "anthropic",
     command: "claude",
-    status: "planned",
-    maturity: "adapter_spec",
+    status: "executable_gated",
+    maturity: "controlled_execution_v1",
     summary: "Anthropic Claude Code command-line coding agent adapter.",
     strengths: ["large-context code work", "multi-file reasoning", "terminal-native workflows"],
-    limitations: ["requires local Claude Code installation", "execution is not enabled in v0"],
+    limitations: ["requires local Claude Code installation and authentication", "requires an isolated Git worktree and exact approval"],
+    recommendedIsolation: "git_worktree",
+    promptDelivery: "stdin_or_arg",
+    outputCapture: "terminal_log_and_diff",
+    safetyNotes: [
+      "Run only in an isolated worktree through the shell-free launcher.",
+      "Never enable --dangerously-skip-permissions or bypassPermissions.",
+      "Require Trace Report and diff review before merge.",
+    ],
+  },
+  {
+    id: "cursor-agent",
+    name: "Cursor Agent",
+    kind: "coding_cli",
+    provider: "cursor",
+    command: "agent",
+    status: "planned",
+    maturity: "adapter_spec",
+    summary: "Cursor Agent command-line adapter for isolated coding tasks, including Cursor-hosted Grok models.",
+    strengths: ["repo editing", "multi-file reasoning", "Cursor-hosted models including Grok"],
+    limitations: ["requires a locally installed Cursor Agent CLI", "execution is not enabled until its argv contract is independently verified"],
+    recommendedIsolation: "git_worktree",
+    promptDelivery: "stdin_or_arg",
+    outputCapture: "terminal_log_and_diff",
+    safetyNotes: [
+      "Run only in an isolated worktree when execution is enabled.",
+      "A Cursor chat session is not a TrustKernel-spawned process.",
+    ],
+  },
+  {
+    id: "grok-cli",
+    name: "Grok CLI",
+    kind: "coding_cli",
+    provider: "xai",
+    command: "grok",
+    status: "planned",
+    maturity: "adapter_spec",
+    summary: "xAI Grok command-line coding agent adapter.",
+    strengths: ["coding assistance", "terminal-native workflows", "large-context reasoning"],
+    limitations: ["requires a locally installed Grok CLI", "execution is not enabled until its argv contract is independently verified"],
     recommendedIsolation: "git_worktree",
     promptDelivery: "stdin_or_arg",
     outputCapture: "terminal_log_and_diff",
@@ -156,7 +197,7 @@ export function listAgentAdapters(options = {}) {
     items: adapters,
     limits: [
       "Adapter Registry returns specifications and execution plans; it does not launch processes itself.",
-      "Codex CLI is the only external adapter enabled by External CLI Launcher v1.",
+      "External CLI Launcher executes only adapters with independently verified native CLI contracts.",
       "Use Capability Probe before preparing and approving an external launch.",
     ],
   };
@@ -174,7 +215,7 @@ export function getAgentAdapter(adapterId) {
       worktreeIsolation: adapter.recommendedIsolation === "git_worktree",
       diffReview: true,
       traceReportRequired: true,
-      directExecution: adapter.id === "codex-cli",
+      directExecution: isExternalCliExecutableAdapter(adapter.id),
     },
     integrationChecklist: [
       "Verify CLI binary and version.",
@@ -246,9 +287,9 @@ export function createAgentAdapterRunPlan(store, input = {}) {
     },
     limits: [
       ...AGENT_ADAPTER_CONTRACT.safetyBoundary,
-      adapter.id === "codex-cli"
+      isExternalCliExecutableAdapter(adapter.id)
         ? "This plan becomes executable only after isolated workspace preparation and exact approval."
-        : "This external adapter remains preview-only.",
+        : "This adapter remains preview-only until its installed CLI contract is independently verified.",
       "Execution must create the isolated workspace before launching the adapter.",
     ],
   };
@@ -284,6 +325,18 @@ function buildLaunchArgs(adapter, input) {
       "--cd",
       input.workspacePath,
       "-",
+    ];
+  }
+  if (adapter.id === "claude-code") {
+    return [
+      "--print",
+      "--verbose",
+      "--output-format",
+      "stream-json",
+      "--permission-mode",
+      "acceptEdits",
+      "--no-session-persistence",
+      "--no-chrome",
     ];
   }
   return ["<adapter-contract-not-yet-verified>"];

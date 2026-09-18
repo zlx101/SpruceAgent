@@ -3,31 +3,75 @@ import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
+export const EXTERNAL_CLI_EXECUTABLE_ADAPTERS = Object.freeze(["codex-cli", "claude-code"]);
+
 export const EXTERNAL_CLI_LAUNCHER_CONTRACT = Object.freeze({
-  version: "0.1.0",
+  version: "0.2.0",
   interface: "spruceagent.external-cli-launcher",
   sourceKind: "approved_isolated_agent_workspace",
   outputKind: "bounded_external_cli_execution",
-  executableAdapters: ["codex-cli"],
+  executableAdapters: EXTERNAL_CLI_EXECUTABLE_ADAPTERS,
   safetyBoundary: [
     "External CLI Launcher v1 executes allowlisted adapters without a command shell.",
-    "Codex prompts are delivered over stdin and represented in approvals by SHA-256 only.",
-    "Codex runs in its prepared Git worktree with workspace-write sandboxing and an ephemeral session.",
-    "Arbitrary CLI arguments, configuration overrides, extra writable directories, and sandbox bypass flags are not accepted.",
+    "An adapter is executable only after its installed CLI argv contract is independently verified.",
+    "Prompts are delivered over stdin and represented in approvals by SHA-256 only.",
+    "Adapters run in a prepared Git worktree. Caller-supplied CLI arguments, prompts, config overrides, extra writable directories, and sandbox bypass flags are not accepted.",
     "Only an allowlisted environment subset is inherited; provider credentials are never persisted in launch records.",
     "Execution is bounded by timeout and output limits, and captured output is redacted before persistence.",
   ],
 });
 
-const CODEX_ARGS_PREFIX = Object.freeze([
-  "exec",
-  "--sandbox",
-  "workspace-write",
-  "--ephemeral",
-  "--json",
-  "--color",
-  "never",
-]);
+const ADAPTER_INVOCATIONS = Object.freeze({
+  "codex-cli": Object.freeze({
+    command: "codex",
+    protocol: "codex_exec_jsonl_v1",
+    extraEnvKeys: Object.freeze(["OPENAI_API_KEY", "CODEX_HOME"]),
+    args: Object.freeze([
+      "exec",
+      "--sandbox",
+      "workspace-write",
+      "--ephemeral",
+      "--json",
+      "--color",
+      "never",
+    ]),
+    stdinSentinel: "-",
+    safety: Object.freeze({
+      shell: false,
+      sandbox: "workspace-write",
+      ephemeral: true,
+      output: "jsonl",
+      permissionMode: null,
+      arbitraryArgumentsAccepted: false,
+      bypassFlagsAccepted: false,
+    }),
+  }),
+  "claude-code": Object.freeze({
+    command: "claude",
+    protocol: "claude_print_stream_json_v1",
+    extraEnvKeys: Object.freeze(["ANTHROPIC_API_KEY"]),
+    args: Object.freeze([
+      "--print",
+      "--verbose",
+      "--output-format",
+      "stream-json",
+      "--permission-mode",
+      "acceptEdits",
+      "--no-session-persistence",
+      "--no-chrome",
+    ]),
+    stdinSentinel: null,
+    safety: Object.freeze({
+      shell: false,
+      sandbox: null,
+      ephemeral: true,
+      output: "stream-json",
+      permissionMode: "acceptEdits",
+      arbitraryArgumentsAccepted: false,
+      bypassFlagsAccepted: false,
+    }),
+  }),
+});
 const INTERNAL_INVOCATION = Symbol("spruceagent.external-cli-invocation");
 const INHERITED_ENV_KEYS = Object.freeze([
   "PATH",
@@ -53,14 +97,18 @@ const INHERITED_ENV_KEYS = Object.freeze([
   "LC_ALL",
   "TERM",
   "COLORTERM",
-  "CODEX_HOME",
-  "OPENAI_API_KEY",
   "HTTP_PROXY",
   "HTTPS_PROXY",
   "NO_PROXY",
   "SSL_CERT_FILE",
   "SSL_CERT_DIR",
   "NODE_EXTRA_CA_CERTS",
+]);
+const FORBIDDEN_EXTERNAL_CLI_ARG_PATTERNS = Object.freeze([
+  /dangerously/i,
+  /bypassPermissions/i,
+  /bypass-approvals/i,
+  /danger-full-access/i,
 ]);
 const SECRET_PATTERNS = Object.freeze([
   [/(\b(?:sk|key|token)-[a-zA-Z0-9_.-]{12,})/g, "[REDACTED_TOKEN]"],
@@ -73,26 +121,35 @@ export function getExternalCliLauncherContract() {
   return EXTERNAL_CLI_LAUNCHER_CONTRACT;
 }
 
+export function isExternalCliExecutableAdapter(adapterId) {
+  return EXTERNAL_CLI_EXECUTABLE_ADAPTERS.includes(String(adapterId ?? ""));
+}
+
 export function buildExternalCliInvocation(workspace, input = {}, runtime = {}) {
-  if (workspace.adapter?.id !== "codex-cli") {
-    throw new Error(`external CLI adapter is not executable: ${workspace.adapter?.id ?? "unknown"}`);
+  const adapterId = workspace.adapter?.id;
+  const spec = ADAPTER_INVOCATIONS[adapterId];
+  if (!spec) {
+    throw new Error(`external CLI adapter is not executable: ${adapterId ?? "unknown"}`);
   }
   if (workspace.mode !== "git_worktree" || workspace.git?.worktreeCreated !== true) {
-    throw new Error("codex-cli execution requires a prepared Git worktree");
+    throw new Error(`${adapterId} execution requires a prepared Git worktree`);
   }
   if (input.args !== undefined || input.command !== undefined || input.config !== undefined || input.prompt !== undefined) {
-    throw new Error("codex-cli prompt, arguments, and configuration are generated from the approved workspace plan");
+    throw new Error(`${adapterId} prompt, arguments, and configuration are generated from the approved workspace plan`);
   }
 
   const cwd = path.resolve(workspace.workspacePath);
-  const gitBaseline = readCleanGitBaseline(cwd);
-  const prompt = normalizePrompt(buildCodexPrompt(workspace));
-  const executable = resolveAdapterExecutable("codex", runtime);
-  const args = [...CODEX_ARGS_PREFIX, "--cd", cwd, "-"];
-  const env = buildInheritedEnvironment(runtime.env ?? process.env);
+  const gitBaseline = readCleanGitBaseline(cwd, adapterId);
+  const prompt = normalizePrompt(buildApprovedPrompt(workspace), adapterId);
+  const executable = resolveAdapterExecutable(spec.command, runtime);
+  const args = spec.stdinSentinel
+    ? [...spec.args, "--cd", cwd, spec.stdinSentinel]
+    : [...spec.args];
+  assertSafeExternalCliArgs(args, adapterId);
+  const env = buildInheritedEnvironment(runtime.env ?? process.env, spec.extraEnvKeys);
   env.SPRUCE_AGENT_PLAN_ID = String(workspace.planId);
   env.SPRUCE_AGENT_WORKSPACE_ID = String(workspace.id);
-  env.SPRUCE_AGENT_ADAPTER_ID = "codex-cli";
+  env.SPRUCE_AGENT_ADAPTER_ID = adapterId;
   const promptSha256 = sha256(prompt);
   const executionLimits = {
     timeoutMs: boundedInteger(input.timeoutMs, 10 * 60 * 1000, 1000, 30 * 60 * 1000, "timeoutMs"),
@@ -101,8 +158,8 @@ export function buildExternalCliInvocation(workspace, input = {}, runtime = {}) 
 
   return {
     [INTERNAL_INVOCATION]: true,
-    adapterId: "codex-cli",
-    protocol: "codex_exec_jsonl_v1",
+    adapterId,
+    protocol: spec.protocol,
     executable,
     args,
     cwd,
@@ -114,14 +171,7 @@ export function buildExternalCliInvocation(workspace, input = {}, runtime = {}) 
     environmentKeys: Object.keys(env).sort(),
     executionLimits,
     displayCommand: `${path.basename(executable)} ${args.map(quoteDisplayArg).join(" ")} <stdin:${promptSha256}>`,
-    safety: {
-      shell: false,
-      sandbox: "workspace-write",
-      ephemeral: true,
-      output: "jsonl",
-      arbitraryArgumentsAccepted: false,
-      bypassFlagsAccepted: false,
-    },
+    safety: { ...spec.safety },
   };
 }
 
@@ -226,15 +276,23 @@ function isNativeExecutableFile(filePath) {
   }
 }
 
-function buildInheritedEnvironment(source) {
+function buildInheritedEnvironment(source, extraKeys = []) {
   const env = {};
-  for (const key of INHERITED_ENV_KEYS) {
+  for (const key of [...INHERITED_ENV_KEYS, ...extraKeys]) {
     if (source[key] !== undefined && source[key] !== "") env[key] = String(source[key]);
   }
   return env;
 }
 
-function readCleanGitBaseline(cwd) {
+function assertSafeExternalCliArgs(args, adapterId) {
+  for (const arg of args) {
+    if (FORBIDDEN_EXTERNAL_CLI_ARG_PATTERNS.some((pattern) => pattern.test(String(arg)))) {
+      throw new Error(`${adapterId} invocation rejected a forbidden CLI flag`);
+    }
+  }
+}
+
+function readCleanGitBaseline(cwd, adapterId) {
   try {
     const head = execFileSync("git", ["-C", cwd, "rev-parse", "HEAD"], {
       encoding: "utf8",
@@ -248,9 +306,9 @@ function readCleanGitBaseline(cwd) {
     return { head, clean: true };
   } catch (error) {
     if (error?.message === "dirty") {
-      throw new Error("codex-cli execution requires a clean prepared worktree");
+      throw new Error(`${adapterId} execution requires a clean prepared worktree`);
     }
-    throw new Error("codex-cli execution requires a readable Git baseline");
+    throw new Error(`${adapterId} execution requires a readable Git baseline`);
   }
 }
 
@@ -380,14 +438,14 @@ function summarizeCodexJsonl(stdout) {
   };
 }
 
-function normalizePrompt(value) {
+function normalizePrompt(value, adapterId) {
   const prompt = String(value ?? "").trim();
-  if (!prompt) throw new Error("codex-cli prompt is required");
-  if (Buffer.byteLength(prompt, "utf8") > 64 * 1024) throw new Error("codex-cli prompt exceeds 65536 bytes");
+  if (!prompt) throw new Error(`${adapterId} prompt is required`);
+  if (Buffer.byteLength(prompt, "utf8") > 64 * 1024) throw new Error(`${adapterId} prompt exceeds 65536 bytes`);
   return prompt;
 }
 
-function buildCodexPrompt(workspace) {
+function buildApprovedPrompt(workspace) {
   const lines = [
     "SpruceAgent approved task:",
     String(workspace.goal ?? "").trim(),

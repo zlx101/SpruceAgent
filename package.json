@@ -31,7 +31,7 @@
     "deploy:preflight": "node apps/cli/bin/spruce.js deploy preflight",
     "release:verify": "node scripts/release-verify.js",
     "alpha:smoke": "node scripts/alpha-smoke.js",
-    "check": "node --check apps/cli/bin/spruce.js && node --check apps/desktop/app.js && node --check apps/showcase/app.js && node --check packages/core/src/execution-tasks.js && node --check packages/core/src/release-verifications.js && node --check packages/core/src/release-artifacts.js && node --check scripts/alpha-smoke.js && node --check scripts/release-verify.js",
+    "check": "node scripts/syntax-check.js",
     "test": "node --test"
   },
   "engines": {

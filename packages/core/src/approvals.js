@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createId, nowIso } from "./id.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 
 const terminalStatuses = new Set(["rejected", "expired", "consumed"]);
 
@@ -134,7 +134,7 @@ function writeTicket(store, ticket) {
 }
 
 function ticketPath(store, approvalId) {
-  return path.join(store.root, "approvals", `${approvalId}.json`);
+  return storeItemPath(store, "approvals", approvalId);
 }
 
 function indexPath(store) {

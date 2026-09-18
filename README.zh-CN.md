@@ -33,7 +33,7 @@ SpruceAgent 要做的是它们之上的下一层：
 
 ## 当前阶段
 
-SpruceAgent 目前处于开源 alpha 与核心基础设施阶段。
+SpruceAgent 目前处于本地开源 alpha：信任治理控制平面已可在本机运行。生产信心仍取决于可重复的外部 Agent 验收试验。
 
 建议先读：
 
@@ -88,6 +88,8 @@ SpruceAgent 目前处于开源 alpha 与核心基础设施阶段。
 - [Workbench Run Launcher v0](docs/workbench-run-launcher-v0.md)
 - [Workbench Workflow Editor v0](docs/workbench-workflow-editor-v0.md)
 - [Workbench Skill / Workflow Runner v0](docs/workbench-skill-workflow-runner-v0.md)
+- [Squad Coordination v0](docs/squad-coordination-v0.md)
+- [Execution Evidence Guard v0](docs/execution-evidence-guard-v0.md)
 - [方向自查 - 2026-06-29](docs/direction-alignment-check-2026-06-29.md)
 - [工程原则](docs/engineering-principles.md)
 

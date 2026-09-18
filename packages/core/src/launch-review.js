@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { getAgentLaunch } from "./agent-launcher.js";
 import { listArtifactsForTrace } from "./artifacts.js";
 import { createId, nowIso } from "./id.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 import { appendTraceEvent, readTraceEvents } from "./trace.js";
 
 export const LAUNCH_REVIEW_CONTRACT = Object.freeze({
@@ -457,7 +457,7 @@ function safeReadTraceEvents(store, traceId) {
 }
 
 function reviewPath(store, reviewId) {
-  return path.join(store.root, "launch-reviews", `${reviewId}.json`);
+  return storeItemPath(store, "launch-reviews", reviewId);
 }
 
 function reviewIndexPath(store) {

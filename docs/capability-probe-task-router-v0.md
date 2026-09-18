@@ -17,7 +17,7 @@ The `spruceagent.capability-probe` contract records:
 
 Provider configuration is redacted. The snapshot records property presence without returning or persisting its value.
 
-The probe does not launch an Agent, send a model request, access the network, or modify Git state. Version execution is disabled by default. Windows `.cmd` and `.bat` wrappers are detected but not executed during version checks, and they are not eligible for the shell-free Codex launcher.
+The probe does not launch an Agent, send a model request, access the network, or modify Git state. Version execution is disabled by default. Windows `.cmd` and `.bat` wrappers are detected but not executed during version checks, and they are not eligible for the shell-free External CLI Launcher.
 
 ## Task Router
 
@@ -55,7 +55,7 @@ The route order is deterministic:
 
 There is no model-quality score in v0. If multiple adapters satisfy the same role and hard constraints, the assignment becomes `requires_preference` instead of selecting an arbitrary winner. If several real LLM providers are configured, the router likewise requires an explicit preference because SpruceAgent does not yet have benchmark evidence for a quality-based choice.
 
-In `execute` mode, an adapter is eligible only when the current capability snapshot reports explicit Agent Launcher support. Codex CLI and `local-shell-agent` currently satisfy that implementation condition; other external adapters remain ineligible. A failed effective Trial outcome still conservatively blocks execute routing, and Launcher-attested evidence takes precedence over supplied observations. Trials never create an automatic winner. Subsequent execution always requires Workspace, TrustKernel, Launcher, and Review gates.
+In `execute` mode, an adapter is eligible only when the current capability snapshot reports explicit Agent Launcher support. Codex CLI, Claude Code, and `local-shell-agent` currently satisfy that implementation condition; Cursor Agent, Grok CLI, and other external adapters remain ineligible until their native CLI contracts are verified. A failed effective Trial outcome still conservatively blocks execute routing, and Launcher-attested evidence takes precedence over supplied observations. Trials never create an automatic winner. Subsequent execution always requires Workspace, TrustKernel, Launcher, and Review gates.
 
 ## Storage
 

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createId, nowIso } from "./id.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 
 export const RELEASE_VERIFICATION_CONTRACT = Object.freeze({
   version: "0.1.0",
@@ -87,8 +87,7 @@ export function listReleaseVerifications(store, options = {}) {
 }
 
 function releaseVerificationPath(store, verificationId) {
-  const safeId = requiredVerificationId(verificationId);
-  return path.join(store.root, "release-verifications", `${safeId}.json`);
+  return storeItemPath(store, "release-verifications", requiredVerificationId(verificationId));
 }
 
 function releaseVerificationIndexPath(store) {

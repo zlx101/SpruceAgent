@@ -47,7 +47,7 @@ completed Agent Launch
   -> Launcher-attested Trial
 ```
 
-Attestation rejects Git mutation commands before approval. It never commits, pushes, merges, rebases, resets, cleans, checks out, switches, or creates worktrees.
+Attestation rejects Git mutation commands before approval. It never commits, pushes, merges, rebases, resets, cleans, checks out, switches, or creates worktrees. Retired Agent Workspaces cannot be attested.
 
 ## Stored Data
 

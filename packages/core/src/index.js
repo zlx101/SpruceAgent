@@ -1,10 +1,10 @@
-export { createId, nowIso } from "./id.js";
+export { createId, nowIso, assertSafeStoreId } from "./id.js";
 export { createStore, ensureStore } from "./storage.js";
 export { runDoctor } from "./doctor.js";
 export { addMemory, listMemory, searchMemory } from "./memory.js";
 export { startTrace, appendTraceEvent, listTraces, readTraceEvents } from "./trace.js";
 export { listTools, findTool } from "./tools.js";
-export { evaluatePolicy, auditPolicyDecision } from "./policy.js";
+export { evaluatePolicy, auditPolicyDecision, GATEWAY_TRUST_MODES, normalizeGatewayTrustMode } from "./policy.js";
 export { evaluateTrace, getEvaluation, listEvaluations } from "./evaluations.js";
 export {
   createOutcomeFixture,
@@ -135,7 +135,7 @@ export {
   getWorkflowBuilderContract,
   normalizeWorkflowDraft,
 } from "./workflow-builder.js";
-export { executeTool } from "./executor.js";
+export { executeTool, resolveProjectPath } from "./executor.js";
 export {
   approveTicket,
   consumeApprovalTicket,
@@ -162,8 +162,10 @@ export {
   listAgentLaunches,
 } from "./agent-launcher.js";
 export {
+  EXTERNAL_CLI_EXECUTABLE_ADAPTERS,
   EXTERNAL_CLI_LAUNCHER_CONTRACT,
   getExternalCliLauncherContract,
+  isExternalCliExecutableAdapter,
 } from "./external-cli-launcher.js";
 export {
   approveFleetRun,
@@ -209,6 +211,13 @@ export {
   attestAgentLaunchTrial,
   getAgentTrialAttestationContract,
 } from "./agent-trial-attestation.js";
+export {
+  EXECUTION_EVIDENCE_CONTRACT,
+  assertFleetWorkspacesCurrent,
+  assertLaunchWorkspaceCurrent,
+  assertWorkspaceExecutionEvidence,
+  getExecutionEvidenceContract,
+} from "./execution-evidence.js";
 export {
   assertAgentWorkspaceLaunchable,
   getAgentWorkspace,

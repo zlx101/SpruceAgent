@@ -2,7 +2,7 @@
 
 SpruceAgent now has a gated launcher layer for prepared Agent Workspaces.
 
-This is the execution boundary after Agent Adapter Registry and Isolated Agent Workspace. It executes `local-shell-agent` commands and the fixed Codex CLI v1 invocation after TrustKernel policy and exact approval checks. Other external adapters remain preview-only.
+This is the execution boundary after Agent Adapter Registry and Isolated Agent Workspace. It executes `local-shell-agent` commands and verified external CLI invocations after TrustKernel policy and exact approval checks. Cursor Agent, Grok CLI, and other unverified external adapters remain preview-only.
 
 ## What It Provides
 
@@ -37,7 +37,7 @@ npm run spruce -- approval approve <approvalId>
 npm run spruce -- agent launch <workspaceId> --execute --command "node -v" --approvalId <approvalId>
 ```
 
-Execute a prepared Codex workspace after approval. Codex commands and arguments cannot be supplied by the caller:
+Execute a prepared Codex or Claude Code workspace after approval. External CLI commands and arguments cannot be supplied by the caller:
 
 ```bash
 npm run spruce -- agent launch <workspaceId> --execute
@@ -81,8 +81,8 @@ It does not expose arbitrary command execution in the browser UI. Execution rema
 
 Agent Launcher v0.2:
 
-- executes Codex CLI only through the fixed, shell-free External CLI Launcher v1 contract
-- keeps Claude Code, OpenCode, Hermes, Gemini, and other external coding agents disabled
+- executes verified external CLIs only through the fixed, shell-free External CLI Launcher v1 contract
+- currently enables Codex CLI and Claude Code; keeps Cursor Agent, Grok CLI, OpenCode, Hermes, Gemini, and other unverified coding agents disabled
 - only accepts user-supplied commands for `local-shell-agent`
 - routes commands through TrustKernel policy
 - creates approval tickets for shell execution
@@ -99,4 +99,4 @@ SpruceAgent needs execution, but execution must be observable and reviewable bef
 Adapter Plan -> Isolated Workspace -> Gated Launch -> Terminal Log -> Diff Summary -> Artifact -> Trace Report -> Review
 ```
 
-See `docs/external-cli-launcher-v1.md` for the Codex runtime evidence, fixed invocation, environment boundary, output limits, and current test evidence.
+See `docs/external-cli-launcher-v1.md` for verified runtime evidence, fixed invocations, environment boundary, output limits, and current test evidence.

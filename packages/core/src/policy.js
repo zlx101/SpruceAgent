@@ -22,6 +22,8 @@ const highCommandPatterns = [
   /\bInvoke-WebRequest\b.*\|\s*iex\b/i,
 ];
 
+export const GATEWAY_TRUST_MODES = Object.freeze(["observe", "draft", "approve"]);
+
 export function evaluatePolicy(input) {
   const tool = findTool(input.toolName);
   const trustMode = input.trustMode ?? "approve";
@@ -61,6 +63,14 @@ export function auditPolicyDecision(store, decision) {
     ...decision,
   });
   return decision;
+}
+
+export function normalizeGatewayTrustMode(trustMode) {
+  const mode = trustMode == null || String(trustMode).trim() === "" ? "approve" : String(trustMode).trim();
+  if (!GATEWAY_TRUST_MODES.includes(mode)) {
+    throw new Error(`gateway refuses trustMode ${mode}; allowed: ${GATEWAY_TRUST_MODES.join(", ")}`);
+  }
+  return mode;
 }
 
 function decide({ trustMode, riskLevel, tool }) {

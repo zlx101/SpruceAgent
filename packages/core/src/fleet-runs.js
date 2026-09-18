@@ -9,9 +9,10 @@ import {
 import { launchAgentWorkspace } from "./agent-launcher.js";
 import { prepareAgentWorkspace } from "./agent-workspaces.js";
 import { redactExternalCliOutput } from "./external-cli-launcher.js";
+import { assertFleetWorkspacesCurrent } from "./execution-evidence.js";
 import { createId, nowIso } from "./id.js";
 import { createLaunchReview } from "./launch-review.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 import { getTaskRoute } from "./task-router.js";
 import { appendTraceEvent, readTraceEvents, startTrace } from "./trace.js";
 
@@ -43,6 +44,7 @@ export const FLEET_RUN_CONTRACT = Object.freeze({
     "Cancellation prevents pending candidates and terminates active process trees when running in the same Gateway process.",
     "Cancellation does not delete worktrees or changes; evidence remains available for audit and manual cleanup.",
     "Completion creates a Launch Review evidence matrix but never selects, commits, merges, pushes, or promotes a winner.",
+    "Retired candidate workspaces block approval requests, batch approval, and execution.",
   ],
 });
 
@@ -178,6 +180,7 @@ export async function requestFleetRunApprovals(store, fleetRunId, input = {}, ru
   if (!new Set(["prepared", "approval_partial"]).has(record.status)) {
     throw new Error(`fleet run is not ready for approval requests: ${record.status}`);
   }
+  assertFleetWorkspacesCurrent(store, record);
 
   for (const unit of record.units.filter((item) => new Set(["prepared", "approval_failed"]).has(item.status))) {
     unit.error = null;
@@ -215,6 +218,7 @@ export function approveFleetRun(store, fleetRunId, input = {}) {
   if (record.status !== "awaiting_approval") {
     throw new Error(`fleet run is not awaiting approval: ${record.status}`);
   }
+  assertFleetWorkspacesCurrent(store, record);
   if (input.confirmation !== "approve_all_invocations") {
     throw new Error("confirmation must equal approve_all_invocations");
   }
@@ -243,6 +247,7 @@ export async function executeFleetRun(store, fleetRunId, input = {}, runtime = {
   if (record.status !== "approved") {
     throw new Error(`fleet run is not approved for execution: ${record.status}`);
   }
+  assertFleetWorkspacesCurrent(store, record);
   if (ACTIVE_FLEETS.has(record.id)) throw new Error(`fleet run is already active: ${record.id}`);
 
   const active = { record, controllers: new Map() };
@@ -563,7 +568,7 @@ function fleetListItem(record) {
 }
 
 function fleetPath(store, fleetRunId) {
-  return path.join(store.root, "fleet-runs", `${fleetRunId}.json`);
+  return storeItemPath(store, "fleet-runs", fleetRunId);
 }
 
 function fleetIndexPath(store) {

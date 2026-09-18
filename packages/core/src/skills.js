@@ -1,11 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createId, nowIso } from "./id.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { appendJsonl, readJson, readJsonl, storeNestedItemPath, writeJson } from "./storage.js";
 import { readTraceEvents } from "./trace.js";
 
 export function listSkills(store, status = "approved") {
-  const dir = path.join(store.root, "skills", status);
+  const dir = path.join(store.root, "skills", assertSkillStatus(status));
   if (!fs.existsSync(dir)) return [];
   return fs
     .readdirSync(dir)
@@ -253,7 +253,7 @@ function createSkillName(goal) {
 }
 
 function skillPath(store, status, skillId) {
-  return path.join(store.root, "skills", status, `${skillId}.json`);
+  return storeNestedItemPath(store, "skills", assertSkillStatus(status), skillId);
 }
 
 function recordSkillVersion(store, skill, input) {
@@ -294,5 +294,13 @@ function skillVersionIndexPath(store) {
 }
 
 function skillVersionPath(store, skillId, revision) {
-  return path.join(store.root, "skill-history", skillId, `${revision}.json`);
+  return storeNestedItemPath(store, "skill-history", skillId, revision);
+}
+
+function assertSkillStatus(status) {
+  const value = String(status ?? "approved").trim();
+  if (value !== "candidates" && value !== "approved") {
+    throw new Error("skill status must be candidates or approved");
+  }
+  return value;
 }

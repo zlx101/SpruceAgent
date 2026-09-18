@@ -21,4 +21,8 @@
 
 ## Practical conclusion
 
-The project is strong as a **trust-governed agent control plane** and is past the pure prototype stage. The practical completion estimate is about **72%** for a real local alpha: core control surfaces are implemented, but production confidence still depends on repeatable accepted external-agent trials, durable operator deployment, and more negative-path hardening around stale or retired execution evidence.
+The project is strong as a **trust-governed agent control plane** and is past the pure prototype stage. The practical completion estimate is about **72%** for a real local alpha: core control surfaces are implemented, but production confidence still depends on repeatable accepted external-agent trials and durable operator deployment.
+
+On 2026-09-16, Execution Evidence Guard v0 closed the stale/retired workspace negative path for attestation and Fleet approval/execution, added shared store-id path safety, sandboxed skill-package export files, and limited Gateway execution trustMode to `observe` / `draft` / `approve`.
+
+On 2026-09-16 later the same day, External CLI Launcher v1 was generalized from Codex-only to verified-adapter execution: Claude Code is executable; Cursor Agent and Grok CLI are registered and still launch-disabled until a native CLI contract exists. A live Codex launch failed on an unsupported ChatGPT-account model. A live Claude Code launch reached the installed CLI with `permissionMode=acceptEdits`, then failed with `403 Request not allowed`. No launcher-attested passing trial exists yet.

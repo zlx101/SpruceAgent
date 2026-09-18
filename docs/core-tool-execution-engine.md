@@ -25,6 +25,7 @@ tool request
 | medium/high-risk tool | creates an approval ticket unless a valid approval is supplied |
 | denied tool | never executes |
 | critical-risk tool | blocked unless `allowCritical` is explicit |
+| Gateway execution routes | `observe`, `draft`, and `approve` only; `delegate` / `autonomous` stay CLI-local |
 | trace-linked execution | writes `tool.policy` and `tool.result` events |
 
 ## Current Built-in Tools

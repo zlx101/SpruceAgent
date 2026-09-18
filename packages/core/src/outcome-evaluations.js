@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { getFleetRun } from "./fleet-runs.js";
 import { createId, nowIso } from "./id.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 import { readTraceEvents } from "./trace.js";
 
 export const OUTCOME_EVALUATION_CONTRACT = Object.freeze({
@@ -642,11 +642,11 @@ function round(value) {
 }
 
 function outcomeFixturePath(store, fixtureId) {
-  return path.join(store.root, "outcome-fixtures", `${fixtureId}.json`);
+  return storeItemPath(store, "outcome-fixtures", fixtureId);
 }
 
 function outcomeResultPath(store, resultId) {
-  return path.join(store.root, "outcome-results", `${resultId}.json`);
+  return storeItemPath(store, "outcome-results", resultId);
 }
 
 function outcomeFixtureIndexPath(store) {

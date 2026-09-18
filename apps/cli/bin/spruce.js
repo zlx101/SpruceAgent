@@ -2486,7 +2486,7 @@ Usage:
   ${executable} agent workspace <workspaceId>
   ${executable} agent retire-workspace <workspaceId> [--deleteBranch] [--reason "completed"]
   ${executable} agent launch <workspaceId>
-  ${executable} agent launch <codexWorkspaceId> --execute [--approvalId <approvalId>]
+  ${executable} agent launch <externalCliWorkspaceId> --execute [--approvalId <approvalId>]
   ${executable} agent launch <localShellWorkspaceId> --execute --command "node -v" [--approvalId <approvalId>]
   ${executable} agent launches [--workspaceId <workspaceId>]
   ${executable} agent launch-detail <launchId>
@@ -2506,7 +2506,7 @@ Usage:
   ${executable} agent trial-detail <trialId>
   ${executable} agent trial-contract
   ${executable} agent trial-attestation-contract
-  ${executable} agent probe [--adapterIds codex-cli,claude-code] [--version]
+  ${executable} agent probe [--adapterIds codex-cli,claude-code,cursor-agent,grok-cli] [--version]
   ${executable} agent probes
   ${executable} agent probe-detail <probeId>
   ${executable} agent route --goal "Implement task" --roles coding,review --refreshCapabilities

@@ -1,6 +1,6 @@
 import path from "node:path";
 import { createId, nowIso } from "./id.js";
-import { appendJsonl, readJsonl } from "./storage.js";
+import { appendJsonl, readJsonl, storeItemPath } from "./storage.js";
 
 export function startTrace(store, input) {
   const trace = {
@@ -32,7 +32,7 @@ export function appendTraceEvent(store, traceId, type, payload = {}) {
     createdAt: nowIso(),
     payload,
   };
-  appendJsonl(path.join(store.root, "traces", `${traceId}.jsonl`), event);
+  appendJsonl(storeItemPath(store, "traces", traceId, ".jsonl"), event);
   return event;
 }
 
@@ -41,5 +41,5 @@ export function listTraces(store) {
 }
 
 export function readTraceEvents(store, traceId) {
-  return readJsonl(path.join(store.root, "traces", `${traceId}.jsonl`));
+  return readJsonl(storeItemPath(store, "traces", traceId, ".jsonl"));
 }

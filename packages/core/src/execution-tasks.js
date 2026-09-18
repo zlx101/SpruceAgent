@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { createId, nowIso } from "./id.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { createId, nowIso, assertSafeStoreId } from "./id.js";
+import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 import { getArtifact } from "./artifacts.js";
 import { getAgentLaunch, listAgentLaunches } from "./agent-launcher.js";
 import { getAgentTrial } from "./agent-trials.js";
@@ -547,13 +547,11 @@ function assertTaskRevision(task, input) {
   if (expected !== task.updatedAt) throw new Error(`execution task revision conflict: expected ${expected}, found ${task.updatedAt}`);
 }
 function requiredTaskId(value, name = "taskId") {
-  const id = requiredText(value, name, 160);
-  if (!/^[A-Za-z0-9_-]{1,160}$/.test(id)) throw new Error(`${name} must be a single safe identifier`);
-  return id;
+  return assertSafeStoreId(requiredText(value, name, 160), name);
 }
-function taskPath(store, id) { return path.join(store.root, "execution-tasks", `${requiredTaskId(id)}.json`); }
+function taskPath(store, id) { return storeItemPath(store, "execution-tasks", requiredTaskId(id)); }
 function indexPath(store) { return path.join(store.root, "execution-task-index.jsonl"); }
-function eventsPath(store, id) { return path.join(store.root, "execution-task-events", `${requiredTaskId(id)}.jsonl`); }
+function eventsPath(store, id) { return storeItemPath(store, "execution-task-events", requiredTaskId(id), ".jsonl"); }
 function writeTask(store, task) { writeJson(taskPath(store, task.id), task); }
 function audit(store, task, type, extra) { appendJsonl(path.join(store.root, "audit.jsonl"), { type, taskId: task.id, status: task.status, createdAt: nowIso(), ...extra }); }
 

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createExecutionTask } from "./execution-tasks.js";
 import { createId, nowIso } from "./id.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 
 export const AUTOPILOT_CONTRACT = Object.freeze({
   version: "0.1.0",
@@ -281,7 +281,7 @@ function audit(store, type, record, details) {
   });
 }
 
-function autopilotPath(store, id) { return path.join(store.root, "autopilots", `${id}.json`); }
+function autopilotPath(store, id) { return storeItemPath(store, "autopilots", id); }
 function autopilotIndexPath(store) { return path.join(store.root, "autopilot-index.jsonl"); }
 function autopilotTriggerIndexPath(store) { return path.join(store.root, "autopilot-trigger-index.jsonl"); }
 function autopilotFailureIndexPath(store) { return path.join(store.root, "autopilot-failure-index.jsonl"); }

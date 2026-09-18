@@ -3,9 +3,10 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { getAgentAdapter, listAgentAdapters } from "./agent-adapters.js";
 import { listAgentTrials } from "./agent-trials.js";
+import { isExternalCliExecutableAdapter } from "./external-cli-launcher.js";
 import { listLlmProviderConfigs } from "./llm-provider-registry.js";
 import { createId, nowIso } from "./id.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 
 export const CAPABILITY_PROBE_CONTRACT = Object.freeze({
   version: "0.3.0",
@@ -154,17 +155,17 @@ function probeAdapter(item, input, runtime, trialStats = null) {
     executablePath,
     version: version.version,
     versionStatus: version.status,
-    launcherExecutionSupported: adapter.id === "codex-cli" && !isShellWrapper(executablePath),
+    launcherExecutionSupported: isExternalCliExecutableAdapter(adapter.id) && !isShellWrapper(executablePath),
     empiricalValidation: empiricalValidation(trialStats),
     capabilities: adapter.capabilities,
     evidence: [
       `${adapter.command} resolved to a local executable.`,
       version.evidence,
-      adapter.id === "codex-cli" && !isShellWrapper(executablePath)
-        ? "Codex CLI task execution is supported through External CLI Launcher v1 after isolated workspace preparation and exact approval."
-        : adapter.id === "codex-cli"
-          ? "Codex was found only as a command wrapper; External CLI Launcher requires a native executable for shell-free execution."
-        : "External CLI task execution remains disabled for this adapter.",
+      isExternalCliExecutableAdapter(adapter.id) && !isShellWrapper(executablePath)
+        ? `${adapter.name} task execution is supported through External CLI Launcher v1 after isolated workspace preparation and exact approval.`
+        : isExternalCliExecutableAdapter(adapter.id)
+          ? `${adapter.command} was found only as a command wrapper; External CLI Launcher requires a native executable for shell-free execution.`
+        : "External CLI task execution remains disabled until this adapter's native CLI contract is independently verified.",
     ],
   };
 }
@@ -339,7 +340,7 @@ function normalizeIds(values) {
 }
 
 function probePath(store, probeId) {
-  return path.join(store.root, "capability-probes", `${probeId}.json`);
+  return storeItemPath(store, "capability-probes", probeId);
 }
 
 function probeIndexPath(store) {

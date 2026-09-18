@@ -3,12 +3,18 @@
   "$id": "https://spruceagent.dev/schemas/gateway.schema.json",
   "title": "SpruceAgent GatewayMesh Local API",
   "type": "object",
-  "required": ["version", "basePath", "localOnly", "auth", "routes"],
+  "required": ["version", "basePath", "localOnly", "executionTrustModes", "auth", "routes"],
   "additionalProperties": false,
   "properties": {
     "version": { "type": "string" },
     "basePath": { "type": "string", "const": "/v1" },
     "localOnly": { "type": "boolean", "const": true },
+    "executionTrustModes": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "string", "enum": ["observe", "draft", "approve"] }
+    },
     "auth": {
       "type": "object",
       "required": ["type", "requiredForV1"],

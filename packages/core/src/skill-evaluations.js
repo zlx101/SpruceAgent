@@ -3,7 +3,7 @@ import path from "node:path";
 import { createId, nowIso } from "./id.js";
 import { evaluatePolicy } from "./policy.js";
 import { compileExecutableSteps, getSkill } from "./skills.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 import { readTraceEvents } from "./trace.js";
 import { findTool } from "./tools.js";
 
@@ -311,7 +311,7 @@ function countBy(items, keyFn) {
 }
 
 function skillEvaluationPath(store, evaluationId) {
-  return path.join(store.root, "skill-evaluations", `${evaluationId}.json`);
+  return storeItemPath(store, "skill-evaluations", evaluationId);
 }
 
 function v0Limits() {

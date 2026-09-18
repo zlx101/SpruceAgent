@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { getAgentAdapter } from "./agent-adapters.js";
 import { createId, nowIso } from "./id.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 
 export const AGENT_TRIAL_CONTRACT = Object.freeze({
   version: "0.2.0",
@@ -296,7 +296,7 @@ function trialListItem(trial) {
 }
 
 function trialPath(store, trialId) {
-  return path.join(store.root, "agent-trials", `${trialId}.json`);
+  return storeItemPath(store, "agent-trials", trialId);
 }
 
 function trialIndexPath(store) {

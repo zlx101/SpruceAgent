@@ -45,7 +45,7 @@ confirmation = approve_all_invocations
 reason       = a non-trivial review reason
 ```
 
-The batch action validates that every pending ticket belongs to the expected candidate workspace before approving any ticket. Execution reuses the timeout and output limit that were part of the approved invocation.
+The batch action validates that every pending ticket belongs to the expected candidate workspace before approving any ticket. Execution reuses the timeout and output limit that were part of the approved invocation. Retired candidate workspaces block approval requests, batch approval, and execution.
 
 ## Cancellation
 

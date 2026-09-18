@@ -40,14 +40,7 @@ Target properties:
 
 Near-term implication:
 
-SpruceAgent should next introduce Workflow v0 as a durable object that can reference:
-
-- context query
-- approved skills
-- typed tool steps
-- approval requirements
-- memory writes
-- expected outputs
+Workflow v0 now exists as a durable object that can reference context queries, approved skills, typed tool steps, approval requirements, memory writes, and expected outputs.
 
 ## 3. Agent
 
@@ -63,10 +56,9 @@ In SpruceAgent today:
 
 Current boundary:
 
-- no LLM planner yet
-- no automatic tool selection
-- no autonomous multi-step reasoning
-- no gateway or desktop UI
+- LLM planner exists as draft-only promotion, not direct execution
+- tool selection is policy-gated, not fully autonomous
+- Gateway and Desktop Workbench exist for local alpha operation
 
 ## 4. Super-Agent
 
@@ -124,14 +116,16 @@ Every concrete task should be handled through this lens:
 
 SpruceAgent currently has:
 
-- Skill v0
+- Skill v0 and the SkillForge lifecycle
 - typed executable skill steps v0
+- Workflow v0
 - Agent Run Loop v0
-- ContextOS first slice
-- TrustKernel first slice
+- GatewayMesh, Workbench, Fleet, Squad, and Autopilot
+- TrustKernel plus Execution Evidence Guard v0
 
-The missing next layer is:
+The remaining production-confidence gap is:
 
-> Workflow v0
+> repeatable accepted external-agent trials, not another planning surface
 
-That should become the bridge between individual skills and higher-level agent behavior.
+On 2026-09-16, External CLI Launcher v1 stopped being Codex-only. Codex CLI and Claude Code are executable after independently verified native argv contracts. Cursor Agent and Grok CLI are registered first-class adapters and remain launch-disabled until a native CLI is present. Live Codex execution failed because the ChatGPT-account default model `gpt-6-astra` is unsupported. Live Claude Code execution started through TrustKernel and then failed with `403 Request not allowed` / `authentication_failed`. Neither live run produced an accepted workspace effect.
+

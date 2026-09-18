@@ -6,6 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   addMemory,
+  assertSafeStoreId,
   attestAgentLaunchTrial,
   archiveWorkflow,
   assessAgentExecutionReadiness,
@@ -84,6 +85,7 @@ import {
   getExecutionTaskEvidence,
   getExecutionTaskLineage,
   getExecutionTaskContract,
+  getExecutionEvidenceContract,
   getAutopilot,
   getAutopilotContract,
   getAgentTrial,
@@ -259,6 +261,7 @@ test("workspace store initializes core files", () => {
   assert.ok(fs.existsSync(path.join(store.root, "capability-probes")));
   assert.ok(fs.existsSync(path.join(store.root, "agent-routes")));
   assert.ok(fs.existsSync(path.join(store.root, "worktrees")));
+  assert.ok(fs.existsSync(path.join(store.root, "fleet-runs")));
   assert.ok(fs.existsSync(path.join(store.root, "runtime")));
 });
 
@@ -704,8 +707,14 @@ test("release verification reports persist summarized local gate evidence", () =
   assert.equal(list.summary.total, 1);
   assert.equal(list.items[0].id, record.id);
   assert.equal(Object.prototype.hasOwnProperty.call(loaded.results[0], "stdout"), false);
-  const invalidVerificationId = assert.throws(() => getReleaseVerification(store, "../audit"), /invalid release verification id/);
-  assert.equal(invalidVerificationId.statusCode, 400);
+  assert.throws(
+    () => getReleaseVerification(store, "../audit"),
+    (err) => {
+      assert.match(err.message, /invalid release verification id/);
+      assert.equal(err.statusCode, 400);
+      return true;
+    },
+  );
   assert.match(audit, /release_verification\.recorded/);
 });
 
@@ -751,13 +760,25 @@ test("release artifact manifest records local checksums and release evidence lin
   assert.match(loaded.artifacts[0].sha256, /^[a-f0-9]{64}$/);
   assert.equal(list.summary.total, 1);
   assert.equal(list.items[0].id, manifest.id);
-  const invalidManifestId = assert.throws(() => getReleaseArtifactManifest(store, "../audit"), /invalid release artifact manifest id/);
-  assert.equal(invalidManifestId.statusCode, 400);
-  const invalidArtifacts = assert.throws(() => createReleaseArtifactManifest(store, {
-    releaseVerificationId: verification.id,
-    artifacts: "package.json",
-  }), /release artifact definitions must be an array/);
-  assert.equal(invalidArtifacts.statusCode, 400);
+  assert.throws(
+    () => getReleaseArtifactManifest(store, "../audit"),
+    (err) => {
+      assert.match(err.message, /invalid release artifact manifest id/);
+      assert.equal(err.statusCode, 400);
+      return true;
+    },
+  );
+  assert.throws(
+    () => createReleaseArtifactManifest(store, {
+      releaseVerificationId: verification.id,
+      artifacts: "package.json",
+    }),
+    (err) => {
+      assert.match(err.message, /release artifact definitions must be an array/);
+      assert.equal(err.statusCode, 400);
+      return true;
+    },
+  );
   assert.match(audit, /release_artifact_manifest\.recorded/);
 });
 
@@ -773,17 +794,17 @@ test("release verification gate is shared by package scripts, CI, and docs", () 
   const executionTaskEventSchema = JSON.parse(fs.readFileSync(path.resolve("schemas", "execution-task-event.schema.json"), "utf8"));
 
   assert.equal(packageJson.scripts["release:verify"], "node scripts/release-verify.js");
-  assert.match(packageJson.scripts.check, /scripts\/release-verify\.js/);
+  assert.equal(packageJson.scripts.check, "node scripts/syntax-check.js");
   assert.match(ci, /npm run release:verify/);
   assert.match(checklist, /npm run release:verify/);
   assert.match(quickstart, /npm run release:verify/);
-  assert.match(script, /spruceagent\.release-verification/);
+  assert.match(script, /RELEASE_VERIFICATION_CONTRACT/);
   assert.match(script, /persistReleaseVerificationReport/);
-  assert.match(script, /packages\/core\/src\/execution-tasks\.js/);
-  assert.match(script, /packages\/core\/src\/release-artifacts\.js/);
-  assert.match(packageJson.scripts.check, /packages\/core\/src\/execution-tasks\.js/);
-  assert.match(packageJson.scripts.check, /packages\/core\/src\/release-verifications\.js/);
-  assert.match(packageJson.scripts.check, /packages\/core\/src\/release-artifacts\.js/);
+  assert.match(script, /scripts\/syntax-check\.js/);
+  const checkScript = fs.readFileSync(path.resolve("scripts", "syntax-check.js"), "utf8");
+  assert.match(checkScript, /packages.*core.*src/);
+  assert.match(checkScript, /apps/);
+  assert.match(checkScript, /tests/);
   assert.match(cli, /handleRelease/);
   assert.match(cli, /release list \[--limit 20\]/);
   assert.match(cli, /release manifest \[--verificationId <verificationId>\]/);
@@ -2438,6 +2459,7 @@ test("gateway route contract exposes stable route ids", () => {
 
   assert.equal(contract.version, "0.1.0");
   assert.equal(contract.basePath, "/v1");
+  assert.deepEqual(contract.executionTrustModes, ["observe", "draft", "approve"]);
   assert.ok(routeIds.includes("workbench"));
   assert.ok(routeIds.includes("showcase"));
   assert.ok(routeIds.includes("status"));
@@ -4909,19 +4931,28 @@ test("trace report contract exposes export-only audit boundary", () => {
   assert.ok(contract.safetyBoundary.some((item) => item.includes("execute tools")));
 });
 
-test("agent adapter registry exposes gated Codex execution and preview-only peers", () => {
+test("agent adapter registry exposes gated Codex and Claude execution plus Cursor and Grok peers", () => {
   const contract = getAgentAdapterContract();
   const adapters = listAgentAdapters();
   const codex = getAgentAdapter("codex-cli");
+  const claude = getAgentAdapter("claude-code");
+  const cursor = getAgentAdapter("cursor-agent");
+  const grok = getAgentAdapter("grok-cli");
 
   assert.equal(contract.interface, "spruceagent.agent-adapters");
   assert.equal(contract.outputKind, "agent_fleet_control_plane");
   assert.ok(contract.plannedIsolationModes.includes("git_worktree"));
   assert.equal(adapters.status, "available");
-  assert.equal(adapters.summary.byKind.coding_cli >= 3, true);
+  assert.equal(adapters.summary.byKind.coding_cli >= 5, true);
   assert.equal(codex.id, "codex-cli");
   assert.equal(codex.status, "executable_gated");
   assert.equal(codex.capabilities.directExecution, true);
+  assert.equal(claude.status, "executable_gated");
+  assert.equal(claude.capabilities.directExecution, true);
+  assert.equal(cursor.status, "planned");
+  assert.equal(cursor.capabilities.directExecution, false);
+  assert.equal(grok.status, "planned");
+  assert.equal(grok.capabilities.directExecution, false);
   assert.ok(codex.integrationChecklist.some((item) => item.includes("isolated workspace")));
 });
 
@@ -5148,13 +5179,13 @@ test("task router assigns roles separately and routes supported execute adapters
   );
 });
 
-test("agent launcher contract exposes gated local and Codex execution boundaries", () => {
+test("agent launcher contract exposes gated local and verified external CLI execution boundaries", () => {
   const contract = getAgentLauncherContract();
 
   assert.equal(contract.interface, "spruceagent.agent-launcher");
   assert.equal(contract.outputKind, "gated_agent_launch_record");
-  assert.deepEqual(contract.executableAdaptersInV1, ["local-shell-agent", "codex-cli"]);
-  assert.ok(contract.safetyBoundary.some((item) => item.includes("Codex CLI v1")));
+  assert.deepEqual(contract.executableAdaptersInV1, ["local-shell-agent", "codex-cli", "claude-code"]);
+  assert.ok(contract.safetyBoundary.some((item) => item.includes("shell-free")));
   assert.ok(contract.safetyBoundary.some((item) => item.includes("Git commit")));
 });
 
@@ -5630,8 +5661,8 @@ test("agent launcher keeps unverified external CLI adapters disabled", async () 
   const store = ensureStore(createStore(dir));
   buildWorkspaceIndex(store);
   const workspace = prepareAgentWorkspace(store, {
-    adapterId: "claude-code",
-    goal: "Do not execute external CLI",
+    adapterId: "opencode",
+    goal: "Do not execute unverified external CLI",
     contextQuery: "README",
   });
 
@@ -5663,6 +5694,7 @@ test("external CLI launcher builds a shell-free bounded Codex invocation", () =>
     env: {
       PATH: path.dirname(executable),
       OPENAI_API_KEY: "test-openai-credential",
+      ANTHROPIC_API_KEY: "must-not-be-inherited",
       DEEPSEEK_API_KEY: "must-not-be-inherited",
     },
   });
@@ -5683,6 +5715,7 @@ test("external CLI launcher builds a shell-free bounded Codex invocation", () =>
   assert.equal(invocation.executionLimits.maxBuffer, 4 * 1024 * 1024);
   assert.equal(invocation.environmentKeys.includes("OPENAI_API_KEY"), true);
   assert.equal(invocation.environmentKeys.includes("DEEPSEEK_API_KEY"), false);
+  assert.equal(invocation.environmentKeys.includes("ANTHROPIC_API_KEY"), false);
   assert.throws(
     () => buildExternalCliInvocation(workspace, { args: ["--dangerously-bypass-approvals-and-sandbox"] }, {
       resolveExecutable: () => executable,
@@ -5703,6 +5736,50 @@ test("external CLI launcher builds a shell-free bounded Codex invocation", () =>
       /native executable/,
     );
   }
+});
+
+test("external CLI launcher builds a shell-free bounded Claude Code invocation", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  initGitRepo(dir);
+  const store = ensureStore(createStore(dir));
+  buildWorkspaceIndex(store);
+  const workspace = prepareAgentWorkspace(store, {
+    adapterId: "claude-code",
+    goal: "Implement the approved workspace task",
+    contextQuery: "SpruceAgent",
+  });
+  const executable = path.join(dir, "bin", process.platform === "win32" ? "claude.exe" : "claude");
+  const invocation = buildExternalCliInvocation(workspace, {}, {
+    resolveExecutable: () => executable,
+    env: {
+      PATH: path.dirname(executable),
+      ANTHROPIC_API_KEY: "test-anthropic-credential",
+      OPENAI_API_KEY: "must-not-be-inherited",
+      DEEPSEEK_API_KEY: "must-not-be-inherited",
+    },
+  });
+
+  assert.equal(invocation.adapterId, "claude-code");
+  assert.equal(invocation.protocol, "claude_print_stream_json_v1");
+  assert.equal(invocation.executable, executable);
+  assert.deepEqual(invocation.args.slice(0, 3), ["--print", "--verbose", "--output-format"]);
+  assert.equal(invocation.args.includes("acceptEdits"), true);
+  assert.equal(invocation.args.some((arg) => /dangerously/i.test(arg)), false);
+  assert.equal(invocation.args.includes("bypassPermissions"), false);
+  assert.equal(invocation.args.includes("--cd"), false);
+  assert.match(invocation.stdin, /SpruceAgent approved task:/);
+  assert.ok(invocation.stdin.includes(workspace.goal));
+  assert.equal(invocation.safety.shell, false);
+  assert.equal(invocation.safety.permissionMode, "acceptEdits");
+  assert.equal(invocation.environmentKeys.includes("ANTHROPIC_API_KEY"), true);
+  assert.equal(invocation.environmentKeys.includes("OPENAI_API_KEY"), false);
+  assert.equal(invocation.environmentKeys.includes("DEEPSEEK_API_KEY"), false);
+  assert.throws(
+    () => buildExternalCliInvocation(workspace, { prompt: "caller override" }, {
+      resolveExecutable: () => executable,
+    }),
+    /generated from the approved workspace plan/,
+  );
 });
 
 test("Codex workspace preparation rejects dirty sources and stale ContextOS evidence", () => {
@@ -6006,6 +6083,14 @@ test("agent launcher rejects git mutation commands before approval", async () =>
       workspaceId: workspace.id,
       execute: true,
       command: "git commit -m blocked",
+    }),
+    /blocks git mutation/,
+  );
+  await assert.rejects(
+    () => launchAgentWorkspace(store, {
+      workspaceId: workspace.id,
+      execute: true,
+      command: "git checkout main",
     }),
     /blocks git mutation/,
   );
@@ -6651,4 +6736,104 @@ test("gateway client records, attests, and lists agent trial evidence", async ()
   } finally {
     await closeServer(gateway.server);
   }
+});
+
+test("store record ids reject path traversal", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+
+  assert.throws(() => assertSafeStoreId("../config"), /safe identifier/);
+  assert.throws(() => getApprovalTicket(store, "../config.json"), /safe identifier/);
+  assert.throws(() => readTraceEvents(store, "trace_../x"), /safe identifier/);
+  assert.throws(() => getAgentWorkspace(store, "..\\windows"), /safe identifier/);
+  assert.throws(() => listSkills(store, "../approved"), /candidates or approved/);
+});
+
+test("skill package export stays inside the workspace", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const candidate = proposeSkill(store, {
+    name: "Export Sandbox",
+    summary: "Keep package files inside the workspace.",
+    steps: ["tool:file.read path=README.md"],
+  });
+
+  assert.throws(
+    () => exportSkillPackage(store, candidate.id, {
+      status: "candidates",
+      file: path.join("..", "escape.skillpkg.json"),
+    }),
+    /path escapes workspace/,
+  );
+  assert.equal(fs.existsSync(path.join(dir, "..", "escape.skillpkg.json")), false);
+});
+
+test("gateway execution refuses delegate trustMode", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const baseUrl = `http://${gateway.host}:${gateway.port}`;
+
+  try {
+    const denied = await fetchJson(`${baseUrl}/v1/tools/run`, {
+      method: "POST",
+      token: gateway.token,
+      body: {
+        toolName: "file.write",
+        trustMode: "delegate",
+        input: { path: "delegate.txt", content: "blocked" },
+      },
+    });
+    assert.equal(denied.status, 500);
+    assert.match(denied.body.message, /refuses trustMode delegate/);
+    assert.equal(fs.existsSync(path.join(dir, "delegate.txt")), false);
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
+
+test("execution evidence guard blocks retired workspaces on attestation and fleet", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  initGitRepo(dir);
+  const store = ensureStore(createStore(dir));
+  assert.equal(getExecutionEvidenceContract().interface, "spruceagent.execution-evidence");
+
+  const { route } = createCodexExecuteRoute(store, dir, "Guard retired fleet candidates");
+  const fleet = createFleetRun(store, {
+    routeId: route.id,
+    candidateCount: 2,
+    maxParallel: 1,
+  });
+  assert.equal(fleet.status, "prepared");
+  retireAgentWorkspace(store, fleet.units[0].workspaceId);
+  await assert.rejects(
+    () => requestFleetRunApprovals(store, fleet.id),
+    /retired and cannot be launched/,
+  );
+
+  const workspace = prepareAgentWorkspace(store, {
+    adapterId: "local-shell-agent",
+    goal: "Retired workspaces cannot be attested",
+  });
+  const command = "node -e \"require('fs').writeFileSync('guard-output.txt','ok')\"";
+  const pendingLaunch = await launchAgentWorkspace(store, {
+    workspaceId: workspace.id,
+    execute: true,
+    command,
+  });
+  approveTicket(store, pendingLaunch.approval.id, { reason: "evidence guard launch" });
+  const launch = await launchAgentWorkspace(store, {
+    workspaceId: workspace.id,
+    execute: true,
+    command,
+    approvalId: pendingLaunch.approval.id,
+  });
+  retireAgentWorkspace(store, workspace.id);
+  await assert.rejects(
+    () => attestAgentLaunchTrial(store, {
+      launchId: launch.id,
+      acceptanceCommand: "node -e \"process.exit(0)\"",
+    }),
+    /retired and cannot be launched/,
+  );
 });

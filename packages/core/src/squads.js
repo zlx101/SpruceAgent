@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createId, nowIso } from "./id.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 import { getTaskRoute } from "./task-router.js";
 import { assertAgentWorkspaceLaunchable, getAgentWorkspace } from "./agent-workspaces.js";
 import { getLaunchReview } from "./launch-review.js";
@@ -280,7 +280,7 @@ function safeGetWorkspace(store, workspaceId) {
   }
 }
 
-function squadPath(store, squadId) { return path.join(store.root, "squads", `${squadId}.json`); }
+function squadPath(store, squadId) { return storeItemPath(store, "squads", squadId); }
 function squadIndexPath(store) { return path.join(store.root, "squad-index.jsonl"); }
 
 function normalizeExecutionTaskId(value) {

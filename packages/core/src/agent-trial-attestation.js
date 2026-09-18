@@ -7,6 +7,8 @@ import { consumeApprovalTicket, createApprovalTicket, getApprovalTicket } from "
 import { getAgentLaunch } from "./agent-launcher.js";
 import { recordLauncherAttestedTrial } from "./agent-trials.js";
 import { nowIso } from "./id.js";
+import { commandMatchesGitMutation } from "./forbidden-commands.js";
+import { assertLaunchWorkspaceCurrent } from "./execution-evidence.js";
 import { auditPolicyDecision, evaluatePolicy } from "./policy.js";
 import { appendJsonl } from "./storage.js";
 import { appendTraceEvent } from "./trace.js";
@@ -27,21 +29,10 @@ export const AGENT_TRIAL_ATTESTATION_CONTRACT = Object.freeze({
     "The workspace fingerprint must remain stable during acceptance for the Trial to pass.",
     "Launcher attestation is a local execution-chain claim, not a cryptographic signature or tamper-proof ledger.",
     "Attestation never commits, pushes, merges, rebases, resets, cleans, or promotes changes.",
+    "Retired Agent Workspaces cannot be attested; current workspace status is re-checked from the launch record.",
   ],
 });
 
-const FORBIDDEN_COMMAND_PATTERNS = [
-  /\bgit\s+commit\b/i,
-  /\bgit\s+push\b/i,
-  /\bgit\s+merge\b/i,
-  /\bgit\s+rebase\b/i,
-  /\bgit\s+reset\b/i,
-  /\bgit\s+clean\b/i,
-  /\bgit\s+checkout\b/i,
-  /\bgit\s+switch\b/i,
-  /\bgit\s+worktree\b/i,
-  /\bgh\s+pr\s+merge\b/i,
-];
 const MAX_UNTRACKED_FILES = 200;
 const MAX_HASHED_FILE_BYTES = 16 * 1024 * 1024;
 
@@ -59,6 +50,7 @@ export async function attestAgentLaunchTrial(store, input = {}) {
   if (!launch.git?.before?.insideWorkTree || !launch.git?.after?.insideWorkTree) {
     throw new Error(`agent launch requires Git evidence before attestation: ${launchId}`);
   }
+  assertLaunchWorkspaceCurrent(store, launch);
 
   let ticket = input.approvalId ? getApprovalTicket(store, input.approvalId) : null;
   // A queued continuation deliberately needs only the approval id. The exact
@@ -221,7 +213,7 @@ function assertWorkspacePath(store, workspacePath) {
 }
 
 function assertAllowedAcceptanceCommand(command) {
-  if (FORBIDDEN_COMMAND_PATTERNS.some((pattern) => pattern.test(command))) {
+  if (commandMatchesGitMutation(command)) {
     throw new Error("agent trial attestation blocks git mutation commands");
   }
 }

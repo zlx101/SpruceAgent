@@ -3,7 +3,7 @@ import path from "node:path";
 import { getAgentAdapter } from "./agent-adapters.js";
 import { getCapabilityProbe, getLatestCapabilityProbe, probeAgentCapabilities } from "./capability-probe.js";
 import { createId, nowIso } from "./id.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 
 export const TASK_ROUTER_CONTRACT = Object.freeze({
   version: "0.4.0",
@@ -339,7 +339,7 @@ function normalizeList(value) {
 }
 
 function routePath(store, routeId) {
-  return path.join(store.root, "agent-routes", `${routeId}.json`);
+  return storeItemPath(store, "agent-routes", routeId);
 }
 
 function routeIndexPath(store) {

@@ -7,7 +7,7 @@ import { createId, nowIso } from "./id.js";
 import { assessRunRisk, runPreflight } from "./preflight.js";
 import { getApprovedSkill } from "./skills.js";
 import { appendTraceEvent, startTrace } from "./trace.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 
 export function createWorkflow(store, input) {
   const workflow = {
@@ -401,11 +401,11 @@ function workflowsDir(store) {
 }
 
 function workflowPath(store, workflowId) {
-  return path.join(workflowsDir(store), `${workflowId}.json`);
+  return storeItemPath(store, "workflows", workflowId);
 }
 
 function workflowHistoryPath(store, workflowId) {
-  return path.join(store.root, "workflow-history", `${workflowId}.jsonl`);
+  return storeItemPath(store, "workflow-history", workflowId, ".jsonl");
 }
 
 function v0Limits() {

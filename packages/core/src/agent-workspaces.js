@@ -3,8 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { createAgentAdapterRunPlan } from "./agent-adapters.js";
 import { assessWorkspaceIndexFreshness } from "./context.js";
+import { isExternalCliExecutableAdapter } from "./external-cli-launcher.js";
 import { createId, nowIso } from "./id.js";
-import { appendJsonl, readJson, readJsonl, writeJson } from "./storage.js";
+import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 
 export const AGENT_WORKSPACE_CONTRACT = Object.freeze({
   version: "0.2.0",
@@ -19,7 +20,7 @@ export const AGENT_WORKSPACE_CONTRACT = Object.freeze({
     "Workspace paths must stay inside the SpruceAgent store worktrees directory.",
     "Retirement removes only clean, SpruceAgent-managed Git worktrees and retains an auditable workspace record.",
     "Retirement never deletes an Agent branch unless the caller explicitly requests deletion and Git accepts a safe non-forced delete.",
-    "Codex workspaces require a clean source repository and fresh ContextOS evidence when context is attached.",
+    "External CLI workspaces require a clean source repository and fresh ContextOS evidence when context is attached.",
     "Current-workspace approved mode is not read-only and still requires the Agent Launcher approval gate before execution.",
   ],
   modes: ["git_worktree", "current_workspace_approved", "current_workspace_readonly"],
@@ -66,13 +67,13 @@ export function prepareAgentWorkspace(store, input = {}) {
   }
 
   const gitBefore = readGitState(store);
-  if (plan.adapter?.id === "codex-cli" && hasSourceChanges(store)) {
-    throw new Error("codex-cli workspace preparation requires a clean source repository");
+  if (isExternalCliExecutableAdapter(plan.adapter?.id) && hasSourceChanges(store)) {
+    throw new Error(`${plan.adapter.id} workspace preparation requires a clean source repository`);
   }
-  if (plan.adapter?.id === "codex-cli" && plan.context) {
+  if (isExternalCliExecutableAdapter(plan.adapter?.id) && plan.context) {
     const freshness = assessWorkspaceIndexFreshness(store);
     if (freshness.status !== "fresh") {
-      throw new Error("codex-cli workspace preparation requires a fresh ContextOS index");
+      throw new Error(`${plan.adapter.id} workspace preparation requires a fresh ContextOS index`);
     }
   }
   const branchName = plan.isolation.branchName;
@@ -188,7 +189,7 @@ export function listAgentWorkspaces(store, options = {}) {
 
 export function getAgentWorkspace(store, workspaceId) {
   if (!workspaceId) throw new Error("workspaceId is required");
-  const filePath = path.join(store.root, "agent-workspaces", `${workspaceId}.json`);
+  const filePath = storeItemPath(store, "agent-workspaces", workspaceId);
   if (!fs.existsSync(filePath)) throw new Error(`agent workspace not found: ${workspaceId}`);
   return readJson(filePath);
 }
@@ -226,7 +227,7 @@ function workspaceRecord(input) {
 }
 
 function persistWorkspace(store, record) {
-  writeJson(path.join(store.root, "agent-workspaces", `${record.id}.json`), record);
+  writeJson(storeItemPath(store, "agent-workspaces", record.id), record);
   appendJsonl(workspaceIndexPath(store), {
     id: record.id,
     planId: record.planId,

@@ -33,7 +33,7 @@ SpruceAgent is designed as the next layer:
 
 ## Current Stage
 
-SpruceAgent is in architecture and core foundation development.
+SpruceAgent is in local open-source alpha. The trust-governed control plane is implemented locally. Production confidence still depends on repeatable accepted external-agent trials.
 
 Start here:
 
@@ -89,6 +89,8 @@ Start here:
 - [Agent Launcher v0.2](docs/agent-launcher-v0.md)
 - [External CLI Launcher v1](docs/external-cli-launcher-v1.md)
 - [Fleet Run Orchestrator v0](docs/fleet-run-orchestrator-v0.md)
+- [Squad Coordination v0](docs/squad-coordination-v0.md)
+- [Execution Evidence Guard v0](docs/execution-evidence-guard-v0.md)
 - [Planner Promotion v0](docs/planner-promotion-v0.md)
 - [Candidate Execution v0](docs/candidate-execution-v0.md)
 - [Candidate Approval Flow v0](docs/candidate-approval-flow-v0.md)

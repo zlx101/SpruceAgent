@@ -23,6 +23,7 @@ The route contract includes:
 - contract version
 - base path
 - auth model
+- Gateway execution trust modes (`observe`, `draft`, `approve`)
 - route ids
 - methods
 - paths

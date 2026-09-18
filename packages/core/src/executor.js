@@ -149,7 +149,7 @@ async function shellExecuteTool(store, input, request) {
   };
 }
 
-function resolveProjectPath(store, rawPath) {
+export function resolveProjectPath(store, rawPath) {
   if (!rawPath || !String(rawPath).trim()) {
     throw new Error("path is required");
   }

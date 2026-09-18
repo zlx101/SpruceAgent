@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { assertSafeStoreId } from "./id.js";
 
 export function createStore(cwd = process.cwd()) {
   return {
@@ -39,6 +40,7 @@ export function ensureStore(store) {
   fs.mkdirSync(path.join(store.root, "release-verifications"), { recursive: true });
   fs.mkdirSync(path.join(store.root, "release-artifacts"), { recursive: true });
   fs.mkdirSync(path.join(store.root, "worktrees"), { recursive: true });
+  fs.mkdirSync(path.join(store.root, "fleet-runs"), { recursive: true });
   fs.mkdirSync(path.join(store.root, "runtime"), { recursive: true });
 
   const configPath = path.join(store.root, "config.json");
@@ -78,6 +80,19 @@ export function ensureStore(store) {
   touch(path.join(store.root, "release-artifact-index.jsonl"));
   touch(path.join(store.root, "audit.jsonl"));
   return store;
+}
+
+export function storeItemPath(store, folder, id, extension = ".json") {
+  return path.join(store.root, folder, `${assertSafeStoreId(id)}${extension}`);
+}
+
+export function storeNestedItemPath(store, folder, parentId, childId, extension = ".json") {
+  return path.join(
+    store.root,
+    folder,
+    assertSafeStoreId(parentId, "parentId"),
+    `${assertSafeStoreId(String(childId), "childId")}${extension}`,
+  );
 }
 
 export function touch(filePath) {

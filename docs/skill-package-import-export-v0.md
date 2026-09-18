@@ -66,6 +66,8 @@ Export to a file:
 npm run spruce -- skill package-export <skillId> --file trustkernel.skillpkg.json
 ```
 
+The `--file` path must stay inside the current workspace. Paths that escape the project or write into `.spruceagent` are rejected.
+
 List local packages:
 
 ```bash
