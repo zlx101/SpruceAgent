@@ -1,4 +1,4 @@
-import { exec, execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -13,11 +13,11 @@ import {
 import { assertAgentWorkspaceLaunchable, getAgentWorkspace } from "./agent-workspaces.js";
 import { createId, nowIso } from "./id.js";
 import { auditPolicyDecision, evaluatePolicy } from "./policy.js";
-import { commandMatchesGitMutation, commandUsesShellControlSyntax } from "./forbidden-commands.js";
+import { boundedUserCommandLimits, commandMatchesGitMutation, parseUserCommand } from "./forbidden-commands.js";
 import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 import { appendTraceEvent, startTrace } from "./trace.js";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export const AGENT_LAUNCHER_CONTRACT = Object.freeze({
   version: "0.3.0",
@@ -29,7 +29,7 @@ export const AGENT_LAUNCHER_CONTRACT = Object.freeze({
     "Agent Launcher v0 records and gates launches from prepared Agent Workspaces.",
     "External coding CLIs execute only through internally generated, shell-free invocations in a prepared Git worktree.",
     "An external adapter stays preview-only until its installed CLI contract is independently verified.",
-    "Only local-shell-agent can execute a user-supplied command.",
+    "Only local-shell-agent can execute a user-supplied command. It is split into argv and started without a shell; shell builtins, pipes, redirects, and shell interpreters are rejected.",
     "Commands flow through TrustKernel policy and approval tickets.",
     "Git commit, push, merge, rebase, reset, and worktree mutation are blocked in user-supplied local-shell commands.",
     "External-agent subprocess choices are controlled by worktree isolation, adapter sandbox or permission mode, prompt constraints, Git evidence, and mandatory review rather than per-command interception.",
@@ -117,7 +117,7 @@ export async function launchAgentWorkspace(store, input = {}, runtime = {}) {
     ? externalInvocation.displayCommand
     : String(input.command ?? "").trim();
   if (!command) throw new Error("command is required when executing local-shell-agent");
-  if (!externalInvocation) assertAllowedLauncherCommand(command);
+  if (!externalInvocation) assertAllowedLauncherCommand(command, input);
   const approvalInput = externalInvocation
     ? {
         command,
@@ -356,12 +356,15 @@ function normalizeExecutionTaskId(value) {
 }
 
 async function runCommand(command, cwd, input) {
+  const { executable, args } = parseUserCommand(command, "agent launcher");
+  const { timeout, maxBuffer } = boundedUserCommandLimits(input, "agent launcher");
   try {
-    const result = await execAsync(command, {
+    const result = await execFileAsync(executable, args, {
       cwd,
-      timeout: Number(input.timeoutMs ?? 30000),
-      maxBuffer: Number(input.maxBuffer ?? 1024 * 1024),
+      timeout,
+      maxBuffer,
       windowsHide: true,
+      shell: false,
     });
     return {
       stdout: result.stdout,
@@ -372,7 +375,7 @@ async function runCommand(command, cwd, input) {
   } catch (error) {
     return {
       stdout: error.stdout ?? "",
-      stderr: error.stderr ?? "",
+      stderr: error.stderr || (typeof error.code === "string" ? error.message : ""),
       exitCode: Number.isInteger(error.code) ? error.code : 1,
       finishedAt: nowIso(),
     };
@@ -433,10 +436,9 @@ function runGit(cwd, args) {
   });
 }
 
-function assertAllowedLauncherCommand(command) {
-  if (commandUsesShellControlSyntax(command)) {
-    throw new Error("agent launcher blocks shell control syntax before execution");
-  }
+function assertAllowedLauncherCommand(command, input) {
+  parseUserCommand(command, "agent launcher");
+  boundedUserCommandLimits(input, "agent launcher");
   if (commandMatchesGitMutation(command)) {
     throw new Error("agent launcher blocks git mutation commands in v0");
   }

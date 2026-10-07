@@ -49,7 +49,7 @@ const ADAPTER_INVOCATIONS = Object.freeze({
   "claude-code": Object.freeze({
     command: "claude",
     protocol: "claude_print_stream_json_v1",
-    extraEnvKeys: Object.freeze(["ANTHROPIC_API_KEY"]),
+    extraEnvKeys: Object.freeze(["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_MODEL"]),
     args: Object.freeze([
       "--print",
       "--verbose",

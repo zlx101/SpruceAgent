@@ -4356,7 +4356,7 @@ test("deepseek provider uses official openai-compatible base url by default", ()
   });
 
   assert.equal(provider.id, "deepseek");
-  assert.equal(provider.model, "deepseek-v4-flash");
+  assert.equal(provider.model, "deepseek-flash");
   assert.equal(provider.baseUrl, "https://api.deepseek.com");
 });
 
@@ -4366,7 +4366,7 @@ test("llm provider registry stores metadata without secrets and validates offlin
   const configured = configureLlmProvider(store, {
     id: "deepseek-prod",
     kind: "deepseek",
-    model: "deepseek-v4-flash",
+    model: "deepseek-flash",
     apiKeyEnv: "SPRUCE_TEST_DEEPSEEK_KEY",
     default: true,
   });
@@ -4393,7 +4393,7 @@ test("llm provider registry stores metadata without secrets and validates offlin
     () => configureLlmProvider(store, {
       id: "unsafe",
       kind: "deepseek",
-      model: "deepseek-v4-flash",
+      model: "deepseek-flash",
       apiKey: "must-not-be-stored",
     }),
     /must not be provided/,
@@ -4424,7 +4424,7 @@ test("configured DeepSeek and Anthropic providers emit official request shapes w
   configureLlmProvider(store, {
     id: "deepseek-contract",
     kind: "deepseek",
-    model: "deepseek-v4-flash",
+    model: "deepseek-flash",
     apiKeyEnv: "TEST_DEEPSEEK_KEY",
     thinking: "disabled",
   });
@@ -4449,7 +4449,7 @@ test("configured DeepSeek and Anthropic providers emit official request shapes w
     }
     return jsonResponse({
       id: "chatcmpl_test",
-      model: "deepseek-v4-flash",
+      model: "deepseek-flash",
       choices: [{ message: { content: JSON.stringify({ summary: "DeepSeek draft", proposedSteps: [], constraints: [] }) } }],
       usage: { prompt_tokens: 1, completion_tokens: 1 },
     });
@@ -4530,7 +4530,7 @@ test("gateway manages LLM provider profiles offline and rejects inline secrets",
       () => client.configureLlmProvider({
         id: "gateway-unsafe",
         kind: "deepseek",
-        model: "deepseek-v4-flash",
+        model: "deepseek-flash",
         apiKey: "inline-secret",
       }),
       /must not be provided/,
@@ -5729,9 +5729,13 @@ test("external CLI launcher builds a shell-free bounded Codex invocation", () =>
       PATH: path.dirname(executable),
       OPENAI_API_KEY: "test-openai-credential",
       ANTHROPIC_API_KEY: "must-not-be-inherited",
+      ANTHROPIC_BASE_URL: "must-not-be-inherited",
+      ANTHROPIC_AUTH_TOKEN: "must-not-be-inherited",
       DEEPSEEK_API_KEY: "must-not-be-inherited",
     },
   });
+  assert.equal(invocation.environmentKeys.includes("ANTHROPIC_BASE_URL"), false);
+  assert.equal(invocation.environmentKeys.includes("ANTHROPIC_AUTH_TOKEN"), false);
 
   assert.equal(getExternalCliLauncherContract().interface, "spruceagent.external-cli-launcher");
   assert.equal(invocation.executable, executable);
@@ -5788,12 +5792,19 @@ test("external CLI launcher builds a shell-free bounded Claude Code invocation",
     env: {
       PATH: path.dirname(executable),
       ANTHROPIC_API_KEY: "test-anthropic-credential",
+      ANTHROPIC_BASE_URL: "https://api.deepseek.com/anthropic",
+      ANTHROPIC_AUTH_TOKEN: "test-anthropic-compatible-token",
+      ANTHROPIC_MODEL: "deepseek-flash",
       OPENAI_API_KEY: "must-not-be-inherited",
       DEEPSEEK_API_KEY: "must-not-be-inherited",
     },
   });
 
   assert.equal(invocation.adapterId, "claude-code");
+  for (const key of ["ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_MODEL"]) {
+    assert.equal(invocation.environmentKeys.includes(key), true, key);
+  }
+  assert.equal(JSON.stringify(invocation.environmentKeys).includes("test-anthropic-compatible-token"), false);
   assert.equal(invocation.protocol, "claude_print_stream_json_v1");
   assert.equal(invocation.executable, executable);
   assert.deepEqual(invocation.args.slice(0, 3), ["--print", "--verbose", "--output-format"]);
@@ -6821,6 +6832,26 @@ test("gateway execution refuses delegate trustMode", async () => {
     assert.equal(denied.status, 500);
     assert.match(denied.body.message, /refuses trustMode delegate/);
     assert.equal(fs.existsSync(path.join(dir, "delegate.txt")), false);
+
+    for (const [route, body] of [
+      ["/v1/agent-launches", { workspaceId: "missing", execute: true, command: "node -v" }],
+      ["/v1/agent-trials/attest", { launchId: "missing", acceptanceCommand: "node -v" }],
+      ["/v1/fleet-runs", { name: "fleet" }],
+      ["/v1/fleet-runs/missing/approvals", {}],
+      ["/v1/fleet-runs/missing/execute", {}],
+      ["/v1/skills/missing/evaluations", {}],
+      ["/v1/skills/missing/promote", {}],
+    ]) {
+      for (const trustMode of ["delegate", "autonomous"]) {
+        const refused = await fetchJson(`${baseUrl}${route}`, {
+          method: "POST",
+          token: gateway.token,
+          body: { ...body, trustMode },
+        });
+        assert.equal(refused.status, 500, `${route} ${trustMode}`);
+        assert.match(refused.body.message, new RegExp(`refuses trustMode ${trustMode}`), route);
+      }
+    }
   } finally {
     await closeServer(gateway.server);
   }

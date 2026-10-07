@@ -22,7 +22,7 @@ const BUILTIN_DEFAULTS = Object.freeze({
     protocol: "openai_chat_completions",
     baseUrl: "https://api.deepseek.com",
     path: "/chat/completions",
-    model: "deepseek-v4-flash",
+    model: "deepseek-flash",
     apiKeyEnv: "DEEPSEEK_API_KEY",
     jsonMode: true,
   },

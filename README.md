@@ -144,7 +144,7 @@ npm run spruce -- autopilot due
 npm run spruce -- autopilot run-due
 npm run spruce -- autopilot failures <autopilotId>
 npm run spruce -- autopilot update <autopilotId> --ifUpdatedAt <ISO> --goal "Corrected bounded review goal"
-DEEPSEEK_API_KEY=<token> npm run spruce -- run "Draft with DeepSeek" --context "TrustKernel" --llm deepseek --llmModel deepseek-v4-flash --dryRun
+DEEPSEEK_API_KEY=<token> npm run spruce -- run "Draft with DeepSeek" --context "TrustKernel" --llm deepseek --llmModel deepseek-flash --dryRun
 npm run spruce -- skill extract <traceId>
 npm run spruce -- skill evaluate <skillId>
 npm run spruce -- skill evaluations
@@ -195,7 +195,7 @@ npm run spruce -- gateway serve
 npm run spruce -- gateway serve --autopilotPollMs 60000
 # then open http://127.0.0.1:7357/workbench
 # public showcase: http://127.0.0.1:7357/showcase
-npm run spruce -- tool run shell.execute --command "echo spruce" --approved
+npm run spruce -- tool run shell.execute --command "node -v" --approved
 npm run spruce -- policy check --tool shell.execute --command "git status"
 ```
 

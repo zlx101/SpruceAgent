@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { exec, execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -7,13 +7,13 @@ import { consumeApprovalTicket, createApprovalTicket, getApprovalTicket } from "
 import { getAgentLaunch } from "./agent-launcher.js";
 import { recordLauncherAttestedTrial } from "./agent-trials.js";
 import { nowIso } from "./id.js";
-import { commandMatchesGitMutation, commandUsesShellControlSyntax } from "./forbidden-commands.js";
+import { commandMatchesGitMutation, parseUserCommand } from "./forbidden-commands.js";
 import { assertLaunchWorkspaceCurrent } from "./execution-evidence.js";
 import { auditPolicyDecision, evaluatePolicy } from "./policy.js";
 import { appendJsonl } from "./storage.js";
 import { appendTraceEvent } from "./trace.js";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export const AGENT_TRIAL_ATTESTATION_CONTRACT = Object.freeze({
   version: "0.2.0",
@@ -213,9 +213,7 @@ function assertWorkspacePath(store, workspacePath) {
 }
 
 function assertAllowedAcceptanceCommand(command) {
-  if (commandUsesShellControlSyntax(command)) {
-    throw new Error("agent trial attestation blocks shell control syntax before execution");
-  }
+  parseUserCommand(command, "agent trial attestation");
   if (commandMatchesGitMutation(command)) {
     throw new Error("agent trial attestation blocks git mutation commands");
   }
@@ -235,13 +233,14 @@ function assertApprovalMatchesAttestation(ticket, command, cwd, launchId) {
 async function runAcceptance(command, cwd, input) {
   const timeout = boundedInteger(input.timeoutMs, 120000, 1000, 300000, "timeoutMs");
   const maxBuffer = boundedInteger(input.maxBuffer, 1024 * 1024, 64 * 1024, 4 * 1024 * 1024, "maxBuffer");
+  const { executable, args } = parseUserCommand(command, "agent trial attestation");
   try {
-    const result = await execAsync(command, { cwd, timeout, maxBuffer, windowsHide: true });
+    const result = await execFileAsync(executable, args, { cwd, timeout, maxBuffer, windowsHide: true, shell: false });
     return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", exitCode: 0 };
   } catch (error) {
     return {
       stdout: error.stdout ?? "",
-      stderr: error.stderr ?? "",
+      stderr: error.stderr || (typeof error.code === "string" ? error.message : ""),
       exitCode: Number.isInteger(error.code) ? error.code : 1,
     };
   }

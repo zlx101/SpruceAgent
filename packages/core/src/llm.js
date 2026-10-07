@@ -119,7 +119,7 @@ export function createDeepSeekLlmProvider(options = {}) {
   return createOpenAiCompatibleLlmProvider({
     id: "deepseek",
     baseUrl: options.baseUrl ?? "https://api.deepseek.com",
-    model: options.model ?? "deepseek-v4-flash",
+    model: options.model ?? "deepseek-flash",
     apiKey: options.apiKey ?? process.env.DEEPSEEK_API_KEY,
     jsonMode: options.jsonMode ?? true,
     timeoutMs: options.timeoutMs,

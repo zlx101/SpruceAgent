@@ -45,13 +45,22 @@ npm run spruce -- tool run file.read --path README.md
 npm run spruce -- tool run file.write --path notes.txt --content "hello"
 npm run spruce -- approval approve <approvalId>
 npm run spruce -- tool run file.write --path notes.txt --content "hello" --approvalId <approvalId>
-npm run spruce -- tool run shell.execute --command "echo spruce" --approved
+npm run spruce -- tool run shell.execute --command "node -v" --approved
 npm run spruce -- tool run shell.execute --command "git reset --hard" --approved
 ```
 
 The last command is blocked as critical unless `--allowCritical` is passed. This is intentional. SpruceAgent should be useful before it is autonomous, and governed before it is powerful.
 
-User-supplied commands that contain unquoted shell separators (`& | ; < >`, newline) or a caret escape are rejected before execution. Backticks, `$`, and `%` are rejected even inside quotes. A quoted `node -e` script may contain `;`. `allowCritical` does not bypass this check.
+`shell.execute` does not start a shell. The command is split into an executable and arguments (double or single quotes group an argument) and started with `execFile`. Consequences:
+
+- shell builtins such as `echo`, `dir`, `cd`, or `type` are not available; run a real program such as `node`, `git`, or a full executable path
+- Windows `.cmd` / `.bat` wrappers such as `npm` are not resolved; call `node` with the script path instead
+- shell interpreters (`cmd`, `powershell`, `pwsh`, `bash`, `sh`, `zsh`, `wsl`, and similar) are rejected as the executable
+- unquoted shell separators (`& | ; < >`, newline) and caret escapes are rejected; backticks, `$`, and `%` are rejected even inside quotes; a quoted `node -e` script may contain `;`
+- an unterminated quote is rejected
+- `timeoutMs` must be an integer from 1000 to 300000 (default 30000) and `maxBuffer` from 64 KiB to 4 MiB (default 1 MiB); other values are rejected before the program starts
+
+`allowCritical` does not bypass these checks. The same rules apply to `local-shell-agent` launches and Agent Trial acceptance commands.
 
 ## Why This Matters
 

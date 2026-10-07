@@ -1906,6 +1906,7 @@ async function routeRequest(store, request, url, body, options = {}) {
   if (request.method === "POST" && url.pathname === "/v1/agent-launches") {
     return ok(await launchAgentWorkspace(store, {
       ...body,
+      trustMode: normalizeGatewayTrustMode(body.trustMode),
       actor: body.actor ?? "gateway-user",
       channel: "gateway",
     }));
@@ -1963,6 +1964,7 @@ async function routeRequest(store, request, url, body, options = {}) {
   if (request.method === "POST" && url.pathname === "/v1/agent-trials/attest") {
     return ok(await attestAgentLaunchTrial(store, {
       ...body,
+      trustMode: normalizeGatewayTrustMode(body.trustMode),
       actor: body.actor ?? "gateway-user",
     }));
   }
@@ -2047,6 +2049,7 @@ async function routeRequest(store, request, url, body, options = {}) {
   if (request.method === "POST" && url.pathname === "/v1/fleet-runs") {
     return ok(createFleetRun(store, {
       ...body,
+      trustMode: normalizeGatewayTrustMode(body.trustMode),
       actor: body.actor ?? "gateway-user",
     }));
   }
@@ -2054,6 +2057,7 @@ async function routeRequest(store, request, url, body, options = {}) {
   if (request.method === "POST" && pathParts[1] === "fleet-runs" && pathParts[2] && pathParts[3] === "approvals") {
     return ok(await requestFleetRunApprovals(store, pathParts[2], {
       ...body,
+      trustMode: normalizeGatewayTrustMode(body.trustMode),
       actor: body.actor ?? "gateway-user",
     }));
   }
@@ -2068,6 +2072,7 @@ async function routeRequest(store, request, url, body, options = {}) {
   if (request.method === "POST" && pathParts[1] === "fleet-runs" && pathParts[2] && pathParts[3] === "execute") {
     return ok(await executeFleetRun(store, pathParts[2], {
       ...body,
+      trustMode: normalizeGatewayTrustMode(body.trustMode),
       actor: body.actor ?? "gateway-user",
     }));
   }
@@ -2157,7 +2162,7 @@ async function routeRequest(store, request, url, body, options = {}) {
     return ok(evaluateSkillCandidate(store, pathParts[2], {
       status: body.status,
       traceId: body.traceId,
-      trustMode: body.trustMode,
+      trustMode: normalizeGatewayTrustMode(body.trustMode),
     }));
   }
 
@@ -2170,7 +2175,7 @@ async function routeRequest(store, request, url, body, options = {}) {
       evaluationId: body.evaluationId,
       minimumScore: body.minimumScore,
       useLatestEvaluation: Boolean(body.useLatestEvaluation),
-      trustMode: body.trustMode,
+      trustMode: normalizeGatewayTrustMode(body.trustMode),
       by: body.by ?? body.actor ?? "gateway-user",
       reason: body.reason,
     }));

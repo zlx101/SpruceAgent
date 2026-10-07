@@ -367,7 +367,7 @@ nodes.squadReadinessPanel.addEventListener("click", async (event) => {
     if (button.dataset.action === "squad-request-approval") {
       const member = state.squadReadiness?.members.find((item) => item.role === button.dataset.role);
       const command = member?.adapterId === "local-shell-agent"
-        ? window.prompt("Enter the local-shell command to approve. It will be bound exactly to this approval request:")
+        ? window.prompt("Enter the local-shell command to approve. It runs without a shell (no echo, pipes, or npm wrappers; use node or a full program path) and is bound exactly to this approval request:")
         : undefined;
       if (member?.adapterId === "local-shell-agent" && !command?.trim()) return;
       state.busy = true;
@@ -2985,7 +2985,7 @@ async function createLaunchReviewFromWorkbench(launchId) {
 
 async function attestAgentLaunchFromWorkbench(launchId) {
   if (!launchId || state.busy) return;
-  const acceptanceCommand = window.prompt("Enter a read-only independent acceptance command. It will be bound exactly to a separate approval before it can run:");
+  const acceptanceCommand = window.prompt("Enter a read-only independent acceptance command, for example node --test. It runs without a shell and is bound exactly to a separate approval before it can run:");
   if (!acceptanceCommand?.trim()) return;
   state.busy = true;
   setStatus("Requesting independent acceptance approval");

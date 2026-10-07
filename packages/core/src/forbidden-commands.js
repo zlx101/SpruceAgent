@@ -29,10 +29,47 @@ const GIT_OPTIONS_WITH_VALUE = new Set(["-c", "-C", "--git-dir", "--work-tree", 
 const SHELL_SEPARATORS = new Set("&|;<>\n\r");
 const ALWAYS_CONTROL = new Set("\u0060$%");
 
+const SHELL_INTERPRETERS = new Set(["cmd", "powershell", "pwsh", "bash", "sh", "zsh", "dash", "ksh", "fish", "wsl", "busybox"]);
+
+export const USER_COMMAND_LIMITS = Object.freeze({
+  timeoutMs: Object.freeze({ default: 30_000, min: 1_000, max: 300_000 }),
+  maxBuffer: Object.freeze({ default: 1024 * 1024, min: 64 * 1024, max: 4 * 1024 * 1024 }),
+});
+
+export function boundedUserCommandLimits(input = {}, label = "command") {
+  return {
+    timeout: boundedLimit(input.timeoutMs, USER_COMMAND_LIMITS.timeoutMs, `${label} timeoutMs`),
+    maxBuffer: boundedLimit(input.maxBuffer, USER_COMMAND_LIMITS.maxBuffer, `${label} maxBuffer`),
+  };
+}
+
+function boundedLimit(value, range, name) {
+  const number = value === undefined || value === null || value === "" ? range.default : Number(value);
+  if (!Number.isSafeInteger(number) || number < range.min || number > range.max) {
+    throw new Error(`${name} must be an integer between ${range.min} and ${range.max}`);
+  }
+  return number;
+}
+
+export function parseUserCommand(command, label = "command") {
+  const text = String(command ?? "").trim();
+  if (!text) throw new Error(`${label} requires a command`);
+  if (commandUsesShellControlSyntax(text)) {
+    throw new Error(`${label} blocks shell control syntax before execution`);
+  }
+  const { tokens, unterminated } = splitCommand(text);
+  if (unterminated) throw new Error(`${label} command has an unterminated quote`);
+  if (!tokens.length || !tokens[0]) throw new Error(`${label} requires a command`);
+  if (SHELL_INTERPRETERS.has(executableName(tokens[0]))) {
+    throw new Error(`${label} blocks shell interpreters; run the target program directly`);
+  }
+  return { executable: tokens[0], args: tokens.slice(1) };
+}
+
 export function commandMatchesGitMutation(command) {
   const text = String(command ?? "");
   if (GIT_MUTATION_COMMAND_PATTERNS.some((pattern) => pattern.test(text))) return true;
-  const tokens = tokenizeCommand(text);
+  const { tokens } = splitCommand(text);
   for (let index = 0; index < tokens.length; index += 1) {
     const name = executableName(tokens[index]);
     if (name === "git" && gitSubcommandIsMutation(tokens, index + 1)) return true;
@@ -77,7 +114,7 @@ function executableName(token) {
   return base.replace(/\.(exe|cmd|bat|com)$/, "");
 }
 
-function tokenizeCommand(text) {
+function splitCommand(text) {
   const tokens = [];
   let current = "";
   let quote = null;
@@ -103,5 +140,5 @@ function tokenizeCommand(text) {
     hasToken = true;
   }
   if (hasToken) tokens.push(current);
-  return tokens;
+  return { tokens, unterminated: quote !== null };
 }

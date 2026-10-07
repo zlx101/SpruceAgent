@@ -22,7 +22,7 @@ Registry `validate` only establishes the first state. This implementation has re
 | `local` | OpenAI Chat Completions | `http://127.0.0.1:11434/v1/chat/completions` | none |
 | `openai-compatible` | OpenAI Chat Completions | explicit HTTPS endpoint | explicit environment variable name |
 
-The DeepSeek defaults follow the current official API documentation: `deepseek-v4-flash` and `deepseek-v4-pro` use the OpenAI-compatible Chat Completions endpoint. Legacy `deepseek-chat` and `deepseek-reasoner` are scheduled for deprecation on 2026-07-24.
+The DeepSeek defaults follow the current official API documentation: `deepseek-flash` and `deepseek-v4-pro` use the OpenAI-compatible Chat Completions endpoint. The legacy name `deepseek-v4-flash` is still accepted by DeepSeek but is served by the Flash model; SpruceAgent now defaults to `deepseek-flash`.
 
 Primary references:
 
@@ -43,7 +43,7 @@ Primary references:
   "protocol": "openai_chat_completions",
   "baseUrl": "https://api.deepseek.com",
   "path": "/chat/completions",
-  "model": "deepseek-v4-flash",
+  "model": "deepseek-flash",
   "apiKeyEnv": "DEEPSEEK_API_KEY",
   "timeoutMs": 30000,
   "maxTokens": 1200,
@@ -60,7 +60,7 @@ Configure metadata without contacting the provider:
 ```bash
 npm run spruce -- llm configure deepseek \
   --kind deepseek \
-  --model deepseek-v4-flash \
+  --model deepseek-flash \
   --apiKeyEnv DEEPSEEK_API_KEY \
   --default
 ```

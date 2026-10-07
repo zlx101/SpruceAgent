@@ -2479,7 +2479,7 @@ Usage:
   ${executable} llm contract
   ${executable} llm provider-contract
   ${executable} llm providers
-  ${executable} llm configure deepseek --kind deepseek --model deepseek-v4-flash --apiKeyEnv DEEPSEEK_API_KEY --default
+  ${executable} llm configure deepseek --kind deepseek --model deepseek-flash --apiKeyEnv DEEPSEEK_API_KEY --default
   ${executable} llm detail <providerId>
   ${executable} llm validate <providerId>
   ${executable} llm remove <providerId>
@@ -2510,7 +2510,7 @@ Usage:
   ${executable} agent launcher-contract
   ${executable} agent external-launcher-contract
   ${executable} agent review-contract
-  ${executable} agent trial-attest <launchId> --command "npm test" [--approvalId <id>] [--timeoutMs 120000]
+  ${executable} agent trial-attest <launchId> --command "node --test" [--approvalId <id>] [--timeoutMs 120000]
   ${executable} agent trial-attest <launchId> --approvalId <approvedAttestationId>
   ${executable} agent trial-record <adapterId> --processExitCode 0 --changedFileCount 1 --baselineWorkspaceClean true --acceptanceStatus passed --acceptanceExitCode 0 --acceptanceWorkspaceStable true --policyStatus allowed
   ${executable} agent trials [--adapterId codex-cli] [--status passed|failed] [--attested true|false]

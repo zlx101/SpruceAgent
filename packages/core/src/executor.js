@@ -1,14 +1,14 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { consumeApprovalTicket, createApprovalTicket, getApprovalTicket } from "./approvals.js";
-import { commandUsesShellControlSyntax } from "./forbidden-commands.js";
+import { boundedUserCommandLimits, parseUserCommand } from "./forbidden-commands.js";
 import { addMemory } from "./memory.js";
 import { auditPolicyDecision, evaluatePolicy } from "./policy.js";
 import { appendTraceEvent } from "./trace.js";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export async function executeTool(store, request) {
   const input = request.input ?? {};
@@ -134,16 +134,16 @@ async function shellExecuteTool(store, input, request) {
   if (!input.command || !String(input.command).trim()) {
     throw new Error("command is required");
   }
-  if (commandUsesShellControlSyntax(input.command)) {
-    throw new Error("shell.execute blocks shell control syntax before execution");
-  }
+  const { executable, args } = parseUserCommand(input.command, "shell.execute");
+  const { timeout, maxBuffer } = boundedUserCommandLimits(request, "shell.execute");
 
   const cwd = input.cwd ? resolveProjectPath(store, input.cwd) : store.cwd;
-  const { stdout, stderr } = await execAsync(input.command, {
+  const { stdout, stderr } = await execFileAsync(executable, args, {
     cwd,
-    timeout: Number(request.timeoutMs ?? 30000),
-    maxBuffer: Number(request.maxBuffer ?? 1024 * 1024),
+    timeout,
+    maxBuffer,
     windowsHide: true,
+    shell: false,
   });
 
   return {
