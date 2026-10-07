@@ -122,6 +122,8 @@ Or, instead, attach the opt-in foreground poller to the local Gateway process wi
 npm run spruce -- gateway serve --autopilotPollMs 60000
 ```
 
+Stop with Ctrl+C. That closes Gateway and marks the local runtime record `stopped`.
+
 Open:
 
 ```text
@@ -137,3 +139,4 @@ The alpha path stays local-first:
 - imported skill packages become candidates only
 - replay fixtures are static and do not execute tools
 - LLM provider calls are optional
+- the local doctor, preflight, Gateway, and Workbench path does not require a model invocation

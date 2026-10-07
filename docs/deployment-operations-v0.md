@@ -10,13 +10,15 @@ Can this checkout safely run the local Gateway and Workbench as an alpha operato
 
 ## Current Top Five Infrastructure Tasks
 
-For the deployment, long-running, and productization track, the current top five infrastructure tasks are:
+For the deployment, long-running, and productization track, the previously listed top five infrastructure tasks are now present in this checkout:
 
 1. Machine-readable deployment preflight.
 2. Lightweight Gateway health with uptime and runner state.
 3. CLI and npm entry points for repeatable operator checks.
 4. CI release gate coverage for deployment readiness.
 5. Gateway runtime state and duplicate-start protection for long-running local processes.
+
+The remaining operator-runtime work on this track is live soak evidence after a human starts Gateway, not another control-plane feature. Model invocation is not required to run the local alpha operator path.
 
 ## CLI
 
@@ -166,6 +168,7 @@ It displays:
 - deployment preflight pass/fail/warning counts
 - the last recorded Gateway runtime status
 - the active Gateway base URL and pid when present
+- the runtime update time when a Gateway record exists
 - recent release verification records
 - recent release artifact manifests
 - selected Execution Task control-state events
@@ -181,6 +184,10 @@ This is an operator visibility surface only. It does not start Gateway, rotate t
 ```
 
 The record includes pid, host, port, base URL, start time, update time, stop time, and the Autopilot polling interval when one is configured. It does not contain the Gateway token.
+
+While Gateway is running, the owning process refreshes `updatedAt` every 30 seconds. That timestamp is process liveness evidence, not an Agent heartbeat.
+
+`spruce gateway serve` waits until SIGINT or SIGTERM. Ctrl+C then closes the HTTP server, so the runtime record is marked `stopped` instead of being left as a stale lock. This matches the Autopilot runner stop path already used by `spruce autopilot runner`.
 
 Before starting, Gateway checks this runtime record. If another live Gateway process is already recorded for the same SpruceAgent store, startup is rejected instead of creating a second long-running owner. When the server closes normally, the record is marked `stopped`. If the process disappears without a clean close, later diagnostics report the record as `stale` and a new start can replace it.
 
@@ -214,7 +221,7 @@ Release Verification v0:
 - does not grant approvals
 - persists only summarized local gate evidence, not raw stdout or stderr
 
-Gateway Runtime v0:
+Gateway Runtime v0.2:
 
 - does not kill processes
 - does not reclaim ports
@@ -222,6 +229,7 @@ Gateway Runtime v0:
 - does not run tools
 - does not grant approvals
 - only records and checks the local Gateway process for the current SpruceAgent store
+- heartbeat refreshes `updatedAt` only while the owning process still holds the runtime record
 
 ## Long-Running Alpha Start
 
@@ -232,6 +240,8 @@ npm run release:verify
 npm run spruce -- gateway token
 npm run spruce -- gateway serve --autopilotPollMs 60000
 ```
+
+Stop with Ctrl+C. That closes Gateway and marks `.spruceagent/runtime/gateway.json` `stopped`.
 
 Open Workbench:
 

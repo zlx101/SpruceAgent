@@ -1897,7 +1897,8 @@ function gatewayRuntimeSummary(runtime) {
   const statusText = runtime.status || record.status || "unknown";
   const target = record.baseUrl || runtime.baseUrl || (record.host && record.port ? `http://${record.host}:${record.port}` : "no active gateway");
   const pid = record.pid ? `pid ${record.pid}` : "no pid";
-  return `${statusText} / ${target} / ${pid}`;
+  const updated = record.updatedAt ? `updated ${record.updatedAt}` : "no update time";
+  return `${statusText} / ${target} / ${pid} / ${updated}`;
 }
 
 function gatewayRuntimeStatus(runtime) {

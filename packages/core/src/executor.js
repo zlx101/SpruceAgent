@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { consumeApprovalTicket, createApprovalTicket, getApprovalTicket } from "./approvals.js";
+import { commandUsesShellControlSyntax } from "./forbidden-commands.js";
 import { addMemory } from "./memory.js";
 import { auditPolicyDecision, evaluatePolicy } from "./policy.js";
 import { appendTraceEvent } from "./trace.js";
@@ -132,6 +133,9 @@ function writeFileTool(store, input) {
 async function shellExecuteTool(store, input, request) {
   if (!input.command || !String(input.command).trim()) {
     throw new Error("command is required");
+  }
+  if (commandUsesShellControlSyntax(input.command)) {
+    throw new Error("shell.execute blocks shell control syntax before execution");
   }
 
   const cwd = input.cwd ? resolveProjectPath(store, input.cwd) : store.cwd;

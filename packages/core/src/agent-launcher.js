@@ -13,7 +13,7 @@ import {
 import { assertAgentWorkspaceLaunchable, getAgentWorkspace } from "./agent-workspaces.js";
 import { createId, nowIso } from "./id.js";
 import { auditPolicyDecision, evaluatePolicy } from "./policy.js";
-import { commandMatchesGitMutation } from "./forbidden-commands.js";
+import { commandMatchesGitMutation, commandUsesShellControlSyntax } from "./forbidden-commands.js";
 import { appendJsonl, readJson, readJsonl, storeItemPath, writeJson } from "./storage.js";
 import { appendTraceEvent, startTrace } from "./trace.js";
 
@@ -434,6 +434,9 @@ function runGit(cwd, args) {
 }
 
 function assertAllowedLauncherCommand(command) {
+  if (commandUsesShellControlSyntax(command)) {
+    throw new Error("agent launcher blocks shell control syntax before execution");
+  }
   if (commandMatchesGitMutation(command)) {
     throw new Error("agent launcher blocks git mutation commands in v0");
   }

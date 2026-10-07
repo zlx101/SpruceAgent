@@ -4,12 +4,14 @@ import { nowIso } from "./id.js";
 import { readJson, writeJson } from "./storage.js";
 
 export const GATEWAY_RUNTIME_CONTRACT = Object.freeze({
-  version: "0.1.0",
+  version: "0.2.0",
   interface: "spruceagent.gateway-runtime",
   outputKind: "local_gateway_process_state",
+  heartbeatIntervalMs: 30_000,
   safetyBoundary: [
     "Gateway Runtime records only the local Gateway process for this SpruceAgent store.",
     "The runtime lock prevents duplicate Gateway starts for one store when the recorded process is still alive.",
+    "While the owning Gateway process is running, it refreshes updatedAt every heartbeatIntervalMs. That is process liveness evidence, not an Agent heartbeat.",
     "It never kills a process, reclaims a port, starts an Agent, runs tools, or changes approval state.",
     "Stopped and stale records are retained as operational evidence and can be replaced by a new Gateway start.",
   ],
@@ -102,6 +104,18 @@ export function markGatewayRuntimeStopped(store, input = {}) {
     updatedAt: stoppedAt,
     stoppedAt,
     stopReason: input.reason ?? "server_closed",
+  });
+  return getGatewayRuntimeState(store);
+}
+
+export function touchGatewayRuntime(store) {
+  const current = readGatewayRuntimeRecord(store);
+  if (!current) return getGatewayRuntimeState(store);
+  if (current.pid !== process.pid) return getGatewayRuntimeState(store);
+  if (!["starting", "running"].includes(current.status)) return getGatewayRuntimeState(store);
+  writeJson(gatewayRuntimePath(store), {
+    ...current,
+    updatedAt: nowIso(),
   });
   return getGatewayRuntimeState(store);
 }

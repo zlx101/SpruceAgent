@@ -24,6 +24,7 @@ export {
   getGatewayAuthStatus,
   getGatewayRouteContract,
   startGatewayServer,
+  stopGatewayServer,
   verifyGatewayToken,
 } from "./gateway.js";
 export {
@@ -34,6 +35,7 @@ export {
   markGatewayRuntimeRunning,
   markGatewayRuntimeStopped,
   reserveGatewayRuntime,
+  touchGatewayRuntime,
 } from "./gateway-runtime.js";
 export { createGatewayClient } from "./gateway-client.js";
 export {

@@ -33,7 +33,7 @@ SpruceAgent 要做的是它们之上的下一层：
 
 ## 当前阶段
 
-SpruceAgent 目前处于本地开源 alpha：信任治理控制平面已可在本机运行。生产信心仍取决于可重复的外部 Agent 验收试验。
+SpruceAgent 目前处于本地开源 alpha：信任治理控制平面已可在本机运行。模型调用不是本地 alpha 的功能阻塞；doctor、preflight、Gateway、Workbench 都不依赖它。生产信心证据仍缺少可重复的外部 Agent 验收试验。
 
 建议先读：
 

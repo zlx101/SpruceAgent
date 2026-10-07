@@ -86,7 +86,9 @@ Agent Launcher v0.2:
 - only accepts user-supplied commands for `local-shell-agent`
 - routes commands through TrustKernel policy
 - creates approval tickets for shell execution
-- blocks git commit, push, merge, rebase, reset, and worktree mutation commands
+- blocks git commit, push, merge, rebase, reset, clean, checkout, switch, and worktree mutation commands, including `git.exe`, a quoted or absolute Git path, and Git global options such as `-C` or `--git-dir` before the subcommand
+- does not sandbox the process: a script that spawns Git itself (for example through `node -e` and `child_process`) is not detected by this command-string check; TrustKernel approval remains the gate for that case
+- rejects user-supplied commands that contain unquoted shell separators (`& | ; < >`, newline) or a caret escape, and rejects `` ` ``, `$`, and `%` even inside quotes, before execution; quoted `node -e` scripts may contain `;`
 - refuses retired Agent Workspaces before planning or execution
 - records terminal logs and diff summaries
 - never commits, pushes, merges, or approves changes

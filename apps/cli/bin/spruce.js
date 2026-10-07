@@ -186,6 +186,7 @@ import {
   summarizeOutcomeFixture,
   startTrace,
   startGatewayServer,
+  stopGatewayServer,
   updateWorkflow,
   claimExecutionTask,
   handoffExecutionTask,
@@ -1612,7 +1613,17 @@ async function handleGateway(action, args) {
       localOnly: true,
       autopilotRunner: result.autopilotRunner,
     }, null, 2));
-    return await new Promise(() => {});
+    await new Promise((resolve) => {
+      const shutdown = () => {
+        process.off("SIGINT", shutdown);
+        process.off("SIGTERM", shutdown);
+        resolve();
+      };
+      process.once("SIGINT", shutdown);
+      process.once("SIGTERM", shutdown);
+    });
+    await stopGatewayServer(result.server);
+    return;
   }
 
   throw new Error("usage: spruce gateway <token|info|contract|runtime|runtime-contract|call|serve>");

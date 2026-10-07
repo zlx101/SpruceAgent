@@ -343,11 +343,31 @@ function buildLaunchArgs(adapter, input) {
 }
 
 function sanitizeBranchName(value) {
-  return String(value || "")
+  const sanitized = String(value || "")
     .trim()
     .replace(/[^a-zA-Z0-9._/-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 96) || "codex/agent-plan";
+  if (hasDotOnlyPathSegment(sanitized) || workspaceSegmentLeavesWorktrees(sanitized)) {
+    throw new Error(`branch name is unsafe for an isolated workspace: ${sanitized}`);
+  }
+  return sanitized;
+}
+
+function hasDotOnlyPathSegment(branchName) {
+  return branchName
+    .split(/[\\/]+/)
+    .filter(Boolean)
+    .some((segment) => /^\.+$/.test(segment));
+}
+
+function workspaceSegmentLeavesWorktrees(branchName) {
+  const folded = branchName.replace(/[\\/]/g, "__");
+  const worktreeRoot = path.resolve(path.sep, "spruceagent-worktrees");
+  const resolved = path.resolve(worktreeRoot, folded);
+  const relative = path.relative(worktreeRoot, resolved);
+  if (path.isAbsolute(relative)) return true;
+  return relative.split(/[\\/]+/).filter(Boolean)[0] === "..";
 }
 
 function countBy(items, keyFn) {

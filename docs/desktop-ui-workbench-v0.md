@@ -26,7 +26,7 @@ The first screen is backed by Gateway routes including `GET /v1/status`, `GET /v
 
 - system overview across ContextOS, Memory, TrustKernel, SkillForge, Workflow, Agent Mesh, Fleet, and Artifacts
 - deployment preflight readiness counts
-- last recorded Gateway runtime status, base URL, and pid
+- last recorded Gateway runtime status, base URL, pid, and update time
 - latest recorded release verification status, step counts, failure count, and local record count
 - recent local release verification records and detail JSON for selected records
 - latest recorded release artifact manifest status, file counts, source revision, and local manifest count

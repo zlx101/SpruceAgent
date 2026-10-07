@@ -1,4 +1,4 @@
-﻿# SpruceAgent
+# SpruceAgent
 
 > The open-source SuperAgent OS for future super individuals and super teams: omnichannel, memory-native, self-improving, and trust-governed.
 
@@ -33,7 +33,7 @@ SpruceAgent is designed as the next layer:
 
 ## Current Stage
 
-SpruceAgent is in local open-source alpha. The trust-governed control plane is implemented locally. Production confidence still depends on repeatable accepted external-agent trials.
+SpruceAgent is in local open-source alpha. The trust-governed control plane is implemented locally. Model invocation is optional and is not required to run doctor, preflight, Gateway, or Workbench. Production-confidence evidence still lacks repeatable accepted external-agent trials.
 
 Start here:
 

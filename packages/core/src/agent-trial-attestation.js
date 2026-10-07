@@ -7,7 +7,7 @@ import { consumeApprovalTicket, createApprovalTicket, getApprovalTicket } from "
 import { getAgentLaunch } from "./agent-launcher.js";
 import { recordLauncherAttestedTrial } from "./agent-trials.js";
 import { nowIso } from "./id.js";
-import { commandMatchesGitMutation } from "./forbidden-commands.js";
+import { commandMatchesGitMutation, commandUsesShellControlSyntax } from "./forbidden-commands.js";
 import { assertLaunchWorkspaceCurrent } from "./execution-evidence.js";
 import { auditPolicyDecision, evaluatePolicy } from "./policy.js";
 import { appendJsonl } from "./storage.js";
@@ -213,6 +213,9 @@ function assertWorkspacePath(store, workspacePath) {
 }
 
 function assertAllowedAcceptanceCommand(command) {
+  if (commandUsesShellControlSyntax(command)) {
+    throw new Error("agent trial attestation blocks shell control syntax before execution");
+  }
   if (commandMatchesGitMutation(command)) {
     throw new Error("agent trial attestation blocks git mutation commands");
   }

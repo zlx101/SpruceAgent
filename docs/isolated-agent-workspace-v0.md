@@ -79,6 +79,7 @@ Agent Workspace v0 is deliberately conservative:
 - it does not merge
 - it does not approve changes
 - it only creates local worktrees under `.spruceagent/worktrees`
+- adapter run plans reject a sanitized branch name that contains a dot-only path segment such as `..`, so the planned workspace path cannot resolve outside `.spruceagent/worktrees`
 - it records enough metadata for later Trace Report and review gates
 - External CLI workspace preparation rejects a dirty source repository and stale attached ContextOS evidence
 - retirement refuses uncommitted worktrees and never removes paths outside `.spruceagent/worktrees`

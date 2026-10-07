@@ -104,6 +104,11 @@ import {
   getGatewayRouteContract,
   getGatewayRuntimeContract,
   getGatewayRuntimeState,
+  GATEWAY_RUNTIME_CONTRACT,
+  markGatewayRuntimeRunning,
+  markGatewayRuntimeStopped,
+  reserveGatewayRuntime,
+  touchGatewayRuntime,
   getLlmAdapterContract,
   getLlmProviderConfig,
   getLlmProviderRegistryContract,
@@ -205,6 +210,7 @@ import {
   searchMemory,
   summarizeOutcomeFixture,
   startGatewayServer,
+  stopGatewayServer,
   verifyGatewayToken,
   startTrace,
   updateWorkflow,
@@ -806,6 +812,7 @@ test("release verification gate is shared by package scripts, CI, and docs", () 
   assert.match(checkScript, /apps/);
   assert.match(checkScript, /tests/);
   assert.match(cli, /handleRelease/);
+  assert.match(cli, /stopGatewayServer/);
   assert.match(cli, /release list \[--limit 20\]/);
   assert.match(cli, /release manifest \[--verificationId <verificationId>\]/);
   assert.match(cli, /task events <taskId> \[--limit 50\]/);
@@ -2405,6 +2412,33 @@ test("gateway runtime state prevents duplicate long-running starts", async () =>
   assert.equal(stopped.status, "stopped");
   assert.equal(stopped.processAlive, false);
   assert.equal(stopped.record.pid, process.pid);
+});
+
+test("gateway runtime heartbeat refreshes update time only for the owning live process", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+
+  assert.equal(getGatewayRuntimeContract().version, "0.2.0");
+  assert.equal(GATEWAY_RUNTIME_CONTRACT.heartbeatIntervalMs, 30_000);
+  assert.equal(touchGatewayRuntime(store).status, "empty");
+
+  const reserved = reserveGatewayRuntime(store, { host: "127.0.0.1", port: 7357 });
+  assert.equal(reserved.status, "starting");
+  const running = markGatewayRuntimeRunning(store, {
+    host: "127.0.0.1",
+    port: 7357,
+    localOnly: true,
+  });
+  assert.equal(running.status, "running");
+  const touched = touchGatewayRuntime(store);
+  assert.equal(touched.status, "running");
+  assert.equal(touched.record.pid, process.pid);
+  assert.ok(touched.record.updatedAt >= running.record.updatedAt);
+
+  markGatewayRuntimeStopped(store, { reason: "test_stop" });
+  const afterStop = touchGatewayRuntime(store);
+  assert.equal(afterStop.status, "stopped");
+  assert.equal(afterStop.record.stopReason, "test_stop");
 });
 
 test("gateway tool execution still uses approval tickets", async () => {

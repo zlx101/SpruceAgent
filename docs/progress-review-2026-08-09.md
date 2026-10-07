@@ -21,8 +21,10 @@
 
 ## Practical conclusion
 
-The project is strong as a **trust-governed agent control plane** and is past the pure prototype stage. The practical completion estimate is about **72%** for a real local alpha: core control surfaces are implemented, but production confidence still depends on repeatable accepted external-agent trials and durable operator deployment.
+The project is strong as a **trust-governed agent control plane** and is past the pure prototype stage. The practical completion estimate is about **72%** for a real local alpha: core control surfaces are implemented. Repeatable accepted external-agent trials remain an evidence gap, not a local-alpha functional blocker. Model invocation is optional. Durable operator deployment is now limited to live soak evidence after a human starts Gateway.
 
 On 2026-09-16, Execution Evidence Guard v0 closed the stale/retired workspace negative path for attestation and Fleet approval/execution, added shared store-id path safety, sandboxed skill-package export files, and limited Gateway execution trustMode to `observe` / `draft` / `approve`.
 
 On 2026-09-16 later the same day, External CLI Launcher v1 was generalized from Codex-only to verified-adapter execution: Claude Code is executable; Cursor Agent and Grok CLI are registered and still launch-disabled until a native CLI contract exists. A live Codex launch failed on an unsupported ChatGPT-account model. A live Claude Code launch reached the installed CLI with `permissionMode=acceptEdits`, then failed with `403 Request not allowed`. No launcher-attested passing trial exists yet.
+
+On 2026-09-18, Gateway Runtime v0.2 implemented the documented long-running stop path: `spruce gateway serve` handles SIGINT/SIGTERM, closes the HTTP server, and marks `.spruceagent/runtime/gateway.json` `stopped` instead of leaving a stale lock. The owning process also refreshes `updatedAt` every 30 seconds while running. The previously listed preflight / health / CLI / CI / duplicate-start tasks were already present.

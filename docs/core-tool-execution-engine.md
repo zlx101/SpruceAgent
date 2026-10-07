@@ -51,6 +51,8 @@ npm run spruce -- tool run shell.execute --command "git reset --hard" --approved
 
 The last command is blocked as critical unless `--allowCritical` is passed. This is intentional. SpruceAgent should be useful before it is autonomous, and governed before it is powerful.
 
+User-supplied commands that contain unquoted shell separators (`& | ; < >`, newline) or a caret escape are rejected before execution. Backticks, `$`, and `%` are rejected even inside quotes. A quoted `node -e` script may contain `;`. `allowCritical` does not bypass this check.
+
 ## Why This Matters
 
 This layer is the first real version of TrustKernel in code.

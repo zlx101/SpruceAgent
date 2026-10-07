@@ -123,9 +123,13 @@ SpruceAgent currently has:
 - GatewayMesh, Workbench, Fleet, Squad, and Autopilot
 - TrustKernel plus Execution Evidence Guard v0
 
-The remaining production-confidence gap is:
+The remaining production-confidence *evidence* gap is still:
 
 > repeatable accepted external-agent trials, not another planning surface
+
+That is not a local-alpha functional blocker. Doctor, deployment preflight, Gateway, Workbench, `local-shell-agent`, TrustKernel, and operator control ledgers run without calling Codex, Claude, Cursor, or Grok. Model invocation is optional evidence, not an emergency dependency.
+
+On 2026-09-18, Gateway Runtime v0.2 closed the long-running operator stop path that the v0 contract already described: `spruce gateway serve` now stops on SIGINT/SIGTERM and marks runtime `stopped`, and the owning process refreshes `updatedAt` every 30 seconds while running. Live unattended soak evidence is still operator-side, not another feature plane.
 
 On 2026-09-16, External CLI Launcher v1 stopped being Codex-only. Codex CLI and Claude Code are executable after independently verified native argv contracts. Cursor Agent and Grok CLI are registered first-class adapters and remain launch-disabled until a native CLI is present. Live Codex execution failed because the ChatGPT-account default model `gpt-6-astra` is unsupported. Live Claude Code execution started through TrustKernel and then failed with `403 Request not allowed` / `authentication_failed`. Neither live run produced an accepted workspace effect.
 

@@ -87,9 +87,11 @@ import {
   gatewayRuntimeHealth,
   getGatewayRuntimeContract,
   getGatewayRuntimeState,
+  GATEWAY_RUNTIME_CONTRACT,
   markGatewayRuntimeRunning,
   markGatewayRuntimeStopped,
   reserveGatewayRuntime,
+  touchGatewayRuntime,
 } from "./gateway-runtime.js";
 import {
   createOutcomeFixture,
@@ -1581,6 +1583,13 @@ export async function startGatewayServer(store, options = {}) {
         autopilotPollMs: options.autopilotPollMs ?? null,
         localOnly: isLocalHost(host),
       });
+  if (!options.disableRuntimeLock) {
+    const heartbeat = setInterval(() => {
+      touchGatewayRuntime(store);
+    }, GATEWAY_RUNTIME_CONTRACT.heartbeatIntervalMs);
+    heartbeat.unref();
+    server.once("close", () => clearInterval(heartbeat));
+  }
   if (autopilotRunner) {
     autopilotRunner.start();
     server.once("close", () => {
@@ -1602,6 +1611,22 @@ export async function startGatewayServer(store, options = {}) {
     autopilotRunner: autopilotRunner?.snapshot() ?? null,
     autopilotStartupTick: startupTick,
   };
+}
+
+export function stopGatewayServer(server) {
+  return new Promise((resolve, reject) => {
+    if (!server) {
+      resolve();
+      return;
+    }
+    server.close((error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+    if (typeof server.closeAllConnections === "function") {
+      server.closeAllConnections();
+    }
+  });
 }
 
 export function createGatewayHandler(store, options = {}) {
