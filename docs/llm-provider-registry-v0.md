@@ -10,7 +10,23 @@ SpruceAgent keeps three states separate:
 2. request-contract tested: local tests verified URL, headers, and body through an intercepted `fetch` implementation.
 3. live verified: a real provider request completed successfully.
 
-Registry `validate` only establishes the first state. This implementation has request-contract tests but deliberately does not perform live verification.
+Registry `validate` only establishes the first state. Automated tests cover the request contract and never send a live request; live verification is a separate, manually authorized run recorded below.
+
+### Live Verification Record
+
+| Field | Value |
+| --- | --- |
+| Date | 2026-10-07 |
+| Provider / kind | `deepseek` / `deepseek` |
+| Endpoint | `https://api.deepseek.com/chat/completions` (direct, no proxy) |
+| Requested model | `deepseek-flash` |
+| Model reported by response | `deepseek-flash` |
+| Command | `spruce run "Review the TrustKernel approval flow and propose a safe next step" --context "TrustKernel" --llm deepseek --dryRun` |
+| Result | `llm.status: drafted`, `planner: deepseek_llm_v0`, 5 proposed steps, 0 marked executable, 0 tool results |
+| Usage | 877 prompt tokens, 865 completion tokens, 1742 total |
+| Credential handling | key read from the user environment into the process only; 0 occurrences of the key value in `.spruceagent/` or the run output |
+
+Scope of this record: one successful request proves the endpoint, authentication, model name, and response parsing work end to end. It does not establish draft quality, latency or availability over time, rate-limit behavior, or the `thinking` / `reasoning_effort` options, which were not exercised.
 
 ## Supported Kinds
 
@@ -117,7 +133,7 @@ npm run spruce -- run "Draft a safe plan" \
   --dryRun
 ```
 
-That command is intentionally deferred until live verification is authorized. Even during a live call, the model only returns a non-executable planning draft.
+This command was run live once against DeepSeek (see the Live Verification Record). Even during a live call, the model only returns a non-executable planning draft.
 
 ## Gateway
 
