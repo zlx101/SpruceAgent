@@ -399,9 +399,14 @@ function parseJsonObjectFromText(text) {
   }
 }
 
+const PROVIDER_TIMEOUT_MS = Object.freeze({ default: 30_000, min: 1_000, max: 300_000 });
+const PROVIDER_RESPONSE_MAX_BYTES = 1024 * 1024;
+
 async function fetchJson(url, options) {
+  const timeoutMs = resolveProviderTimeout(options.timeoutMs);
+  const secrets = collectHeaderSecrets(options.headers);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), Number(options.timeoutMs ?? 30000));
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
       method: options.method,
@@ -409,15 +414,85 @@ async function fetchJson(url, options) {
       body: JSON.stringify(options.body),
       signal: controller.signal,
     });
-    const text = await response.text();
-    const body = text ? JSON.parse(text) : {};
+    const text = await readBoundedText(response, PROVIDER_RESPONSE_MAX_BYTES);
+    let body = {};
+    if (text) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        if (!response.ok) throw new Error(`provider request failed: ${response.status}`);
+        throw new Error("provider response was not JSON");
+      }
+    }
     if (!response.ok) {
-      throw new Error(`provider request failed: ${response.status} ${body.error?.message ?? response.statusText}`);
+      const detail = sanitizeProviderErrorDetail(body.error?.message, secrets);
+      throw new Error(`provider request failed: ${response.status}${detail ? ` ${detail}` : ""}`);
     }
     return body;
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`provider request timed out after ${timeoutMs}ms`);
+    }
+    throw new Error(redactSecrets(error?.message ?? "provider request failed", secrets));
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function resolveProviderTimeout(value) {
+  const number = value === undefined || value === null || value === "" ? PROVIDER_TIMEOUT_MS.default : Number(value);
+  if (!Number.isSafeInteger(number) || number < PROVIDER_TIMEOUT_MS.min || number > PROVIDER_TIMEOUT_MS.max) {
+    throw new Error(`provider timeoutMs must be an integer between ${PROVIDER_TIMEOUT_MS.min} and ${PROVIDER_TIMEOUT_MS.max}`);
+  }
+  return number;
+}
+
+async function readBoundedText(response, maxBytes) {
+  const reader = response.body?.getReader?.();
+  if (!reader) {
+    const text = await response.text();
+    if (Buffer.byteLength(text) > maxBytes) throw new Error(`provider response exceeded ${maxBytes} bytes`);
+    return text;
+  }
+  const chunks = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new Error(`provider response exceeded ${maxBytes} bytes`);
+    }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+function collectHeaderSecrets(headers = {}) {
+  const secrets = [];
+  for (const [key, value] of Object.entries(headers)) {
+    const name = key.toLowerCase();
+    if (name !== "authorization" && name !== "x-api-key") continue;
+    const raw = String(value ?? "");
+    const token = raw.replace(/^Bearer\s+/i, "");
+    if (token.length >= 8) secrets.push(token);
+    if (raw !== token && raw.length >= 8) secrets.push(raw);
+  }
+  return secrets;
+}
+
+function sanitizeProviderErrorDetail(detail, secrets) {
+  if (typeof detail !== "string") return "";
+  return redactSecrets(detail, secrets).replace(/\s+/g, " ").trim().slice(0, 180);
+}
+
+function redactSecrets(message, secrets) {
+  let text = String(message ?? "");
+  for (const secret of secrets) {
+    if (secret) text = text.split(secret).join("[redacted]");
+  }
+  return text.slice(0, 500);
 }
 
 function summarizeProviderRaw(response) {

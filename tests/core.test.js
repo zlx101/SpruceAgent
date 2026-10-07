@@ -4350,6 +4350,88 @@ test("openai-compatible llm provider drafts from chat completions response", asy
   }
 });
 
+test("provider failures stay bounded and do not persist credentials", async () => {
+  const originalFetch = globalThis.fetch;
+  const secret = "sk-test-secret-value";
+  const store = ensureStore(createStore(fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"))));
+  const cases = [
+    {
+      name: "html error",
+      fetch: async () => new Response("<html>secret " + secret + "</html>", { status: 502 }),
+      message: /^provider request failed: 502$/,
+    },
+    {
+      name: "credential echo",
+      fetch: async () => jsonResponse({ error: { message: `rejected ${secret}` } }, { status: 401 }),
+      message: /provider request failed: 401 rejected \[redacted\]/,
+    },
+    {
+      name: "oversized body",
+      fetch: async () => new Response("x".repeat(1024 * 1024 + 8), { status: 200 }),
+      message: /provider response exceeded 1048576 bytes/,
+    },
+  ];
+
+  try {
+    for (const item of cases) {
+      globalThis.fetch = item.fetch;
+      const provider = createOpenAiCompatibleLlmProvider({
+        id: "failure-contract",
+        baseUrl: "https://example.test/v1",
+        model: "provider-model",
+        apiKey: secret,
+      });
+      const draft = await draftLlmPlan(store, {
+        provider,
+        goal: "Plan safely",
+        context: { resultCount: 0, results: [] },
+        knownFacts: {},
+      });
+      assert.equal(draft.status, "failed", item.name);
+      assert.equal(draft.planDraft, null, item.name);
+      assert.match(draft.error.message, item.message, item.name);
+      assert.equal(draft.error.message.includes(secret), false, item.name);
+    }
+
+    globalThis.fetch = (_url, options) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener("abort", () => {
+        const error = new Error("The operation was aborted");
+        error.name = "AbortError";
+        reject(error);
+      });
+    });
+    const slow = createOpenAiCompatibleLlmProvider({
+      id: "slow-contract",
+      baseUrl: "https://example.test/v1",
+      model: "provider-model",
+      apiKey: secret,
+      timeoutMs: 1000,
+    });
+    const timedOut = await draftLlmPlan(store, {
+      provider: slow,
+      goal: "Plan safely",
+      context: { resultCount: 0, results: [] },
+      knownFacts: {},
+    });
+    assert.equal(timedOut.status, "failed");
+    assert.match(timedOut.error.message, /timed out after 1000ms/);
+
+    const unbounded = createOpenAiCompatibleLlmProvider({
+      id: "unbounded-contract",
+      baseUrl: "https://example.test/v1",
+      model: "provider-model",
+      apiKey: secret,
+      timeoutMs: 24 * 60 * 60 * 1000,
+    });
+    await assert.rejects(
+      () => unbounded.draftPlan({ goal: "Plan safely", context: { resultCount: 0, results: [] }, knownFacts: {} }),
+      /provider timeoutMs must be an integer between/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("deepseek provider uses official openai-compatible base url by default", () => {
   const provider = createDeepSeekLlmProvider({
     apiKey: "test-key",

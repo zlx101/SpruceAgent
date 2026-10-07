@@ -81,4 +81,6 @@ No real Provider request is made by these tests. Live API verification is a sepa
 - Inline credentials are rejected from CLI/Gateway workflow configuration paths.
 - Configuration readiness is not presented as live API verification.
 - Live Provider errors become failed draft results and do not authorize fallback actions.
+- A non-JSON error body is recorded as the HTTP status only. Credential values from the request headers are removed from the stored error text.
+- Provider requests time out between 1 and 300 seconds (default 30) and response bodies are capped at 1 MiB. Out-of-range timeouts are rejected before the request is sent.
 - Planner Promotion, Candidate Execution, TrustKernel, approvals, and audit remain mandatory.
