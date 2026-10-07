@@ -4,6 +4,7 @@ const state = {
   status: null,
   contextFreshness: null,
   deploymentPreflight: null,
+  onboarding: null,
   gatewayRuntime: null,
   releaseVerifications: null,
   releaseVerificationDetail: null,
@@ -522,10 +523,11 @@ async function refresh() {
   state.busy = true;
   setStatus("Loading");
   try {
-    const [status, contextFreshness, deploymentPreflight, gatewayRuntime, releaseVerifications, releaseArtifactManifests, inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches, launchReviews, capabilityProbes, taskRoutes, fleetRuns, squads, executionTasks, autopilots, autopilotDue] = await Promise.all([
+    const [status, contextFreshness, deploymentPreflight, onboarding, gatewayRuntime, releaseVerifications, releaseArtifactManifests, inbox, skills, candidateSkills, skillEvaluations, workflows, workflowInbox, approvalQueue, artifacts, agentAdapters, agentWorkspaces, agentLaunches, launchReviews, capabilityProbes, taskRoutes, fleetRuns, squads, executionTasks, autopilots, autopilotDue] = await Promise.all([
       get("/v1/status"),
       get("/v1/context/freshness"),
       get("/v1/deployment/preflight"),
+      get("/v1/onboarding"),
       get("/v1/gateway/runtime"),
       get("/v1/release-verifications?limit=10"),
       get("/v1/release-artifacts?limit=10"),
@@ -552,6 +554,7 @@ async function refresh() {
     state.status = status;
     state.contextFreshness = contextFreshness;
     state.deploymentPreflight = deploymentPreflight;
+    state.onboarding = onboarding;
     state.gatewayRuntime = gatewayRuntime;
     state.releaseVerifications = releaseVerifications;
     state.releaseArtifactManifests = releaseArtifactManifests;
@@ -1694,7 +1697,7 @@ function render() {
   nodes.autopilotState.textContent = `${autopilots.items.length} rules / ${autopilotDue.items.length} due`;
   nodes.autopilotRunDueButton.disabled = state.busy || !autopilotDue.items.length;
 
-  renderSystemOverview(state.status, state.contextFreshness, state.deploymentPreflight, state.gatewayRuntime, state.releaseVerifications, state.releaseArtifactManifests);
+  renderSystemOverview(state.status, state.contextFreshness, state.deploymentPreflight, state.onboarding, state.gatewayRuntime, state.releaseVerifications, state.releaseArtifactManifests);
   renderReleaseVerifications(state.releaseVerifications);
   renderReleaseVerificationPanel(state.releaseVerificationDetail);
   renderReleaseArtifactManifests(state.releaseArtifactManifests);
@@ -1737,11 +1740,12 @@ function render() {
   renderDetail(state.detail);
 }
 
-function renderSystemOverview(status, freshness, deploymentPreflight, gatewayRuntime, releaseVerifications, releaseArtifactManifests) {
+function renderSystemOverview(status, freshness, deploymentPreflight, onboarding, gatewayRuntime, releaseVerifications, releaseArtifactManifests) {
   nodes.systemOverview.replaceChildren();
   const autopilotRunner = status?.autopilotRunner;
   const modules = [
     ["ContextOS", `${status?.indexedDocumentCount ?? 0} indexed`, freshness?.status ?? "unknown"],
+    ["Onboarding", onboardingSummary(onboarding), onboardingStatus(onboarding)],
     ["Deployment Preflight", deploymentPreflightSummary(deploymentPreflight), deploymentPreflightStatus(deploymentPreflight)],
     ["Gateway Runtime", gatewayRuntimeSummary(gatewayRuntime), gatewayRuntimeStatus(gatewayRuntime)],
     ["Release Verification", releaseVerificationSummary(releaseVerifications, status), releaseVerificationStatus(releaseVerifications)],
@@ -1871,6 +1875,20 @@ function renderReleaseArtifactManifestPanel(detail) {
     persistence: detail.persistence,
     limits: detail.limits,
   }, null, 2);
+}
+
+function onboardingSummary(report) {
+  if (!report) return "not loaded";
+  const attention = report.attentionNeeded ? " / operator attention" : "";
+  return `${report.status} / ${report.context?.documentCount ?? 0} indexed${attention}`;
+}
+
+function onboardingStatus(report) {
+  if (!report) return "unknown";
+  if (report.status === "ready" && !report.attentionNeeded) return "passed";
+  if (report.status === "failed") return "blocked";
+  if (report.attentionNeeded || report.status === "incomplete") return "pending";
+  return report.status || "unknown";
 }
 
 function deploymentPreflightSummary(report) {

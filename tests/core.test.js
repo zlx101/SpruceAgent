@@ -115,6 +115,9 @@ import {
   getCandidateApprovalContract,
   getContextEvidenceContract,
   getDeploymentPreflightContract,
+  getGatewayOnboardingContract,
+  getGatewayOnboardingStatus,
+  runGatewayOnboarding,
   getReleaseVerification,
   getReleaseVerificationContract,
   getReleaseArtifactManifest,
@@ -641,6 +644,34 @@ test("doctor reports alpha readiness without failed checks", () => {
   assert.ok(["passed", "warning"].includes(report.status));
   assert.ok(report.checks.some((check) => check.id === "node.version" && check.status === "passed"));
   assert.ok(report.checks.some((check) => check.id === "store.temp" && check.status === "passed"));
+});
+
+test("gateway onboarding runs a mock dry-run without a model or tool execution", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  fs.writeFileSync(path.join(dir, "README.md"), "TrustKernel governs every action.", "utf8");
+  const store = ensureStore(createStore(dir));
+
+  const before = getGatewayOnboardingStatus(store);
+  assert.equal(getGatewayOnboardingContract().interface, "spruceagent.gateway-onboarding");
+  assert.equal(before.status, "incomplete");
+  assert.equal(before.llm.required, false);
+
+  const report = await runGatewayOnboarding(store);
+  const serialized = JSON.stringify(report);
+  const ledger = fs.readFileSync(path.join(store.root, "onboarding.json"), "utf8");
+
+  assert.equal(report.status, "ready");
+  assert.equal(report.dryRun.status, "dry_run");
+  assert.equal(report.dryRun.toolResultCount, 0);
+  assert.equal(report.dryRun.llmProvider, "mock");
+  assert.equal(report.workflowDraft.status, "drafted");
+  assert.equal(report.workflowDraft.saved, false);
+  assert.equal(report.llm.required, false);
+  assert.equal(listWorkflows(store).length, 0);
+  assert.equal(serialized.includes("sk-"), false);
+  assert.equal(ledger.includes("sk-"), false);
+  assert.match(ledger, /lastDryRunTraceId/);
+  assert.equal(getGatewayOnboardingStatus(store).status, "ready");
 });
 
 test("deployment preflight reports local runtime readiness without exposing tokens", () => {
@@ -2367,6 +2398,7 @@ test("gateway token is generated and required for v1 routes", async () => {
     assert.equal(health.body.status, "ok");
     assert.equal(health.body.authConfigured, true);
     assert.equal(health.body.deploymentPreflight, "/v1/deployment/preflight");
+    assert.equal(health.body.onboarding, "/v1/onboarding");
     assert.equal(Object.prototype.hasOwnProperty.call(health.body, "token"), false);
     assert.equal(Object.prototype.hasOwnProperty.call(health.body, "root"), false);
 
@@ -2746,6 +2778,9 @@ test("gateway client reads status and route contract", async () => {
     assert.equal(inboxContract.interface, "spruceagent.run-inbox");
     assert.ok(contract.routes.some((route) => route.id === "tools.run"));
     assert.ok(contract.routes.some((route) => route.id === "deployment.preflight"));
+    assert.ok(contract.routes.some((route) => route.id === "onboarding.status"));
+    assert.ok(contract.routes.some((route) => route.id === "onboarding.run"));
+    assert.ok(contract.routes.some((route) => route.id === "onboarding.contract"));
     assert.ok(contract.routes.some((route) => route.id === "gateway.runtime"));
     assert.ok(contract.routes.some((route) => route.id === "release_verifications.list"));
     assert.ok(contract.routes.some((route) => route.id === "release_verifications.detail"));
@@ -2819,6 +2854,36 @@ test("gateway client reads deployment preflight readiness", async () => {
     assert.equal(report.runtime.tokenConfigured, true);
     assert.equal(report.target.baseUrl, `http://${gateway.host}:${gateway.port}`);
     assert.equal(Object.prototype.hasOwnProperty.call(report.runtime, "token"), false);
+  } finally {
+    await closeServer(gateway.server);
+  }
+});
+
+test("gateway client runs onboarding without calling a model", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  fs.writeFileSync(path.join(dir, "README.md"), "TrustKernel governs every action.", "utf8");
+  const store = ensureStore(createStore(dir));
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const client = createGatewayClient({
+    baseUrl: `http://${gateway.host}:${gateway.port}`,
+    token: gateway.token,
+  });
+
+  try {
+    const contract = await client.onboardingContract();
+    const before = await client.onboardingStatus();
+    const report = await client.runOnboarding({});
+    const after = await client.onboardingStatus();
+    const serialized = JSON.stringify(report);
+
+    assert.equal(contract.interface, "spruceagent.gateway-onboarding");
+    assert.equal(before.status, "incomplete");
+    assert.equal(report.status, "ready");
+    assert.equal(report.dryRun.llmProvider, "mock");
+    assert.equal(report.dryRun.toolResultCount, 0);
+    assert.equal(after.status, "ready");
+    assert.equal(serialized.includes(gateway.token), false);
+    assert.equal(report.llm.required, false);
   } finally {
     await closeServer(gateway.server);
   }

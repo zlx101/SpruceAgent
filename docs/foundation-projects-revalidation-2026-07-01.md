@@ -172,6 +172,7 @@ Highest value after Workflow Builder v0:
 
 4. Gateway Onboarding v0
    - Guided setup for token, context index, provider, first dry run, first workflow draft.
+   - Implemented 2026-10-07 as a local mock dry-run path. Token issuance stays on `spruce gateway token`. An LLM profile is optional and unused by onboarding. See [Gateway Onboarding v0](gateway-onboarding-v0.md).
 
 5. Showcase Page v0
    - Public-facing landing page that demonstrates the full SpruceAgent loop in one screen.

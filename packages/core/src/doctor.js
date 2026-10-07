@@ -55,6 +55,8 @@ const REQUIRED_PATHS = [
   "docs/llm-provider-registry-v0.md",
   "docs/outcome-evaluation-suite-v1.md",
   "docs/deployment-operations-v0.md",
+  "docs/gateway-onboarding-v0.md",
+  "packages/core/src/onboarding.js",
   "docs/squad-coordination-v0.md",
   "docs/execution-evidence-guard-v0.md",
   "docs/execution-tasks-v0.md",

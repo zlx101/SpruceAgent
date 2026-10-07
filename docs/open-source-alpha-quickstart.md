@@ -26,6 +26,14 @@ npm run doctor
 
 A missing `.git` directory is a warning, not a runtime failure.
 
+## Guided Local Setup
+
+```bash
+npm run spruce -- onboard
+```
+
+This indexes the workspace, runs a mock dry-run (no tools, no model), and creates a reviewable workflow draft. It does not start Gateway, save the workflow, or require an API key. `spruce onboard status` shows pending approvals and resumable runs after a restart.
+
 ## Run The Full Local Release Gate
 
 For the same verification sequence used by CI:

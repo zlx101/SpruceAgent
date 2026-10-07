@@ -71,6 +71,7 @@ import { getArtifact, getArtifactContract, listArtifacts } from "./artifacts.js"
 import { assessWorkspaceIndexFreshness, buildWorkspaceIndex, readWorkspaceIndex, searchWorkspaceContext } from "./context.js";
 import { createContextEvidencePack, getContextEvidenceContract } from "./context-evidence.js";
 import { getDeploymentPreflightContract, runDeploymentPreflight } from "./deployment-preflight.js";
+import { getGatewayOnboardingContract, getGatewayOnboardingStatus, runGatewayOnboarding } from "./onboarding.js";
 import { evaluateTrace, getEvaluation, listEvaluations } from "./evaluations.js";
 import {
   getReleaseVerification,
@@ -238,6 +239,27 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       path: "/v1/deployment/preflight/contract",
       authRequired: true,
       description: "Read the Deployment Preflight contract.",
+    },
+    {
+      id: "onboarding.contract",
+      method: "GET",
+      path: "/v1/onboarding/contract",
+      authRequired: true,
+      description: "Read the Gateway Onboarding contract. Onboarding never requires an LLM provider.",
+    },
+    {
+      id: "onboarding.status",
+      method: "GET",
+      path: "/v1/onboarding",
+      authRequired: true,
+      description: "Read local onboarding status, including pending operator attention after a restart.",
+    },
+    {
+      id: "onboarding.run",
+      method: "POST",
+      path: "/v1/onboarding",
+      authRequired: true,
+      description: "Run local onboarding: index, mock dry-run, and a reviewable workflow draft. Does not execute tools or call a model.",
     },
     {
       id: "gateway.runtime",
@@ -1656,6 +1678,7 @@ export function createGatewayHandler(store, options = {}) {
             lastError: options.autopilotRunner.snapshot().lastError,
           } : null,
           deploymentPreflight: "/v1/deployment/preflight",
+          onboarding: "/v1/onboarding",
         });
       }
 
@@ -1704,6 +1727,21 @@ async function routeRequest(store, request, url, body, options = {}) {
 
   if (request.method === "GET" && url.pathname === "/v1/deployment/preflight/contract") {
     return ok(getDeploymentPreflightContract());
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/onboarding/contract") {
+    return ok(getGatewayOnboardingContract());
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/onboarding") {
+    return ok(getGatewayOnboardingStatus(store));
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/onboarding") {
+    return ok(await runGatewayOnboarding(store, {
+      saveWorkflow: Boolean(body.saveWorkflow),
+      actor: body.actor ?? "gateway-user",
+    }));
   }
 
   if (request.method === "GET" && url.pathname === "/v1/gateway/runtime") {

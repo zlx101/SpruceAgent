@@ -174,7 +174,10 @@ import {
   restoreSkillVersion,
   restoreWorkflowVersion,
   runDeploymentPreflight,
+  getGatewayOnboardingContract,
+  getGatewayOnboardingStatus,
   runDoctor,
+  runGatewayOnboarding,
   runDueAutopilots,
   setAutopilotEnabled,
   runAgent,
@@ -231,6 +234,25 @@ async function main() {
     if (report.status === "failed") {
       process.exitCode = 1;
     }
+    return;
+  }
+
+  if (command === "onboard") {
+    ensureStore(store);
+    if (subcommand === "contract") {
+      printJson(getGatewayOnboardingContract());
+      return;
+    }
+    if (subcommand === "status") {
+      printJson(getGatewayOnboardingStatus(store));
+      return;
+    }
+    const flags = parseFlags([subcommand, ...rest].filter(Boolean));
+    const report = await runGatewayOnboarding(store, {
+      saveWorkflow: Boolean(flags.saveWorkflow),
+    });
+    printJson(report);
+    if (report.status === "failed") process.exitCode = 1;
     return;
   }
 
@@ -2384,6 +2406,9 @@ function printHelp() {
 Usage:
   ${executable} init
   ${executable} doctor
+  ${executable} onboard
+  ${executable} onboard status
+  ${executable} onboard contract
   ${executable} deploy preflight [--host 127.0.0.1] [--port 7357] [--autopilotPollMs 60000] [--requireToken]
   ${executable} deploy contract
   ${executable} status

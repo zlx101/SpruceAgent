@@ -1,6 +1,12 @@
 export { createId, nowIso, assertSafeStoreId } from "./id.js";
 export { createStore, ensureStore } from "./storage.js";
 export { runDoctor } from "./doctor.js";
+export {
+  GATEWAY_ONBOARDING_CONTRACT,
+  getGatewayOnboardingContract,
+  getGatewayOnboardingStatus,
+  runGatewayOnboarding,
+} from "./onboarding.js";
 export { addMemory, listMemory, searchMemory } from "./memory.js";
 export { startTrace, appendTraceEvent, listTraces, readTraceEvents } from "./trace.js";
 export { listTools, findTool } from "./tools.js";
