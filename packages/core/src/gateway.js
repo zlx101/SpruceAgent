@@ -143,6 +143,7 @@ import { getRunInbox, getRunInboxContract } from "./run-inbox.js";
 import { getTraceReport, getTraceReportContract } from "./trace-report.js";
 import { getLlmAdapterContract } from "./llm.js";
 import {
+  assertGatewayLlmRequest,
   configureLlmProvider,
   getLlmProviderConfig,
   getLlmProviderRegistryContract,
@@ -1140,7 +1141,7 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       method: "POST",
       path: "/v1/runs",
       authRequired: true,
-      description: "Start an Agent Run Loop v0 run.",
+      description: "Start an Agent Run Loop v0 run. LLM selection is a configured profile id or mock; endpoint, model, timeout, and credential fields are refused.",
     },
     {
       id: "runs.get",
@@ -1433,14 +1434,14 @@ export const GATEWAY_ROUTE_CONTRACT = Object.freeze({
       method: "POST",
       path: "/v1/workflow-builder/draft",
       authRequired: true,
-      description: "Draft a workflow definition from a goal without executing it.",
+      description: "Draft a workflow definition from a goal without executing it. LLM selection is a configured profile id or mock.",
     },
     {
       id: "workflow_builder.save",
       method: "POST",
       path: "/v1/workflow-builder/save",
       authRequired: true,
-      description: "Save a reviewed workflow draft as a workflow definition without running it.",
+      description: "Save a reviewed workflow draft as a workflow definition without running it. LLM selection is a configured profile id or mock.",
     },
     {
       id: "candidate.contract",
@@ -2348,6 +2349,7 @@ async function routeRequest(store, request, url, body, options = {}) {
   }
 
   if (request.method === "POST" && url.pathname === "/v1/runs") {
+    const llm = gatewayLlmSelection(body);
     return ok(await runAgent(store, {
       goal: body.goal,
       contextQuery: body.contextQuery ?? body.context,
@@ -2356,12 +2358,8 @@ async function routeRequest(store, request, url, body, options = {}) {
       contextLimit: body.contextLimit ?? body.limit,
       skillId: body.skillId,
       executeSkill: Boolean(body.executeSkill),
-      llmProvider: body.llmProvider,
-      llmModel: body.llmModel,
-      llmBaseUrl: body.llmBaseUrl,
-      llmTimeoutMs: body.llmTimeoutMs,
-      llmTemperature: body.llmTemperature,
-      llmMaxTokens: body.llmMaxTokens,
+      llmProvider: llm.llmProvider,
+      requireConfiguredProfile: true,
       promotePlan: Boolean(body.promotePlan),
       plannerAllowedTools: body.plannerAllowedTools,
       requestCandidateApprovals: Boolean(body.requestCandidateApprovals),
@@ -2376,6 +2374,7 @@ async function routeRequest(store, request, url, body, options = {}) {
   }
 
   if (request.method === "POST" && url.pathname === "/v1/workflow-builder/draft") {
+    const llm = gatewayLlmSelection(body);
     return ok(await draftWorkflow(store, {
       goal: body.goal,
       contextQuery: body.contextQuery ?? body.context,
@@ -2384,16 +2383,13 @@ async function routeRequest(store, request, url, body, options = {}) {
       name: body.name,
       summary: body.summary,
       includeMemoryStep: body.includeMemoryStep,
-      llmProvider: body.llmProvider ?? "mock",
-      llmModel: body.llmModel,
-      llmBaseUrl: body.llmBaseUrl,
-      llmTimeoutMs: body.llmTimeoutMs,
-      llmTemperature: body.llmTemperature,
-      llmMaxTokens: body.llmMaxTokens,
+      llmProvider: llm.llmProvider ?? "mock",
+      requireConfiguredProfile: true,
     }));
   }
 
   if (request.method === "POST" && url.pathname === "/v1/workflow-builder/save") {
+    const llm = gatewayLlmSelection(body);
     return ok(await createWorkflowFromDraft(store, {
       draft: body.draft,
       goal: body.goal,
@@ -2403,12 +2399,8 @@ async function routeRequest(store, request, url, body, options = {}) {
       name: body.name,
       summary: body.summary,
       includeMemoryStep: body.includeMemoryStep,
-      llmProvider: body.llmProvider ?? "mock",
-      llmModel: body.llmModel,
-      llmBaseUrl: body.llmBaseUrl,
-      llmTimeoutMs: body.llmTimeoutMs,
-      llmTemperature: body.llmTemperature,
-      llmMaxTokens: body.llmMaxTokens,
+      llmProvider: llm.llmProvider ?? "mock",
+      requireConfiguredProfile: true,
     }));
   }
 
@@ -2684,6 +2676,13 @@ function verifyRequest(store, request, options) {
   const header = request.headers.authorization ?? "";
   const token = header.startsWith("Bearer ") ? header.slice("Bearer ".length).trim() : "";
   return verifyGatewayToken(store, token);
+}
+
+function gatewayLlmSelection(body = {}) {
+  assertGatewayLlmRequest(body);
+  return {
+    llmProvider: body.llmProvider,
+  };
 }
 
 async function readBody(request) {

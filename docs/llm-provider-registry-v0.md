@@ -148,6 +148,8 @@ DELETE /v1/llm/providers/:providerId
 
 Gateway configuration rejects `apiKey`, `token`, `secret`, `authorization`, `authToken`, and `headers` fields.
 
+`POST /v1/runs`, `POST /v1/workflow-builder/draft`, and `POST /v1/workflow-builder/save` accept only `llmProvider` as a ready profile id or `mock`. They refuse `llmBaseUrl`, `baseUrl`, `llmModel`, timeout, temperature, token-limit, and credential fields. An unregistered name such as `deepseek` is rejected even if `DEEPSEEK_API_KEY` is present in the Gateway process, so a caller cannot redirect that key to another host. Endpoint URLs are taken from the stored profile, never from the run request.
+
 ## Security Boundary
 
 - remote endpoints require HTTPS;

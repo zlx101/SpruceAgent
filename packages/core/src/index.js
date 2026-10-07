@@ -69,7 +69,9 @@ export {
   getLlmAdapterContract,
 } from "./llm.js";
 export {
+  assertGatewayLlmRequest,
   configureLlmProvider,
+  GATEWAY_LLM_REFUSED_FIELDS,
   getLlmProviderConfig,
   getLlmProviderRegistryContract,
   hasLlmProviderConfig,

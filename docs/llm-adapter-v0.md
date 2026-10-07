@@ -81,6 +81,8 @@ No real Provider request is made by these tests. Live API verification is a sepa
 - Inline credentials are rejected from CLI/Gateway workflow configuration paths.
 - Configuration readiness is not presented as live API verification.
 - Live Provider errors become failed draft results and do not authorize fallback actions.
+- Caller-supplied `llmBaseUrl` is rejected at resolve time. A built-in name such as `deepseek` uses its official endpoint only; any other endpoint must be stored on a provider profile first.
+- Gateway Agent Run and Workflow Builder select `mock` or a ready profile id. They do not accept endpoint, model, timeout, or credential overrides, and they do not fall back to process-environment keys for unregistered names.
 - A non-JSON error body is recorded as the HTTP status only. Credential values from the request headers are removed from the stored error text.
 - Provider requests time out between 1 and 300 seconds (default 30) and response bodies are capped at 1 MiB. Out-of-range timeouts are rejected before the request is sent.
 - Planner Promotion, Candidate Execution, TrustKernel, approvals, and audit remain mandatory.

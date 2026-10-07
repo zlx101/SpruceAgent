@@ -384,7 +384,8 @@ Gateway v0 does not yet provide:
 - CORS policy configuration
 - rate limiting
 - websocket streaming
-- LLM planner integration
+
+Gateway Agent Run and Workflow Builder may select `mock` or a locally configured LLM profile. They do not accept caller-supplied endpoints, models, timeouts, or credentials, and they do not integrate an unconstrained remote planner.
 
 Those should come after the local API surface is stable.
 

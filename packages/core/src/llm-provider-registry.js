@@ -14,8 +14,43 @@ export const LLM_PROVIDER_REGISTRY_CONTRACT = Object.freeze({
     "Remote endpoints require HTTPS; plain HTTP is allowed only for loopback local-model endpoints.",
     "A ready profile means structurally configured with required environment variables present, not network-verified or quality-validated.",
     "LLM output remains draft-only and cannot execute tools or grant approvals.",
+    "Resolve-time baseUrl overrides are rejected. Gateway may select mock or a ready profile id only; it cannot supply endpoints, models, timeouts, or credentials.",
   ],
 });
+
+export const GATEWAY_LLM_REFUSED_FIELDS = Object.freeze([
+  "llmBaseUrl",
+  "baseUrl",
+  "llmModel",
+  "llmTimeoutMs",
+  "llmTemperature",
+  "llmMaxTokens",
+  "llmApiKey",
+  "apiKey",
+  "token",
+  "secret",
+  "authorization",
+  "authToken",
+  "headers",
+]);
+
+export function assertGatewayLlmRequest(body = {}) {
+  if (body == null || typeof body !== "object" || Array.isArray(body)) {
+    throw requestError("gateway llm request body must be an object");
+  }
+  for (const field of GATEWAY_LLM_REFUSED_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(body, field)) continue;
+    const value = body[field];
+    if (value == null) continue;
+    if (typeof value === "string" && value.trim() === "") continue;
+    throw requestError(`gateway refuses ${field}; configure a provider profile instead`);
+  }
+  if (body.llmProvider != null && body.llmProvider !== "") {
+    if (typeof body.llmProvider !== "string") {
+      throw requestError("gateway llmProvider must be a profile id or mock");
+    }
+  }
+}
 
 const BUILTIN_DEFAULTS = Object.freeze({
   deepseek: {
@@ -143,8 +178,16 @@ export function validateLlmProviderConfig(store, providerId, options = {}) {
 
 export function resolveConfiguredLlmProvider(store, provider, options = {}) {
   assertNoInlineSecrets(options);
+  if (options.baseUrl) {
+    throw requestError("llmBaseUrl cannot be supplied at resolve time; set baseUrl on a provider profile instead");
+  }
   if (!provider) return null;
-  if (typeof provider === "object") return createLlmProvider(provider, options);
+  if (typeof provider === "object") {
+    if (options.requireConfiguredProfile) {
+      throw requestError("gateway llmProvider must be a profile id or mock");
+    }
+    return createLlmProvider(provider, options);
+  }
   if (provider === "mock") return createLlmProvider("mock", options);
 
   const registry = readRegistry(store);
@@ -152,6 +195,9 @@ export function resolveConfiguredLlmProvider(store, provider, options = {}) {
   if (!requestedId) throw new Error("no default LLM provider is configured");
   const profile = registry.profiles.find((item) => item.id === requestedId);
   if (!profile) {
+    if (options.requireConfiguredProfile) {
+      throw requestError(`llm provider is not configured: ${requestedId}`);
+    }
     return createLlmProvider(requestedId, options);
   }
 
@@ -162,13 +208,13 @@ export function resolveConfiguredLlmProvider(store, provider, options = {}) {
   const apiKey = profile.apiKeyEnv ? (options.env ?? process.env)[profile.apiKeyEnv] : undefined;
   const runtime = {
     id: profile.id,
-    model: options.model ?? profile.model,
+    model: options.requireConfiguredProfile ? profile.model : (options.model ?? profile.model),
     baseUrl: profile.baseUrl,
     path: profile.path,
     apiKey,
-    timeoutMs: options.timeoutMs ?? profile.timeoutMs,
-    temperature: options.temperature ?? profile.temperature,
-    maxTokens: options.maxTokens ?? profile.maxTokens,
+    timeoutMs: options.requireConfiguredProfile ? profile.timeoutMs : (options.timeoutMs ?? profile.timeoutMs),
+    temperature: options.requireConfiguredProfile ? profile.temperature : (options.temperature ?? profile.temperature),
+    maxTokens: options.requireConfiguredProfile ? profile.maxTokens : (options.maxTokens ?? profile.maxTokens),
     jsonMode: profile.jsonMode,
   };
   if (profile.protocol === "anthropic_messages") {
@@ -354,6 +400,12 @@ function audit(store, type, profile, actor) {
 
 function compactDefined(value) {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
+}
+
+function requestError(message, statusCode = 400) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
 }
 function assertNoInlineSecrets(value) {
   if (!value || typeof value !== "object") return;

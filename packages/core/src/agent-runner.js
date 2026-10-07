@@ -346,6 +346,7 @@ function resolveLlmProvider(store, provider, input) {
     timeoutMs: input.llmTimeoutMs,
     temperature: input.llmTemperature,
     maxTokens: input.llmMaxTokens,
+    requireConfiguredProfile: Boolean(input.requireConfiguredProfile) || input.channel === "gateway",
   });
 }
 

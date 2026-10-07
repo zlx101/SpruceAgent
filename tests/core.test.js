@@ -4629,6 +4629,81 @@ test("gateway manages LLM provider profiles offline and rejects inline secrets",
     await closeServer(gateway.server);
   }
 });
+
+test("named provider resolve rejects endpoint overrides; Gateway requires a profile", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+  fs.writeFileSync(path.join(dir, "README.md"), "Gateway LLM boundary.", "utf8");
+  buildWorkspaceIndex(store);
+
+  assert.throws(
+    () => resolveConfiguredLlmProvider(store, "deepseek", { baseUrl: "https://attacker.example/v1" }),
+    /llmBaseUrl cannot be supplied at resolve time/,
+  );
+  const builtin = resolveConfiguredLlmProvider(store, "deepseek");
+  assert.equal(builtin.baseUrl, "https://api.deepseek.com");
+  assert.throws(
+    () => resolveConfiguredLlmProvider(store, "deepseek", { requireConfiguredProfile: true }),
+    /llm provider is not configured: deepseek/,
+  );
+
+  const gateway = await startGatewayServer(store, { port: 0 });
+  const baseUrl = `http://${gateway.host}:${gateway.port}`;
+  const originalFetch = globalThis.fetch;
+  let outboundCalls = 0;
+  globalThis.fetch = async (url, options) => {
+    const href = String(url);
+    if (/127\.0\.0\.1|localhost/.test(href)) {
+      return originalFetch(url, options);
+    }
+    outboundCalls += 1;
+    throw new Error(`unexpected outbound fetch: ${href}`);
+  };
+
+  try {
+    const redirected = await fetchJson(`${baseUrl}/v1/runs`, {
+      method: "POST",
+      token: gateway.token,
+      body: {
+        goal: "Must not send credentials to a caller URL",
+        dryRun: true,
+        llmProvider: "deepseek",
+        llmBaseUrl: "https://attacker.example/v1",
+      },
+    });
+    assert.equal(redirected.status, 400);
+    assert.match(redirected.body.message, /gateway refuses llmBaseUrl/);
+
+    const unconfigured = await fetchJson(`${baseUrl}/v1/runs`, {
+      method: "POST",
+      token: gateway.token,
+      body: {
+        goal: "Must not use process env without a profile",
+        dryRun: true,
+        llmProvider: "deepseek",
+      },
+    });
+    assert.equal(unconfigured.status, 400);
+    assert.match(unconfigured.body.message, /llm provider is not configured: deepseek/);
+
+    const drafted = await fetchJson(`${baseUrl}/v1/workflow-builder/draft`, {
+      method: "POST",
+      token: gateway.token,
+      body: {
+        goal: "Must not override the builder endpoint",
+        llmProvider: "mock",
+        llmModel: "attacker-model",
+      },
+    });
+    assert.equal(drafted.status, 400);
+    assert.match(drafted.body.message, /gateway refuses llmModel/);
+    assert.equal(outboundCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await closeServer(gateway.server);
+  }
+});
+
 test("planner promotion contract exposes allowlisted candidate boundary", () => {
   const contract = getPlannerPromotionContract();
 

@@ -44,6 +44,7 @@ export async function draftWorkflow(store, input = {}) {
     timeoutMs: input.llmTimeoutMs,
     temperature: input.llmTemperature,
     maxTokens: input.llmMaxTokens,
+    requireConfiguredProfile: Boolean(input.requireConfiguredProfile),
   });
   const knownFacts = {
     hasWorkspaceIndex: true,
