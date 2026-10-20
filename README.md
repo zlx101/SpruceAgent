@@ -6,7 +6,9 @@
 onboard → index / evidence → dry-run or draft → approval ticket → execute or resume in this workspace → traces / artifacts
 ```
 
-SpruceAgent is a local-first, trust-governed control plane. You connect to a local Gateway, onboard this workspace, review evidence, dry-run or draft, approve, execute or resume in this repository, then inspect traces and artifacts.
+The **daily closed loop** (daily loop) is the one path you walk on this machine and in this workspace: onboard, review evidence, dry-run or draft, approve, execute or resume here, then open the traces. Fleet and Squad sit to the side. If a step cannot finish or cannot point back to a local file or ticket, the loop is not closed.
+
+SpruceAgent is a local-first, trust-governed control plane. You connect to a local Gateway and walk that path in this workspace.
 
 ## Is this for you?
 

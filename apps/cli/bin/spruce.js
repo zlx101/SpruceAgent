@@ -2410,6 +2410,7 @@ The control plane needed to make an Agent. One person, one machine, one workspac
 Usage:
 
 Daily:
+  Everyday path on this machine and this workspace. status.daily says if you can continue.
   ${executable} init
   ${executable} doctor
   ${executable} onboard

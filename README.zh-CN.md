@@ -6,7 +6,9 @@
 onboard → 索引/证据 → dry-run 或草稿 → 审批票 → 本工作区执行或恢复 → traces / artifacts
 ```
 
-SpruceAgent 是 local-first、信任治理的控制面。你连上本机 Gateway，给当前工作区做 Onboard，看证据，dry-run 或出草稿，审批后在本仓库执行或恢复，再看痕迹与产物。
+**日用闭环**（也叫日用环）是本机每天走完的那一圈：开箱、看证据、试跑或出草稿、你批准、在本工作区执行或恢复、留下能打开的痕迹。Fleet / Squad 是旁路，不在这圈上。走不完、指不回本机文件或票，就不算闭环。
+
+SpruceAgent 是 local-first、信任治理的控制面。你连上本机 Gateway，给当前工作区走完这一圈。
 
 ## 这是不是给你用的
 
@@ -166,7 +168,7 @@ npm run spruce -- gateway serve --port 7357 --autopilotPollMs 60000
 http://127.0.0.1:7357/workbench
 ```
 
-连接 Token 后，日用闭环是：Connect → Onboard → 索引/证据 → dry-run 或草稿 → 审批 → 在本仓库执行或恢复 → 看痕迹与产物。System Overview 的 Run Onboarding 与 `spruce onboard` 相同：本地 mock dry-run，不保存 workflow，不执行工具。
+连接 Token 后，走的仍是同一圈日用环：Connect → Onboard → 索引/证据 → dry-run 或草稿 → 审批 → 在本仓库执行或恢复 → 看痕迹与产物。System Overview 的 Run Onboarding 与 `spruce onboard` 相同：本地 mock dry-run，不保存 workflow，不执行工具。
 
 Workbench 日用面是 System、Launch、Evidence、Builder、Queue、Approvals、Resumable、Artifacts、Detail。Editor、Skills、SkillForge、Fleet、Squads 等仍可打开，不是日用入口。
 

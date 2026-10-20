@@ -1,6 +1,6 @@
 # Contributing to SpruceAgent
 
-SpruceAgent is the control plane needed to make an Agent. One person, one machine, one workspace. Contributions are welcome when they improve safety, reliability, traceability, or the daily closed loop from onboarding to approved local results.
+SpruceAgent is the control plane needed to make an Agent. One person, one machine, one workspace. The daily closed loop is the everyday path on this machine and in this workspace, from onboarding to an approved local result you can open. Contributions are welcome when they improve safety, reliability, traceability, or that path.
 
 ## Contribution Priorities
 

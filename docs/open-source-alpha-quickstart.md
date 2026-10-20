@@ -2,7 +2,7 @@
 
 This is the shortest path to get a local result on one machine and one workspace after cloning the repository.
 
-Daily closed loop:
+Daily closed loop (the one path you walk on this machine and in this workspace):
 
 ```text
 onboard → status.daily → open the dry-run trace / artifact
