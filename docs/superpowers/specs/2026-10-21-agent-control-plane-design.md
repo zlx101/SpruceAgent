@@ -4,14 +4,14 @@
 
 前序：`docs/superpowers/specs/2026-10-21-personal-repo-control-plane-design.md`（v0 文案与 Workbench 前门收口）。
 
-策略（锁定）：SpruceAgent 是本机 Agent **控制面**，不是去办事的那个 Agent。理念是「AI 时代，做 Agent 需要的事」。类型化判定只做可选插头；票和执行留在控制面。
+策略（锁定）：做 Agent 需要的控制面。一个人、一台机器、一个工作区。日用闭环。不是去办事的那个 Agent。类型化判定只做可选插头；票和执行留在控制面。
 
 ## 1. 问题
 
 仓库里已经有 TrustKernel、ContextOS、onboard、run、审批票、trace、artifact。日用价值被两件事挡住：
 
 1. 对外仍容易被读成全能 OS / 对话桌面 / 整机助手。
-2. CLI 是真接口，但帮助和 `status` 把 Fleet、Squad、技能货架和日用环铺在同一层，操作者看不见「现在能不能动手」。
+2. CLI 是真接口，但帮助和 `status` 把 Fleet、Squad、技能货架和日用闭环铺在同一层，操作者看不见「现在能不能动手」。
 
 v0 已改 README / Workbench 导航与日用失败条。v1 把同一条环收到 **core + CLI**，成为可验收的控制面日用面。
 
@@ -27,7 +27,7 @@ SpruceAgent 只服务一个人、一台机器、一个工作区。
 
 价值：把「允不允许、有没有证据、停没停住、事后能不能打开」做成可打开的本机事实。模型可换，控制权不换。
 
-日用环：
+日用闭环：
 
 ```text
 onboard → 索引/证据 → dry-run 或草稿 → 审批票 → 本工作区执行或恢复 → traces / artifacts
@@ -37,7 +37,7 @@ onboard → 索引/证据 → dry-run 或草稿 → 审批票 → 本工作区�
 
 1. **结果**：一次动作留下本机可打开的 trace / artifact / 审批。
 2. **归自己**：产物只写 `.spruceagent`。密钥只登记环境变量名。模型和类型化判定都是可关的插头。
-3. **能溯源**：每一步能指回文件、记忆、技能、审批或 mock 草稿。指不回去的不进日用环。
+3. **能溯源**：每一步能指回文件、记忆、技能、审批或 mock 草稿。指不回去的不进日用闭环。
 
 ### 2.2 判定 ≠ 批准 ≠ 执行
 
@@ -142,7 +142,7 @@ README / 中文 README / Quickstart / Showcase / CONTRIBUTING / Workbench 文案
   spruce run detail | artifact get
 ```
 
-模型不是日用环的条件。Onboarding dry-run 仍用 mock planner。
+模型不是日用闭环的条件。Onboarding dry-run 仍用 mock planner。
 
 类型化判定插头不在本切片数据流里。以后若接，只允许出现在「提议之后、出票之前」，输入为不含密钥的状态摘要，输出为封闭答案；控制面代码解释答案，判定插头不直接调用工具。
 

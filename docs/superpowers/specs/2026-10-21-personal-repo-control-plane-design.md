@@ -24,7 +24,7 @@ Connect → Onboard → 索引/证据 → dry-run 或草稿 → 审批 → 在�
 
 1. **结果**：一次动作必须留下本仓库里可打开的痕迹（trace / artifact / 审批）。不能只剩「系统很全」。
 2. **归自己**：产物只写本地 `.spruceagent`。不把密钥、模型、通道变成平台锁。
-3. **能溯源**：每一步能指回文件、记忆、技能、审批或 mock 草稿。指不回去的不进日用环。
+3. **能溯源**：每一步能指回文件、记忆、技能、审批或 mock 草稿。指不回去的不进日用闭环。
 
 明确不做：
 
@@ -75,7 +75,7 @@ Showcase 不是日用入口，但公开句子不能和边界打架。
 
 ## 5. 数据流
 
-不新开路由。日用环使用已有 Gateway：
+不新开路由。日用闭环使用已有 Gateway：
 
 ```text
 本机 store
@@ -88,7 +88,7 @@ Showcase 不是日用入口，但公开句子不能和边界打架。
     GET /v1/artifacts
 ```
 
-模型不是日用环的条件。Onboarding dry-run 使用 mock planner。
+模型不是日用闭环的条件。Onboarding dry-run 使用 mock planner。
 
 ## 6. 失败必须露在日用面
 
@@ -106,7 +106,7 @@ Showcase 不是日用入口，但公开句子不能和边界打架。
 
 本切片完成当且仅当：
 
-1. README / 中文 README / Quickstart / Workbench 文档的第一句与日用环一致，不再写全能 OS。
+1. README / 中文 README / Quickstart / Workbench 文档的第一句与日用闭环一致，不再写全能 OS。
 2. Workbench 导航分成日用 / 旁路；Onboarding 按钮行为不变。
 3. Showcase 不再自称 SuperAgent OS。
 4. 现有测试仍过；只改被文案或导航碰到的正则。

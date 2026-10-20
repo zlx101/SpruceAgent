@@ -1,6 +1,10 @@
 # SpruceAgent
 
-> 给一个人、一台机器、一个工作区的本机控制面：结果归自己，每一步能溯源。
+> 做 Agent 需要的控制面。一个人、一台机器、一个工作区。日用闭环：
+
+```text
+onboard → 索引/证据 → dry-run 或草稿 → 审批票 → 本工作区执行或恢复 → traces / artifacts
+```
 
 SpruceAgent 是 local-first、信任治理的控制面。你连上本机 Gateway，给当前工作区做 Onboard，看证据，dry-run 或出草稿，审批后在本仓库执行或恢复，再看痕迹与产物。
 
@@ -26,7 +30,7 @@ npm run spruce -- run detail <traceId>
 npm run spruce -- artifact list --traceId <traceId>
 ```
 
-一步指不回本机文件、审批票或 mock 草稿，日用环就不算完成。
+一步指不回本机文件、审批票或 mock 草稿，日用闭环就不算完成。
 
 它由四个核心能力构成：
 
@@ -53,7 +57,7 @@ OpenHuman 证明了 Agent 需要个人上下文和产品体验。
 
 SpruceAgent 做的是更窄的一层：
 
-> 一个人在自己仓库里拿到结果、结果归自己、每一步能溯源的控制面。
+> 做 Agent 需要的控制面。一个人、一台机器、一个工作区。日用闭环。
 
 ## 当前阶段
 
@@ -162,7 +166,7 @@ npm run spruce -- gateway serve --port 7357 --autopilotPollMs 60000
 http://127.0.0.1:7357/workbench
 ```
 
-连接 Token 后，日用环是：Connect → Onboard → 索引/证据 → dry-run 或草稿 → 审批 → 在本仓库执行或恢复 → 看痕迹与产物。System Overview 的 Run Onboarding 与 `spruce onboard` 相同：本地 mock dry-run，不保存 workflow，不执行工具。
+连接 Token 后，日用闭环是：Connect → Onboard → 索引/证据 → dry-run 或草稿 → 审批 → 在本仓库执行或恢复 → 看痕迹与产物。System Overview 的 Run Onboarding 与 `spruce onboard` 相同：本地 mock dry-run，不保存 workflow，不执行工具。
 
 Workbench 日用面是 System、Launch、Evidence、Builder、Queue、Approvals、Resumable、Artifacts、Detail。Editor、Skills、SkillForge、Fleet、Squads 等仍可打开，不是日用入口。
 

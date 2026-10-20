@@ -1,6 +1,6 @@
 # Contributing to SpruceAgent
 
-SpruceAgent is a local control plane for one person, one machine, and one workspace. Contributions are welcome when they improve safety, reliability, traceability, or the daily loop from onboarding to approved local results.
+SpruceAgent is the control plane needed to make an Agent. One person, one machine, one workspace. Contributions are welcome when they improve safety, reliability, traceability, or the daily closed loop from onboarding to approved local results.
 
 ## Contribution Priorities
 

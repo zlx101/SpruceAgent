@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "A local Agent control plane for one person, one machine, and one workspace.",
+  "description": "The control plane needed to make an Agent. One person, one machine, one workspace.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

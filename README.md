@@ -1,6 +1,10 @@
 # SpruceAgent
 
-> A local control plane for one person, one machine, and one workspace: results stay yours, every step is traceable.
+> The control plane needed to make an Agent. One person, one machine, one workspace. Daily closed loop:
+
+```text
+onboard → index / evidence → dry-run or draft → approval ticket → execute or resume in this workspace → traces / artifacts
+```
 
 SpruceAgent is a local-first, trust-governed control plane. You connect to a local Gateway, onboard this workspace, review evidence, dry-run or draft, approve, execute or resume in this repository, then inspect traces and artifacts.
 
@@ -26,7 +30,7 @@ npm run spruce -- run detail <traceId>
 npm run spruce -- artifact list --traceId <traceId>
 ```
 
-If a step cannot point back to a local file, ticket, or mock draft, the daily loop is not done.
+If a step cannot point back to a local file, ticket, or mock draft, the daily closed loop is not done.
 
 It combines four core ideas:
 
@@ -53,7 +57,7 @@ OpenHuman shows that agents need personal context and product experience.
 
 SpruceAgent is the narrower layer:
 
-> a control plane for one person in their own repository: get a result, keep that result, and trace every step.
+> The control plane needed to make an Agent. One person, one machine, one workspace. Daily closed loop.
 
 ## Current Stage
 
@@ -260,6 +264,6 @@ Chinese documentation:
 
 SpruceAgent is not a more autonomous black box.
 
-It is a control plane for one person, one machine, and one workspace: results stay local, and every step can be traced back.
+It is the control plane needed to make an Agent. One person, one machine, one workspace. The daily closed loop must leave a local, openable result.
 
 Execution is governed by one rule: safe enough to trust, reliable enough to depend on, compliant enough to adopt, practical enough to use every day, and simple enough to reason from first principles.

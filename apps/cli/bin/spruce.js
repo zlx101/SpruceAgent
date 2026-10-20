@@ -2405,7 +2405,7 @@ function printJson(value) {
 function printHelp() {
   const executable = path.basename(process.argv[1] ?? "spruce");
   console.log(`SpruceAgent CLI
-Local Agent control plane for one person, one machine, and one workspace.
+The control plane needed to make an Agent. One person, one machine, one workspace.
 
 Usage:
 

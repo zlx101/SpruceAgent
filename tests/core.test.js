@@ -776,7 +776,8 @@ test("spruce status JSON and help expose the daily control-plane surface", () =>
 
   const help = execFileSync(process.execPath, [cli], { encoding: "utf8" });
   assert.match(help, /^SpruceAgent CLI/m);
-  assert.match(help, /Local Agent control plane for one person, one machine, and one workspace/);
+  assert.match(help, /The control plane needed to make an Agent/);
+  assert.match(help, /One person, one machine, one workspace/);
   assert.match(help, /^Daily:/m);
   assert.match(help, /^Sidecar:/m);
   assert.match(help, /onboard status/);

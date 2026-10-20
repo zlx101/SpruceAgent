@@ -8,7 +8,7 @@
 
 ## 1. 问题
 
-日用环已经能跑。挡住交付的是入口形状：
+日用闭环已经能跑。挡住交付的是入口形状：
 
 1. README / Quickstart 像给贡献者验仓库，不像给本机操作者三步拿到结果。
 2. 质量门停在测试绿了，没有强制日用路径留下可打开的 trace / artifact，失败必须出现在 `status.daily`。
@@ -25,7 +25,7 @@ SpruceAgent 仍是一个人、一台机器、一个工作区的本机控制面�
 3. 打开本次留下的 trace / artifact
 ```
 
-质量门覆盖这一条日用环。全量测试绿了才算过。失败必须出现在 `status.daily`。
+质量门覆盖这一条日用闭环。全量测试绿了才算过。失败必须出现在 `status.daily`。
 
 不做：安装包、模型网关、新 HTTP 路由、对话 REPL、删 Fleet / Squad、判定插头真接。
 
@@ -35,7 +35,7 @@ SpruceAgent 仍是一个人、一台机器、一个工作区的本机控制面�
 - `docs/open-source-alpha-quickstart.md`：最短路径是这三步。
 - `scripts/daily-smoke.js`：临时工作区 `runGatewayOnboarding` → `getDailyLoopAttention` 不是 blocked → `lastDryRunTraceId` 能被 `getRunDetail` 打开，且该 trace 有 artifact。
 - `scripts/release-verify.js`：全量测试之后跑日用冒烟；失败则整次失败。现有 alpha smoke 可留，不能代替日用冒烟。
-- `CONTRIBUTING.md`：改日用环必须在 CLI 或 Workbench 日用面上复现。
+- `CONTRIBUTING.md`：改日用闭环必须在 CLI 或 Workbench 日用面上复现。
 - `onboard` 行为不变：mock dry-run、0 工具、不要求密钥、默认不保存 workflow。
 
 ## 4. 数据流
