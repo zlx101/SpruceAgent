@@ -1,6 +1,6 @@
 # Contributing to SpruceAgent
 
-SpruceAgent is an open-source SuperAgent OS for personal work and team work. Contributions are welcome when they improve safety, reliability, usability, or the path from Skill to Workflow to Agent to Super-Agent.
+SpruceAgent is a local control plane for one person, one machine, and one workspace. Contributions are welcome when they improve safety, reliability, traceability, or the daily loop from onboarding to approved local results.
 
 ## Contribution Priorities
 
@@ -36,6 +36,7 @@ Before opening a PR:
 
 - Keep changes scoped to one clear problem.
 - Add or update tests for behavior changes.
+- Changes to the daily loop (onboard, `status.daily`, approvals, resume, traces, artifacts) must be reproduced on the CLI or Workbench daily surface. Sidecar JSON alone is not enough.
 - Update schemas and docs when contracts change.
 - Do not commit `.spruceagent/`, secrets, exported `*.skillpkg.json` files, local logs, or credentials.
 - Explain the safety impact when changing tool execution, approvals, policy, LLM planning, or skill execution.

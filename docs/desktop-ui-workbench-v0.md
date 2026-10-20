@@ -1,6 +1,6 @@
 # Desktop UI Workbench v0
 
-SpruceAgent now has a local browser workbench served by Gateway.
+Workbench is the local daily surface for one person, one machine, and one workspace: connect, onboard, review evidence, dry-run or draft, approve, execute or resume in this repository, then inspect traces and artifacts.
 
 The UI is intentionally small and dependency-free. It uses the existing Gateway API instead of creating a new execution path.
 
@@ -19,6 +19,17 @@ http://127.0.0.1:7357/workbench
 ```
 
 The HTML/CSS/JS assets are local static files. API calls still require the Gateway Bearer token.
+
+Navigation is split into two groups. Daily: System, Launch, Evidence, Builder, Queue, Approvals, Resumable, Artifacts, Detail. Sidecar (still openable, not a daily entrance): Editor, Skills, SkillForge, Workflows, Agents, Fleet, Squads, Tasks, Workflow Runs, Recent.
+
+The first-screen counts are Pending, Queue, Ready, and Artifacts. Fleet, Squads, Agents, and Autopilots stay in sidecar views.
+
+Daily-loop failures are shown on System, Evidence, Launch, Builder, Queue, Approvals, Resumable, and the status line. They are not JSON-only.
+
+- Not connected: System stays disconnected; Onboarding does not run.
+- Index missing or stale: Onboarding and Evidence are pending. The UI does not invent context.
+- Dry-run or draft failure: the status line shows the reason.
+- Approvals pending: Queue, Approvals, and Resumable show the work; resume stays manual.
 
 ## What It Shows
 
@@ -175,10 +186,12 @@ Workbench v0 does not bypass TrustKernel.
 
 Run Inbox v0 made the product state visible. Workbench v0 makes it actionable and inspectable.
 
-This is the first real operating surface for SpruceAgent:
+Daily loop:
 
 ```text
-System Overview -> Evidence -> Create / Claim Execution Task -> Draft Workflow -> Review Steps -> Save Workflow -> Version / Archive / Restore -> Evaluate Skill -> Plan Agent Adapter -> Prepare Workspace -> Route Task -> Fleet Review -> Launch Preview -> Launch / Skill / Workflow -> Inspect -> Human Gate -> Approve / Reject -> Resume -> Artifact -> Report -> Audit
+Connect → Onboard → index / evidence → dry-run or draft → approve → execute or resume in this repository → inspect traces and artifacts
 ```
+
+Sidecar views (Editor, Skills, SkillForge, Fleet, Squads, and the rest) stay available. They are not the daily entrance.
 
 It is still local-first, conservative, and auditable.

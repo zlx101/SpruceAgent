@@ -72,6 +72,7 @@ import { assessWorkspaceIndexFreshness, buildWorkspaceIndex, readWorkspaceIndex,
 import { createContextEvidencePack, getContextEvidenceContract } from "./context-evidence.js";
 import { getDeploymentPreflightContract, runDeploymentPreflight } from "./deployment-preflight.js";
 import { getGatewayOnboardingContract, getGatewayOnboardingStatus, runGatewayOnboarding } from "./onboarding.js";
+import { getDailyLoopAttention } from "./daily-loop-attention.js";
 import { evaluateTrace, getEvaluation, listEvaluations } from "./evaluations.js";
 import {
   getReleaseVerification,
@@ -2706,6 +2707,7 @@ function gatewayStatus(store, autopilotRunner = null) {
     skillReplayResultCount: listSkillReplayResults(store).length,
     skillPackageCount: listSkillPackages(store).length,
     skillPackageImportCount: listSkillPackageImports(store).length,
+    daily: getDailyLoopAttention(store),
   };
 }
 

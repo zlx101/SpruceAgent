@@ -23,7 +23,8 @@ npm run release:verify
 2. `npm run deploy:preflight`
 3. `npm run check`
 4. `npm test`
-5. `npm run alpha:smoke`
+5. `npm run daily:smoke`
+6. `npm run alpha:smoke`
 
 It stops on the first failing command, prints a machine-readable `spruceagent.release-verification` summary, and records the summarized result under the local `.spruceagent/release-verifications/` runtime store.
 

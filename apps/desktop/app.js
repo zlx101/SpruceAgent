@@ -99,7 +99,11 @@ const nodes = {
   refreshButton: document.querySelector("#refresh-button"),
   statusLine: document.querySelector("#status-line"),
   systemState: document.querySelector("#system-state"),
+  dailyAttention: document.querySelector("#daily-attention"),
   systemOverview: document.querySelector("#system-overview"),
+  onboardingRunButton: document.querySelector("#onboarding-run-button"),
+  onboardingState: document.querySelector("#onboarding-state"),
+  onboardingPanel: document.querySelector("#onboarding-panel"),
   releaseVerificationList: document.querySelector("#release-verification-list"),
   releaseVerificationPanel: document.querySelector("#release-verification-panel"),
   releaseArtifactList: document.querySelector("#release-artifact-list"),
@@ -200,6 +204,9 @@ nodes.form.addEventListener("submit", async (event) => {
 });
 
 nodes.refreshButton.addEventListener("click", refresh);
+nodes.onboardingRunButton?.addEventListener("click", () => {
+  runOnboardingFromWorkbench();
+});
 
 nodes.releaseVerificationList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action]");
@@ -264,6 +271,7 @@ nodes.workflowDraftList.addEventListener("click", (event) => {
   if (button.dataset.draftAction === "remove") removeWorkflowDraftStep(index);
   if (button.dataset.draftAction === "up") moveWorkflowDraftStep(index, -1);
   if (button.dataset.draftAction === "down") moveWorkflowDraftStep(index, 1);
+  if (button.dataset.draftAction === "duplicate") duplicateWorkflowDraftStep(index);
 });
 
 nodes.skillList.addEventListener("click", async (event) => {
@@ -520,6 +528,12 @@ if (state.token) {
 
 async function refresh() {
   if (state.busy) return;
+  if (!state.token) {
+    state.status = null;
+    render();
+    setStatus("Disconnected. Connect with a Gateway token before onboarding.", true);
+    return;
+  }
   state.busy = true;
   setStatus("Loading");
   try {
@@ -578,7 +592,8 @@ async function refresh() {
     state.autopilots = autopilots;
     state.autopilotDue = autopilotDue;
     render();
-    setStatus(`Connected - ${state.approvalQueue.status.replace(/_/g, " ")}`);
+    const attention = dailyLoopAttention();
+    setStatus(attention.text, attention.kind === "blocked");
   } catch (error) {
     setStatus(error.message, true);
   } finally {
@@ -628,9 +643,10 @@ async function handleDecisionQueueAction(button) {
 }
 
 async function refreshAfterRunControlAction() {
-  const [status, deploymentPreflight, gatewayRuntime, releaseVerifications, releaseArtifactManifests, inbox, workflowInbox, approvalQueue, artifacts, fleetRuns, agentLaunches] = await Promise.all([
+  const [status, deploymentPreflight, onboarding, gatewayRuntime, releaseVerifications, releaseArtifactManifests, inbox, workflowInbox, approvalQueue, artifacts, fleetRuns, agentLaunches] = await Promise.all([
     get("/v1/status"),
     get("/v1/deployment/preflight"),
+    get("/v1/onboarding"),
     get("/v1/gateway/runtime"),
     get("/v1/release-verifications?limit=10"),
     get("/v1/release-artifacts?limit=10"),
@@ -643,6 +659,7 @@ async function refreshAfterRunControlAction() {
   ]);
   state.status = status;
   state.deploymentPreflight = deploymentPreflight;
+  state.onboarding = onboarding;
   state.gatewayRuntime = gatewayRuntime;
   state.releaseVerifications = releaseVerifications;
   state.releaseArtifactManifests = releaseArtifactManifests;
@@ -1041,6 +1058,11 @@ function decisionActionBody(action) {
 
 async function draftWorkflowFromWorkbench() {
   if (state.busy) return;
+  if (!state.token || !state.status) {
+    nodes.workflowBuilderState.textContent = "Not connected";
+    setStatus("Disconnected. Connect with a Gateway token before onboarding.", true);
+    return;
+  }
   const input = buildWorkflowBuilderInput();
   if (!input.goal) {
     nodes.workflowBuilderState.textContent = "Goal required";
@@ -1060,11 +1082,11 @@ async function draftWorkflowFromWorkbench() {
     nodes.workflowBuilderState.textContent = draft.status;
     setStatus(`Workflow draft ready - ${draft.workflow.name}`);
   } catch (error) {
-    nodes.workflowBuilderState.textContent = "Failed";
+    nodes.workflowBuilderState.textContent = error.message;
     setStatus(error.message, true);
   } finally {
     state.busy = false;
-    nodes.workflowBuilderSubmit.disabled = false;
+    nodes.workflowBuilderSubmit.disabled = !state.token || !state.status;
   }
 }
 
@@ -1103,6 +1125,19 @@ function addWorkflowDraftStep(kind) {
 function removeWorkflowDraftStep(index) {
   if (!state.workflowDraft || state.workflowDraft.status === "saved") return;
   state.workflowDraft.workflow.steps.splice(index, 1);
+  markWorkflowDraftEdited();
+  renderWorkflowDraft(state.workflowDraft);
+}
+
+function duplicateWorkflowDraftStep(index) {
+  if (!state.workflowDraft || state.workflowDraft.status === "saved") return;
+  const steps = state.workflowDraft.workflow.steps;
+  const step = steps[index];
+  if (!step) return;
+  steps.splice(index + 1, 0, {
+    ...step,
+    tags: Array.isArray(step.tags) ? [...step.tags] : step.tags,
+  });
   markWorkflowDraftEdited();
   renderWorkflowDraft(state.workflowDraft);
 }
@@ -1242,6 +1277,11 @@ async function restoreWorkflowVersionFromWorkbench(workflowId, revision) {
 
 async function submitRun() {
   if (state.busy) return;
+  if (!state.token || !state.status) {
+    nodes.launchState.textContent = "Not connected";
+    setStatus("Disconnected. Connect with a Gateway token before onboarding.", true);
+    return;
+  }
   const input = buildRunInput();
   if (!input.goal) {
     setStatus("Goal required", true);
@@ -1259,16 +1299,21 @@ async function submitRun() {
     await refreshAfterRunControlAction();
     await loadDetail(run.traceId, { scroll: true });
   } catch (error) {
-    nodes.launchState.textContent = "Failed";
+    nodes.launchState.textContent = error.message;
     setStatus(error.message, true);
   } finally {
     state.busy = false;
-    nodes.runSubmit.disabled = false;
+    nodes.runSubmit.disabled = !state.token || !state.status;
   }
 }
 
 async function searchContextEvidenceFromWorkbench() {
   if (state.busy) return;
+  if (!state.token || !state.status) {
+    nodes.contextEvidenceState.textContent = "Not connected";
+    setStatus("Disconnected. Connect with a Gateway token before onboarding.", true);
+    return;
+  }
   const query = nodes.contextEvidenceQuery.value.trim();
   if (!query) {
     nodes.contextEvidenceState.textContent = "Query required";
@@ -1289,11 +1334,11 @@ async function searchContextEvidenceFromWorkbench() {
     renderContextEvidence(state.contextEvidence);
     setStatus(`Evidence ready - ${state.contextEvidence.summary.sourceCount} sources`);
   } catch (error) {
-    nodes.contextEvidenceState.textContent = "Failed";
+    nodes.contextEvidenceState.textContent = error.message;
     setStatus(error.message, true);
   } finally {
     state.busy = false;
-    nodes.contextEvidenceSubmit.disabled = false;
+    nodes.contextEvidenceSubmit.disabled = !state.token || !state.status;
   }
 }
 
@@ -1664,16 +1709,16 @@ function render() {
   nodes.pendingCount.textContent = inbox.summary.pendingApprovalCount;
   nodes.decisionCount.textContent = approvalQueue.summary.pendingDecisionCount + approvalQueue.summary.readyToResumeCount;
   nodes.resumableCount.textContent = inbox.summary.resumableRunCount;
-  nodes.recentCount.textContent = inbox.summary.recentRunCount;
+  if (nodes.recentCount) nodes.recentCount.textContent = inbox.summary.recentRunCount;
   nodes.artifactCount.textContent = artifacts.summary.total;
-  nodes.agentAdapterCount.textContent = agentAdapters.summary.total;
-  nodes.agentWorkspaceCount.textContent = agentWorkspaces.summary.activeCount;
-  nodes.agentLaunchCount.textContent = agentLaunches.summary.total;
-  nodes.launchReviewCount.textContent = launchReviews.summary.total;
-  nodes.taskRouteCount.textContent = taskRoutes.summary.total;
-  nodes.fleetRunCount.textContent = fleetRuns.summary.total;
-  nodes.executionTaskCount.textContent = executionTasks.summary.total;
-  nodes.autopilotCount.textContent = autopilots.items.length;
+  if (nodes.agentAdapterCount) nodes.agentAdapterCount.textContent = agentAdapters.summary.total;
+  if (nodes.agentWorkspaceCount) nodes.agentWorkspaceCount.textContent = agentWorkspaces.summary.activeCount;
+  if (nodes.agentLaunchCount) nodes.agentLaunchCount.textContent = agentLaunches.summary.total;
+  if (nodes.launchReviewCount) nodes.launchReviewCount.textContent = launchReviews.summary.total;
+  if (nodes.taskRouteCount) nodes.taskRouteCount.textContent = taskRoutes.summary.total;
+  if (nodes.fleetRunCount) nodes.fleetRunCount.textContent = fleetRuns.summary.total;
+  if (nodes.executionTaskCount) nodes.executionTaskCount.textContent = executionTasks.summary.total;
+  if (nodes.autopilotCount) nodes.autopilotCount.textContent = autopilots.items.length;
   nodes.skillState.textContent = `${skills.length}`;
   nodes.candidateSkillState.textContent = `${candidateSkills.length} candidates`;
   nodes.skillEvaluationState.textContent = `${skillEvaluations.length} reports`;
@@ -1698,6 +1743,7 @@ function render() {
   nodes.autopilotRunDueButton.disabled = state.busy || !autopilotDue.items.length;
 
   renderSystemOverview(state.status, state.contextFreshness, state.deploymentPreflight, state.onboarding, state.gatewayRuntime, state.releaseVerifications, state.releaseArtifactManifests);
+  renderOnboardingPanel(state.onboarding);
   renderReleaseVerifications(state.releaseVerifications);
   renderReleaseVerificationPanel(state.releaseVerificationDetail);
   renderReleaseArtifactManifests(state.releaseArtifactManifests);
@@ -1738,10 +1784,22 @@ function render() {
   renderArtifacts(artifacts.items);
   renderArtifactPanel(state.artifactDetail);
   renderDetail(state.detail);
+  applyDailyLoopSurface();
 }
 
 function renderSystemOverview(status, freshness, deploymentPreflight, onboarding, gatewayRuntime, releaseVerifications, releaseArtifactManifests) {
   nodes.systemOverview.replaceChildren();
+  if (!state.token || !status) {
+    const item = document.createElement("article");
+    item.className = "overview-item";
+    item.append(
+      textNode("div", "Gateway", "overview-title"),
+      textNode("div", "Not connected", "overview-value"),
+      pillNode("disconnected", "blocked"),
+    );
+    nodes.systemOverview.appendChild(item);
+    return;
+  }
   const autopilotRunner = status?.autopilotRunner;
   const modules = [
     ["ContextOS", `${status?.indexedDocumentCount ?? 0} indexed`, freshness?.status ?? "unknown"],
@@ -1889,6 +1947,161 @@ function onboardingStatus(report) {
   if (report.status === "failed") return "blocked";
   if (report.attentionNeeded || report.status === "incomplete") return "pending";
   return report.status || "unknown";
+}
+
+function renderOnboardingPanel(report) {
+  if (!nodes.onboardingPanel) return;
+  if (nodes.onboardingState) {
+    nodes.onboardingState.textContent = onboardingStateText(report);
+  }
+  nodes.onboardingPanel.textContent = JSON.stringify(report ?? {}, null, 2);
+}
+
+function onboardingStateText(report) {
+  if (!state.token || !state.status) return "Not connected";
+  if (!report) return "Not run";
+  const failed = (report.steps || []).find((step) => step.status === "failed");
+  if (failed) return `${report.status}: ${failed.detail}`;
+  const freshness = report.context?.freshness;
+  if (freshness === "missing" || freshness === "stale") return `Index ${freshness}`;
+  return `${report.status}${report.attentionNeeded ? " / attention" : ""}`;
+}
+
+function dailyLoopAttention() {
+  if (!state.token || !state.status) {
+    return {
+      kind: "blocked",
+      text: "Disconnected. Connect with a Gateway token before onboarding.",
+    };
+  }
+
+  const daily = state.status.daily;
+  if (daily && (daily.kind === "ok" || daily.kind === "pending" || daily.kind === "blocked") && typeof daily.text === "string") {
+    return { kind: daily.kind, text: daily.text };
+  }
+
+  const failed = (state.onboarding?.steps || []).find((step) => step.status === "failed");
+  if (state.onboarding?.status === "failed" || failed) {
+    return {
+      kind: "blocked",
+      text: failed?.detail || "Onboarding failed.",
+    };
+  }
+
+  if (state.onboarding?.status === "ready" && !state.onboarding?.ledger?.lastDryRunTraceId) {
+    return {
+      kind: "pending",
+      text: "Onboarding has no dry-run trace. The step is not complete.",
+    };
+  }
+
+  const freshness = state.contextFreshness?.status || state.onboarding?.context?.freshness;
+  if (freshness === "missing" || freshness === "stale") {
+    return {
+      kind: "pending",
+      text: `Index ${freshness}. Onboarding and Evidence are pending. Do not invent context.`,
+    };
+  }
+
+  if (!state.onboarding?.updatedAt) {
+    return {
+      kind: "pending",
+      text: "Onboarding has not run.",
+    };
+  }
+
+  if (state.onboarding.status === "incomplete") {
+    return {
+      kind: "pending",
+      text: "Onboarding incomplete.",
+    };
+  }
+
+  const pending = Number(state.inbox?.summary?.pendingApprovalCount || 0);
+  const queue = Number(state.approvalQueue?.summary?.pendingDecisionCount || 0);
+  const resumable = Number(state.inbox?.summary?.resumableRunCount || 0);
+  if (pending || queue || resumable) {
+    return {
+      kind: "pending",
+      text: `Approvals pending: ${pending} tickets, ${queue} queue, ${resumable} resumable. Resume stays manual.`,
+    };
+  }
+
+  return {
+    kind: "ok",
+    text: "Daily loop ready. Results stay in this workspace.",
+  };
+}
+
+function applyDailyLoopSurface() {
+  const attention = dailyLoopAttention();
+  if (nodes.dailyAttention) {
+    nodes.dailyAttention.textContent = attention.text;
+    nodes.dailyAttention.classList.toggle("error", attention.kind === "blocked");
+  }
+
+  const connected = Boolean(state.token && state.status);
+  if (nodes.onboardingRunButton) nodes.onboardingRunButton.disabled = state.busy || !connected;
+  if (nodes.runSubmit) nodes.runSubmit.disabled = state.busy || !connected;
+  if (nodes.contextEvidenceSubmit) nodes.contextEvidenceSubmit.disabled = state.busy || !connected;
+  if (nodes.workflowBuilderSubmit) nodes.workflowBuilderSubmit.disabled = state.busy || !connected;
+
+  if (!connected) {
+    if (nodes.contextEvidenceState) nodes.contextEvidenceState.textContent = "Not connected";
+    if (nodes.launchState) nodes.launchState.textContent = "Not connected";
+    if (nodes.workflowBuilderState) nodes.workflowBuilderState.textContent = "Not connected";
+    if (nodes.decisionQueueState) nodes.decisionQueueState.textContent = "Not connected";
+    if (nodes.approvalState) nodes.approvalState.textContent = "Not connected";
+    if (nodes.resumeState) nodes.resumeState.textContent = "Not connected";
+    if (nodes.artifactState) nodes.artifactState.textContent = "Not connected";
+    if (nodes.detailState) nodes.detailState.textContent = "Not connected";
+    return;
+  }
+
+  if (attention.kind !== "ok") {
+    if (nodes.launchState) nodes.launchState.textContent = attention.text;
+    if (nodes.workflowBuilderState) nodes.workflowBuilderState.textContent = attention.text;
+  } else {
+    if (nodes.launchState) nodes.launchState.textContent = "Ready";
+    if (nodes.workflowBuilderState) nodes.workflowBuilderState.textContent = "Ready";
+  }
+  if (nodes.detailState?.textContent === "Not connected") nodes.detailState.textContent = "No run selected";
+
+  if (!state.contextEvidence && nodes.contextEvidenceState) {
+    const freshness = state.contextFreshness?.status;
+    if (attention.kind !== "ok") {
+      nodes.contextEvidenceState.textContent = attention.text;
+    } else if (freshness) {
+      nodes.contextEvidenceState.textContent = `Index ${freshness}`;
+    }
+  }
+}
+
+async function runOnboardingFromWorkbench() {
+  if (state.busy) return;
+  if (!state.token || !state.status) {
+    setStatus("Disconnected. Connect with a Gateway token before onboarding.", true);
+    if (nodes.onboardingState) nodes.onboardingState.textContent = "Not connected";
+    return;
+  }
+  state.busy = true;
+  if (nodes.onboardingRunButton) nodes.onboardingRunButton.disabled = true;
+  setStatus("Running local onboarding");
+  try {
+    state.onboarding = await post("/v1/onboarding", {});
+    render();
+    const failed = (state.onboarding.steps || []).find((step) => step.status === "failed");
+    const message = failed
+      ? `Onboarding ${state.onboarding.status}: ${failed.detail}`
+      : `Onboarding ${state.onboarding.status}; mock dry-run ${state.onboarding.dryRun?.status ?? "n/a"}`;
+    setStatus(message, state.onboarding.status === "failed");
+  } catch (error) {
+    if (nodes.onboardingState) nodes.onboardingState.textContent = error.message;
+    setStatus(error.message, true);
+  } finally {
+    state.busy = false;
+    if (nodes.onboardingRunButton) nodes.onboardingRunButton.disabled = !state.token || !state.status;
+  }
 }
 
 function deploymentPreflightSummary(report) {
@@ -2656,6 +2869,7 @@ function workflowDraftStepNode(step, index, total) {
   actions.append(
     draftActionButton("up", index, "&#8593;", "Up", index === 0),
     draftActionButton("down", index, "&#8595;", "Down", index === total - 1),
+    draftActionButton("duplicate", index, "&#8862;", "Duplicate"),
     draftActionButton("remove", index, "&#10005;", "Remove", total === 1, "danger"),
   );
   heading.append(title, actions);

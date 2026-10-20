@@ -49,6 +49,8 @@ POST /v1/onboarding
 
 `POST` accepts `{ "saveWorkflow": true }` only as an extra. It does not accept endpoint, model, timeout, or credential fields.
 
+Workbench System Overview shows onboarding status and can run the same `POST /v1/onboarding` path. The button does not save the workflow draft and does not execute tools.
+
 ## Safety boundary
 
 - The dry-run uses the mock planner. No provider request is sent.

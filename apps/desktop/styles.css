@@ -146,6 +146,26 @@ textarea:focus {
   margin-top: 20px;
 }
 
+.nav-group {
+  display: grid;
+  gap: 4px;
+}
+
+.nav-group + .nav-group {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.nav-group-label {
+  margin: 0 0 2px;
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .nav-list a {
   color: var(--ink);
   text-decoration: none;
@@ -155,6 +175,11 @@ textarea:focus {
 
 .nav-list a:hover {
   background: #edf1ed;
+}
+
+.section-copy {
+  color: var(--muted);
+  margin: 6px 0 0;
 }
 
 .main {
@@ -394,6 +419,19 @@ button:disabled {
 .section-state {
   color: var(--muted);
   font-size: 12px;
+}
+
+.daily-attention {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-strong);
+}
+
+.daily-attention.error {
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .item-list {

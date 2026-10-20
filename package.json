@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "The open-source SuperAgent OS for future super individuals and super teams.",
+  "description": "A local Agent control plane for one person, one machine, and one workspace.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -15,6 +15,7 @@
   "homepage": "https://github.com/zlx101/SpruceAgent#readme",
   "keywords": [
     "agent",
+    "control-plane",
     "superagent",
     "ai-agent",
     "workflow",
@@ -31,6 +32,7 @@
     "deploy:preflight": "node apps/cli/bin/spruce.js deploy preflight",
     "release:verify": "node scripts/release-verify.js",
     "alpha:smoke": "node scripts/alpha-smoke.js",
+    "daily:smoke": "node scripts/daily-smoke.js",
     "check": "node scripts/syntax-check.js",
     "test": "node --test"
   },

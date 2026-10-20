@@ -51,13 +51,19 @@ Workflow Editor v0 creates definitions only.
 
 ## Current Limits
 
-Workflow Editor v0 does not yet provide:
+The create form still does not load an existing workflow for in-place PATCH.
 
-- visual step reordering
-- editing existing workflows
-- deleting or archiving workflows
-- validation preview per step
-- workflow version history
+Workflow Builder and the Workflows list already provide:
+
+- step field editing before save
+- step reorder (up/down), duplicate, and remove
+- archive without deletion
+- version history and restore-as-new-revision
+
+Still not provided:
+
+- drag-and-drop reorder
+- per-step validation preview
 - workflow templates
 - team permissions
 

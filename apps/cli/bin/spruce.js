@@ -176,6 +176,8 @@ import {
   runDeploymentPreflight,
   getGatewayOnboardingContract,
   getGatewayOnboardingStatus,
+  getDailyLoopAttention,
+  normalizeGatewayTrustMode,
   runDoctor,
   runGatewayOnboarding,
   runDueAutopilots,
@@ -289,6 +291,7 @@ async function main() {
       releaseVerificationCount: listReleaseVerifications(store, { limit: 1 }).summary.total,
       releaseArtifactManifestCount: listReleaseArtifactManifests(store, { limit: 1 }).summary.total,
       gateway: getGatewayAuthStatus(store),
+      daily: getDailyLoopAttention(store),
     });
     return;
   }
@@ -452,7 +455,7 @@ async function handleRun(firstArg, args) {
   const result = await runAgent(store, {
     goal,
     contextQuery: flags.context,
-    trustMode: flags.trustMode ?? "approve",
+    trustMode: normalizeGatewayTrustMode(flags.trustMode),
     dryRun: Boolean(flags.dryRun),
     contextLimit: flags.contextLimit ?? flags.limit,
     skillId: flags.skill,
@@ -484,7 +487,7 @@ async function handleRunResume(args) {
     traceId,
     stepId: flags.stepId,
     approvalId: flags.approvalId,
-    trustMode: flags.trustMode ?? "approve",
+    trustMode: normalizeGatewayTrustMode(flags.trustMode),
     actor: flags.actor ?? "local-user",
   }));
 }
@@ -2402,16 +2405,31 @@ function printJson(value) {
 function printHelp() {
   const executable = path.basename(process.argv[1] ?? "spruce");
   console.log(`SpruceAgent CLI
+Local Agent control plane for one person, one machine, and one workspace.
 
 Usage:
+
+Daily:
   ${executable} init
   ${executable} doctor
   ${executable} onboard
   ${executable} onboard status
+  ${executable} status
+  ${executable} context index
+  ${executable} context freshness
+  ${executable} context evidence "TrustKernel approval" [--limit 5] [--memoryLimit 3]
+  ${executable} run "Plan safely" --dryRun
+  ${executable} approval list [--status pending]
+  ${executable} approval approve <approvalId>
+  ${executable} run resume <traceId> [--stepId <stepId>] [--approvalId <approvalId>]
+  ${executable} run detail <traceId>
+  ${executable} artifact list [--traceId <traceId>] [--kind tool_result]
+  ${executable} artifact get <artifactId>
+
+Sidecar:
   ${executable} onboard contract
   ${executable} deploy preflight [--host 127.0.0.1] [--port 7357] [--autopilotPollMs 60000] [--requireToken]
   ${executable} deploy contract
-  ${executable} status
   ${executable} run "Summarize TrustKernel" --context "TrustKernel"
   ${executable} run "Summarize TrustKernel" --context "TrustKernel" --requireFreshContext
   ${executable} run "Summarize TrustKernel" --context "TrustKernel" --requireFreshContext --refreshContext
@@ -2420,11 +2438,8 @@ Usage:
   ${executable} run "Promote draft" --context "TrustKernel" --llm mock --promotePlan --dryRun
   ${executable} run "Request candidate approvals" --llm <provider> --promotePlan --requestCandidateApprovals
   ${executable} run "Execute promoted candidate" --context "TrustKernel" --llm <provider> --promotePlan --executeCandidatePlan
-  ${executable} run resume <traceId> [--stepId <stepId>] [--approvalId <approvalId>]
-  ${executable} run detail <traceId>
   ${executable} run detail-contract
   ${executable} run "Execute approved skill" --skill <skillId> --executeSkill
-  ${executable} run "Plan safely" --dryRun
   ${executable} inbox
   ${executable} inbox contract
   ${executable} memory add "content" [--scope project] [--kind note] [--tags a,b]
@@ -2436,9 +2451,7 @@ Usage:
   ${executable} tool list
   ${executable} tool run file.read --path README.md
   ${executable} tool run shell.execute --command "git status" --approved
-  ${executable} approval list [--status pending]
   ${executable} approval queue [--traceKind agent.run|workflow.run]
-  ${executable} approval approve <approvalId>
   ${executable} task create --goal "Ship a reviewed change" --nextAction "Run the focused test"
   ${executable} task list [--status open] [--owner <owner>]
   ${executable} task claim <taskId> --owner <owner>
@@ -2457,17 +2470,12 @@ Usage:
   ${executable} task contract
   ${executable} task event-contract
   ${executable} autopilot runner [--intervalMs 60000] [--limit 100]
-  ${executable} artifact list [--traceId <traceId>] [--kind tool_result]
-  ${executable} artifact get <artifactId>
   ${executable} artifact contract
   ${executable} report trace <traceId> [--format json|markdown] [--includeRaw] [--out trace-report.md]
   ${executable} report contract
   ${executable} tool run file.write --path notes.txt --content "hello" --approvalId <approvalId>
-  ${executable} context index
-  ${executable} context freshness
   ${executable} context preflight [--requireFreshContext] [--refreshContext]
   ${executable} context search "TrustKernel"
-  ${executable} context evidence "TrustKernel approval" [--limit 5] [--memoryLimit 3]
   ${executable} context evidence-contract
   ${executable} context show README.md
   ${executable} policy check --tool shell.execute --command "git status"

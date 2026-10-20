@@ -1,12 +1,36 @@
 # SpruceAgent
 
-> The open-source SuperAgent OS for future super individuals and super teams: omnichannel, memory-native, self-improving, and trust-governed.
+> A local control plane for one person, one machine, and one workspace: results stay yours, every step is traceable.
 
-SpruceAgent is a local-first agent platform designed to evolve beyond today's agent harnesses and become the force multiplier for future super individuals and super teams.
+SpruceAgent is a local-first, trust-governed control plane. You connect to a local Gateway, onboard this workspace, review evidence, dry-run or draft, approve, execute or resume in this repository, then inspect traces and artifacts.
+
+## Is this for you?
+
+Use it if you make, run, or govern an Agent on this machine and in this repository. You use a terminal and Git. You need a result you can open, keep locally, and trace.
+
+Skip it if you want a chat that finishes life tasks, or only an IDE that writes code.
+
+## First result
+
+No model key is required.
+
+```bash
+npm run spruce -- onboard
+npm run spruce -- status
+```
+
+`status.daily` says whether you can continue. Open the dry-run trace from the onboard ledger:
+
+```bash
+npm run spruce -- run detail <traceId>
+npm run spruce -- artifact list --traceId <traceId>
+```
+
+If a step cannot point back to a local file, ticket, or mock draft, the daily loop is not done.
 
 It combines four core ideas:
 
-- **GatewayMesh**: one agent reachable from desktop, CLI, web, chat, mobile, browser, webhooks, and automation triggers.
+- **GatewayMesh**: local Gateway, CLI, and Workbench on this machine, sharing identity and permissions.
 - **ContextOS**: project and personal context as a durable operating layer, not just chat history.
 - **SkillForge**: repeated workflows become versioned, testable, reusable skills.
 - **TrustKernel**: every action is governed by identity, permission, risk, approval, audit, and rollback boundaries.
@@ -15,21 +39,21 @@ It combines four core ideas:
 
 SpruceAgent is named after the spruce tree: evergreen, resilient, upright, and structured.
 
-The metaphor is intentional. SpruceAgent should be rooted in personal context, branch into tools and entrances, keep long-term memory like an evergreen crown, and grow through repeated work without leaving user control.
+The metaphor is intentional. SpruceAgent should be rooted in personal context, branch into local tools and traces, keep long-term memory like an evergreen crown, and grow through repeated work without leaving user control.
 
 See: [Name Origin](docs/spruceagent-name-origin.md)
 
 ## Why SpruceAgent
 
-OpenClaw shows that agents need entrances.
+OpenClaw shows that agents need a surface.
 
-Hermes Agent shows that agents need self-improving runtime.
+Hermes Agent shows that agents need a self-improving runtime.
 
 OpenHuman shows that agents need personal context and product experience.
 
-SpruceAgent is designed as the next layer:
+SpruceAgent is the narrower layer:
 
-> one SuperAgent that can be summoned anywhere, understands your work, learns from repeated tasks, and acts only inside explicit trust boundaries.
+> a control plane for one person in their own repository: get a result, keep that result, and trace every step.
 
 ## Current Stage
 
@@ -38,10 +62,15 @@ SpruceAgent is in local open-source alpha. The trust-governed control plane is i
 Start here:
 
 - [Open Source Alpha Quickstart](docs/open-source-alpha-quickstart.md)
-- [Public Showcase](apps/showcase/index.html)
-- [Public Showcase v0](docs/public-showcase-v0.md)
+- [Desktop UI Workbench v0](docs/desktop-ui-workbench-v0.md)
+- [Gateway Onboarding v0](docs/gateway-onboarding-v0.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security Policy](SECURITY.md)
+
+Also in this repository:
+
+- [Public Showcase](apps/showcase/index.html)
+- [Public Showcase v0](docs/public-showcase-v0.md)
 - [Release Checklist](docs/release-checklist.md)
 - [Repo Release Kit v0](docs/repo-release-kit-v0.md)
 - [SuperAgent Blueprint](docs/spruceagent-superagent-blueprint.md)
@@ -97,7 +126,6 @@ Start here:
 - [Run Continuation v0](docs/run-continuation-v0.md)
 - [Run State / Inbox v0](docs/run-state-inbox-v0.md)
 - [Run Detail / Trace Viewer v0](docs/run-detail-trace-viewer-v0.md)
-- [Desktop UI Workbench v0](docs/desktop-ui-workbench-v0.md)
 - [Workbench Run Launcher v0](docs/workbench-run-launcher-v0.md)
 - [Workbench Workflow Editor v0](docs/workbench-workflow-editor-v0.md)
 - [Workbench Skill / Workflow Runner v0](docs/workbench-skill-workflow-runner-v0.md)
@@ -106,14 +134,27 @@ Start here:
 
 ## Local Core Quickstart
 
+Get a local result first:
+
+```bash
+npm run spruce -- onboard
+npm run spruce -- status
+npm run spruce -- run detail <traceId>
+npm run spruce -- artifact list --traceId <traceId>
+```
+
+Contributor checks stay after the first result:
+
 ```bash
 npm run doctor
+npm run daily:smoke
 npm run alpha:smoke
 npm test
 npm run spruce -- init
+npm run spruce -- onboard
 npm run spruce -- status
-npm run spruce -- memory add "SpruceAgent serves future super individuals and super teams." --tags positioning
-npm run spruce -- memory search "super teams"
+npm run spruce -- memory add "SpruceAgent is a local control plane for one person and one workspace." --tags positioning
+npm run spruce -- memory search "control plane"
 npm run spruce -- trace start "Ship the first SpruceAgent core"
 npm run spruce -- tool list
 npm run spruce -- tool run file.read --path README.md
@@ -194,7 +235,6 @@ npm run spruce -- gateway serve
 # explicit, opt-in local polling host; it only creates open Execution Tasks
 npm run spruce -- gateway serve --autopilotPollMs 60000
 # then open http://127.0.0.1:7357/workbench
-# public showcase: http://127.0.0.1:7357/showcase
 npm run spruce -- tool run shell.execute --command "node -v" --approved
 npm run spruce -- policy check --tool shell.execute --command "git status"
 ```
@@ -218,8 +258,8 @@ Chinese documentation:
 
 ## North Star
 
-SpruceAgent is not a more autonomous black box, and it is not only a personal productivity tool.
+SpruceAgent is not a more autonomous black box.
 
-It is compounding intelligence for individuals and teams under user-owned control.
+It is a control plane for one person, one machine, and one workspace: results stay local, and every step can be traced back.
 
 Execution is governed by one rule: safe enough to trust, reliable enough to depend on, compliant enough to adopt, practical enough to use every day, and simple enough to reason from first principles.

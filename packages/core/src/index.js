@@ -7,6 +7,7 @@ export {
   getGatewayOnboardingStatus,
   runGatewayOnboarding,
 } from "./onboarding.js";
+export { getDailyLoopAttention } from "./daily-loop-attention.js";
 export { addMemory, listMemory, searchMemory } from "./memory.js";
 export { startTrace, appendTraceEvent, listTraces, readTraceEvents } from "./trace.js";
 export { listTools, findTool } from "./tools.js";

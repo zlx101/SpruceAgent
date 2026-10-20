@@ -45,6 +45,15 @@ const steps = Object.freeze([
     expected: "The full Node test suite passes.",
   },
   {
+    id: "daily_smoke",
+    label: "Daily Smoke",
+    operatorCommand: "npm run daily:smoke",
+    commands: [
+      ["scripts/daily-smoke.js"],
+    ],
+    expected: "The daily loop leaves an openable onboard dry-run trace and artifact.",
+  },
+  {
     id: "alpha_smoke",
     label: "Alpha Smoke",
     operatorCommand: "npm run alpha:smoke",

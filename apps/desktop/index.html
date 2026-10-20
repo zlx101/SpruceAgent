@@ -13,7 +13,7 @@
           <img class="brand-mark" src="/workbench/assets/spruce-mark.svg" alt="">
           <div>
             <div class="brand-name">SpruceAgent</div>
-            <div class="brand-subtitle">Workbench</div>
+            <div class="brand-subtitle">Local control plane</div>
           </div>
         </div>
 
@@ -30,25 +30,31 @@
         </form>
 
         <nav class="nav-list" aria-label="Workbench views">
-          <a href="#system">System</a>
-          <a href="#launch">Launch</a>
-          <a href="#context-evidence">Evidence</a>
-          <a href="#workflow-editor">Editor</a>
-          <a href="#workflow-builder">Builder</a>
-          <a href="#skills">Skills</a>
-          <a href="#skillforge">SkillForge</a>
-          <a href="#workflows">Workflows</a>
-          <a href="#agents">Agents</a>
-          <a href="#fleet">Fleet</a>
-          <a href="#squads">Squads</a>
-          <a href="#tasks">Tasks</a>
-          <a href="#workflow-runs">Workflow Runs</a>
-          <a href="#decision-queue">Queue</a>
-          <a href="#approvals">Approvals</a>
-          <a href="#resumable">Resumable</a>
-          <a href="#recent">Recent</a>
-          <a href="#artifacts">Artifacts</a>
-          <a href="#detail">Detail</a>
+          <div class="nav-group" aria-labelledby="nav-daily-label">
+            <p id="nav-daily-label" class="nav-group-label">Daily</p>
+            <a href="#system">System</a>
+            <a href="#launch">Launch</a>
+            <a href="#context-evidence">Evidence</a>
+            <a href="#workflow-builder">Builder</a>
+            <a href="#decision-queue">Queue</a>
+            <a href="#approvals">Approvals</a>
+            <a href="#resumable">Resumable</a>
+            <a href="#artifacts">Artifacts</a>
+            <a href="#detail">Detail</a>
+          </div>
+          <div class="nav-group" aria-labelledby="nav-sidecar-label">
+            <p id="nav-sidecar-label" class="nav-group-label">Sidecar</p>
+            <a href="#workflow-editor">Editor</a>
+            <a href="#skills">Skills</a>
+            <a href="#skillforge">SkillForge</a>
+            <a href="#workflows">Workflows</a>
+            <a href="#agents">Agents</a>
+            <a href="#fleet">Fleet</a>
+            <a href="#squads">Squads</a>
+            <a href="#tasks">Tasks</a>
+            <a href="#workflow-runs">Workflow Runs</a>
+            <a href="#recent">Recent</a>
+          </div>
         </nav>
       </aside>
 
@@ -56,6 +62,7 @@
         <header class="topbar">
           <div>
             <h1>Agent Workbench</h1>
+            <p class="section-copy">Connect → Onboard → evidence → dry-run or draft → approve → execute or resume in this repository → traces and artifacts.</p>
             <p id="status-line">Disconnected</p>
           </div>
           <div class="toolbar">
@@ -63,7 +70,7 @@
           </div>
         </header>
 
-        <section class="summary-grid" aria-label="Run inbox summary">
+        <section class="summary-grid" aria-label="Daily loop summary">
           <article class="metric">
             <span class="metric-label">Pending</span>
             <strong id="pending-count">0</strong>
@@ -77,44 +84,8 @@
             <strong id="resumable-count">0</strong>
           </article>
           <article class="metric">
-            <span class="metric-label">Recent</span>
-            <strong id="recent-count">0</strong>
-          </article>
-          <article class="metric">
             <span class="metric-label">Artifacts</span>
             <strong id="artifact-count">0</strong>
-          </article>
-          <article class="metric">
-            <span class="metric-label">Agents</span>
-            <strong id="agent-adapter-count">0</strong>
-          </article>
-          <article class="metric">
-            <span class="metric-label">Workspaces</span>
-            <strong id="agent-workspace-count">0</strong>
-          </article>
-          <article class="metric">
-            <span class="metric-label">Launches</span>
-            <strong id="agent-launch-count">0</strong>
-          </article>
-          <article class="metric">
-            <span class="metric-label">Reviews</span>
-            <strong id="launch-review-count">0</strong>
-          </article>
-          <article class="metric">
-            <span class="metric-label">Routes</span>
-            <strong id="task-route-count">0</strong>
-          </article>
-          <article class="metric">
-            <span class="metric-label">Fleet</span>
-            <strong id="fleet-run-count">0</strong>
-          </article>
-          <article class="metric">
-            <span class="metric-label">Tasks</span>
-            <strong id="execution-task-count">0</strong>
-          </article>
-          <article class="metric">
-            <span class="metric-label">Autopilots</span>
-            <strong id="autopilot-count">0</strong>
           </article>
         </section>
 
@@ -123,7 +94,14 @@
             <h2>System Overview</h2>
             <span id="system-state" class="section-state">Disconnected</span>
           </div>
+          <p id="daily-attention" class="daily-attention">Disconnected. Connect with a Gateway token before onboarding.</p>
           <div id="system-overview" class="overview-grid"></div>
+          <div class="section-heading subheading">
+            <h3>Onboarding</h3>
+            <span id="onboarding-state" class="section-state">Not run</span>
+          </div>
+          <button id="onboarding-run-button" class="secondary-button" type="button">Run Onboarding</button>
+          <pre id="onboarding-panel" class="json-view artifact-preview">{}</pre>
           <div class="section-heading subheading">
             <h3>Release Verification Records</h3>
             <span class="section-state">Local evidence</span>
@@ -141,7 +119,7 @@
         <section id="launch" class="work-section">
           <div class="section-heading">
             <h2>Launch Run</h2>
-            <span id="launch-state" class="section-state">Ready</span>
+            <span id="launch-state" class="section-state">Not connected</span>
           </div>
           <form id="run-form" class="run-form">
             <label class="field-wide">
@@ -202,7 +180,7 @@
         <section id="context-evidence" class="work-section">
           <div class="section-heading">
             <h2>Context Evidence</h2>
-            <span id="context-evidence-state" class="section-state">Ready</span>
+            <span id="context-evidence-state" class="section-state">Not connected</span>
           </div>
           <form id="context-evidence-form" class="run-form">
             <label class="field-wide">
@@ -270,7 +248,7 @@
         <section id="workflow-builder" class="work-section">
           <div class="section-heading">
             <h2>Workflow Builder</h2>
-            <span id="workflow-builder-state" class="section-state">Ready</span>
+            <span id="workflow-builder-state" class="section-state">Not connected</span>
           </div>
           <form id="workflow-builder-form" class="run-form">
             <label>

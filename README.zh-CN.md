@@ -1,12 +1,36 @@
 # SpruceAgent
 
-> 面向未来超级个人与超级团队的开源 SuperAgent OS：多入口、原生记忆、自我进化、可信可控。
+> 给一个人、一台机器、一个工作区的本机控制面：结果归自己，每一步能溯源。
 
-SpruceAgent 是一个 local-first 的智能体平台。它不是再做一个普通 Agent framework，而是要成为未来超级个人与超级团队的神兵利器。
+SpruceAgent 是 local-first、信任治理的控制面。你连上本机 Gateway，给当前工作区做 Onboard，看证据，dry-run 或出草稿，审批后在本仓库执行或恢复，再看痕迹与产物。
+
+## 这是不是给你用的
+
+适合在本机、本仓库里造 / 跑 / 管 Agent 的人。你会用终端和 Git。你要的是能打开、归自己、能溯源的结果。
+
+不适合只想用对话把生活办完的人，也不适合只用 IDE 写代码的人。
+
+## 先拿到结果
+
+不需要模型密钥。
+
+```bash
+npm run spruce -- onboard
+npm run spruce -- status
+```
+
+看 `status.daily` 能不能继续。用 onboard 账本里的 dry-run trace 打开痕迹：
+
+```bash
+npm run spruce -- run detail <traceId>
+npm run spruce -- artifact list --traceId <traceId>
+```
+
+一步指不回本机文件、审批票或 mock 草稿，日用环就不算完成。
 
 它由四个核心能力构成：
 
-- **GatewayMesh**：一个 Agent，可以从桌面、CLI、Web、聊天软件、移动端、浏览器、Webhook 和自动化触发器唤起。
+- **GatewayMesh**：本机 Gateway、CLI 和 Workbench，同一身份、同一权限。
 - **ContextOS**：把项目和个人上下文变成长程操作层，而不只是保存聊天记录。
 - **SkillForge**：把重复工作沉淀成可版本化、可测试、可复用的技能。
 - **TrustKernel**：每一个行动都受到身份、权限、风险、审批、审计和回滚边界约束。
@@ -15,21 +39,21 @@ SpruceAgent 是一个 local-first 的智能体平台。它不是再做一个普�
 
 SpruceAgent 的名字来自“云杉”。
 
-云杉常青、耐寒、挺拔、有秩序。这个隐喻不是装饰，而是项目的气质：扎根于个人上下文，分枝到工具和入口，像常青树一样保留长期记忆，并在用户控制之下持续生长。
+云杉常青、耐寒、挺拔、有秩序。这个隐喻不是装饰，而是项目的气质：扎根于个人上下文，分枝到本机工具和痕迹，像常青树一样保留长期记忆，并在用户控制之下持续生长。
 
 详见：[名字由来](docs/spruceagent-name-origin.md)
 
 ## 为什么是 SpruceAgent
 
-OpenClaw 证明了 Agent 需要入口。
+OpenClaw 证明了 Agent 需要操作面。
 
 Hermes Agent 证明了 Agent 需要自我进化的运行时。
 
 OpenHuman 证明了 Agent 需要个人上下文和产品体验。
 
-SpruceAgent 要做的是它们之上的下一层：
+SpruceAgent 做的是更窄的一层：
 
-> 一个可以从任何地方被召唤、理解你的工作、从重复任务中学习，并且始终处在用户控制之下的 SuperAgent。
+> 一个人在自己仓库里拿到结果、结果归自己、每一步能溯源的控制面。
 
 ## 当前阶段
 
@@ -38,10 +62,15 @@ SpruceAgent 目前处于本地开源 alpha：信任治理控制平面已可在�
 建议先读：
 
 - [Open Source Alpha Quickstart](docs/open-source-alpha-quickstart.md)
-- [公开展示页](apps/showcase/index.html)
-- [Public Showcase v0](docs/public-showcase-v0.md)
+- [Desktop UI Workbench v0](docs/desktop-ui-workbench-v0.md)
+- [Gateway Onboarding v0](docs/gateway-onboarding-v0.md)
 - [贡献指南](CONTRIBUTING.md)
 - [安全策略](SECURITY.md)
+
+其余文档：
+
+- [公开展示页](apps/showcase/index.html)
+- [Public Showcase v0](docs/public-showcase-v0.md)
 - [发布检查清单](docs/release-checklist.md)
 - [Repo Release Kit v0](docs/repo-release-kit-v0.md)
 - [SuperAgent 蓝图](docs/spruceagent-superagent-blueprint.md)
@@ -84,7 +113,6 @@ SpruceAgent 目前处于本地开源 alpha：信任治理控制平面已可在�
 - [Run Continuation v0](docs/run-continuation-v0.md)
 - [Run State / Inbox v0](docs/run-state-inbox-v0.md)
 - [Run Detail / Trace Viewer v0](docs/run-detail-trace-viewer-v0.md)
-- [Desktop UI Workbench v0](docs/desktop-ui-workbench-v0.md)
 - [Workbench Run Launcher v0](docs/workbench-run-launcher-v0.md)
 - [Workbench Workflow Editor v0](docs/workbench-workflow-editor-v0.md)
 - [Workbench Skill / Workflow Runner v0](docs/workbench-skill-workflow-runner-v0.md)
@@ -95,11 +123,24 @@ SpruceAgent 目前处于本地开源 alpha：信任治理控制平面已可在�
 
 ## 本地快速开始
 
+先拿到本机结果：
+
+```bash
+npm run spruce -- onboard
+npm run spruce -- status
+npm run spruce -- run detail <traceId>
+npm run spruce -- artifact list --traceId <traceId>
+```
+
+贡献者检查放在拿到结果之后：
+
 ```bash
 npm run doctor
+npm run daily:smoke
 npm run alpha:smoke
 npm test
 npm run spruce -- init
+npm run spruce -- onboard
 npm run spruce -- status
 npm run spruce -- context index
 npm run spruce -- context search "TrustKernel" --limit 3
@@ -121,13 +162,9 @@ npm run spruce -- gateway serve --port 7357 --autopilotPollMs 60000
 http://127.0.0.1:7357/workbench
 ```
 
-公开展示页：
+连接 Token 后，日用环是：Connect → Onboard → 索引/证据 → dry-run 或草稿 → 审批 → 在本仓库执行或恢复 → 看痕迹与产物。System Overview 的 Run Onboarding 与 `spruce onboard` 相同：本地 mock dry-run，不保存 workflow，不执行工具。
 
-```text
-http://127.0.0.1:7357/showcase
-```
-
-Workbench 当前用于查看状态、检索上下文、启动 run、审批候选动作、运行 workflow、查看 trace，并进入 SkillForge 的评估、晋升、回放和包导入导出流程。
+Workbench 日用面是 System、Launch、Evidence、Builder、Queue、Approvals、Resumable、Artifacts、Detail。Editor、Skills、SkillForge、Fleet、Squads 等仍可打开，不是日用入口。
 
 ## 安全边界
 

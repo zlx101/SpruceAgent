@@ -161,14 +161,17 @@ Highest value after Workflow Builder v0:
    - Edit generated workflow steps before saving.
    - Reorder, delete, duplicate, and inspect metadata.
    - Keep all saves versioned.
+   - Implemented on Workbench Workflow Builder (edit, up/down, duplicate, remove, source map). Saves remain versioned workflow revisions. Drag-and-drop reorder is still out of scope.
 
 2. ContextOS Source Map v0
    - Show which files and memories influenced a draft/run.
    - Add source type, freshness, sensitivity, and confidence.
+   - Implemented. See [ContextOS Source Map v0](contextos-source-map-v0.md).
 
 3. SkillForge Evaluation Harness v0
    - Evaluate candidate skills against prior traces.
    - Record pass/fail evidence before approval.
+   - Implemented. See [SkillForge Evaluation Harness v0](skillforge-evaluation-harness-v0.md).
 
 4. Gateway Onboarding v0
    - Guided setup for token, context index, provider, first dry run, first workflow draft.
@@ -176,6 +179,7 @@ Highest value after Workflow Builder v0:
 
 5. Showcase Page v0
    - Public-facing landing page that demonstrates the full SpruceAgent loop in one screen.
+   - Implemented. See [Public Showcase v0](public-showcase-v0.md).
 
 ## Source Review Notes
 

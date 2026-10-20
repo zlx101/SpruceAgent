@@ -117,6 +117,7 @@ import {
   getDeploymentPreflightContract,
   getGatewayOnboardingContract,
   getGatewayOnboardingStatus,
+  getDailyLoopAttention,
   runGatewayOnboarding,
   getReleaseVerification,
   getReleaseVerificationContract,
@@ -227,6 +228,7 @@ import {
   cancelFleetRun,
 } from "../packages/core/src/index.js";
 import { buildExternalCliInvocation } from "../packages/core/src/external-cli-launcher.js";
+import { evaluateDailyLoopAttention } from "../packages/core/src/daily-loop-attention.js";
 
 test("workspace store initializes core files", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
@@ -674,6 +676,129 @@ test("gateway onboarding runs a mock dry-run without a model or tool execution",
   assert.equal(getGatewayOnboardingStatus(store).status, "ready");
 });
 
+test("daily loop attention reports pending, blocked, and ready from the local store", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const store = ensureStore(createStore(dir));
+
+  const empty = getDailyLoopAttention(store);
+  assert.equal(empty.kind, "pending");
+  assert.match(empty.text, /Index missing/);
+  assert.match(empty.text, /Do not invent context/);
+
+  fs.writeFileSync(path.join(dir, "README.md"), "TrustKernel governs every action.", "utf8");
+  buildWorkspaceIndex(store);
+  const indexed = getDailyLoopAttention(store);
+  assert.equal(indexed.kind, "pending");
+  assert.equal(indexed.text, "Onboarding has not run.");
+
+  const report = await runGatewayOnboarding(store);
+  assert.equal(report.status, "ready");
+  assert.ok(report.ledger.lastDryRunTraceId);
+  const ready = getDailyLoopAttention(store);
+  assert.equal(ready.kind, "ok");
+  assert.equal(ready.text, "Daily loop ready. Results stay in this workspace.");
+
+  const blocked = evaluateDailyLoopAttention({
+    onboarding: {
+      status: "failed",
+      updatedAt: report.updatedAt,
+      steps: [{ id: "dry_run", status: "failed", detail: "Mock dry-run blocked; tool results 1." }],
+      ledger: { lastDryRunTraceId: report.ledger.lastDryRunTraceId },
+    },
+    freshness: "fresh",
+    inbox: { summary: { pendingApprovalCount: 0, resumableRunCount: 0 } },
+    queue: { summary: { pendingDecisionCount: 0 } },
+  });
+  assert.equal(blocked.kind, "blocked");
+  assert.equal(blocked.text, "Mock dry-run blocked; tool results 1.");
+
+  const missingTrace = evaluateDailyLoopAttention({
+    onboarding: {
+      status: "ready",
+      updatedAt: report.updatedAt,
+      steps: [],
+      ledger: { lastDryRunTraceId: null },
+    },
+    freshness: "fresh",
+    inbox: { summary: { pendingApprovalCount: 0, resumableRunCount: 0 } },
+    queue: { summary: { pendingDecisionCount: 0 } },
+  });
+  assert.equal(missingTrace.kind, "pending");
+  assert.equal(missingTrace.text, "Onboarding has no dry-run trace. The step is not complete.");
+
+  const ticket = createApprovalTicket(store, {
+    toolName: "file.write",
+    input: { path: "notes.txt", content: "hello" },
+    decision: evaluatePolicy({
+      toolName: "file.write",
+      input: { path: "notes.txt", content: "hello" },
+    }),
+    traceId: report.ledger.lastDryRunTraceId,
+  });
+  assert.equal(ticket.status, "pending");
+  const waiting = getDailyLoopAttention(store);
+  assert.equal(waiting.kind, "pending");
+  assert.match(waiting.text, /Approvals pending:/);
+  assert.match(waiting.text, /Resume stays manual/);
+
+  fs.writeFileSync(path.join(dir, "NOTES.md"), "A new indexed file makes the context stale.", "utf8");
+  const stale = getDailyLoopAttention(store);
+  assert.equal(stale.kind, "pending");
+  assert.match(stale.text, /Index stale/);
+  assert.match(stale.text, /Do not invent context/);
+
+  const incompleteDir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const incompleteStore = ensureStore(createStore(incompleteDir));
+  fs.writeFileSync(path.join(incompleteDir, "README.md"), "TrustKernel governs every action.", "utf8");
+  buildWorkspaceIndex(incompleteStore);
+  fs.writeFileSync(path.join(incompleteStore.root, "onboarding.json"), JSON.stringify({
+    version: "0.1.0",
+    updatedAt: "2026-10-21T00:00:00.000Z",
+    completedSteps: ["store"],
+  }), "utf8");
+  const incomplete = getDailyLoopAttention(incompleteStore);
+  assert.equal(incomplete.kind, "pending");
+  assert.equal(incomplete.text, "Onboarding incomplete.");
+});
+
+test("spruce status JSON and help expose the daily control-plane surface", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const cli = path.resolve("apps", "cli", "bin", "spruce.js");
+  const status = JSON.parse(execFileSync(process.execPath, [cli, "status"], {
+    cwd: dir,
+    encoding: "utf8",
+  }));
+  assert.equal(typeof status.root, "string");
+  assert.ok(["ok", "pending", "blocked"].includes(status.daily.kind));
+  assert.equal(typeof status.daily.text, "string");
+  assert.equal(typeof status.pendingApprovalCount, "number");
+  assert.equal(typeof status.gateway.tokenConfigured, "boolean");
+
+  const help = execFileSync(process.execPath, [cli], { encoding: "utf8" });
+  assert.match(help, /^SpruceAgent CLI/m);
+  assert.match(help, /Local Agent control plane for one person, one machine, and one workspace/);
+  assert.match(help, /^Daily:/m);
+  assert.match(help, /^Sidecar:/m);
+  assert.match(help, /onboard status/);
+  assert.match(help, /context index/);
+  assert.match(help, /gateway serve/);
+  assert.equal(help.includes("SuperAgent OS"), false);
+});
+
+test("spruce run refuses delegate trustMode", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  const cli = path.resolve("apps", "cli", "bin", "spruce.js");
+  try {
+    execFileSync(process.execPath, [cli, "run", "Plan safely", "--dryRun", "--trustMode", "delegate"], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    assert.fail("spruce run should refuse delegate trustMode");
+  } catch (error) {
+    assert.match(String(error.stderr || error.message), /refuses trustMode delegate/);
+  }
+});
+
 test("deployment preflight reports local runtime readiness without exposing tokens", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
   const store = ensureStore({ cwd: path.resolve("."), root: path.join(dir, ".spruceagent") });
@@ -832,12 +957,20 @@ test("release verification gate is shared by package scripts, CI, and docs", () 
 
   assert.equal(packageJson.scripts["release:verify"], "node scripts/release-verify.js");
   assert.equal(packageJson.scripts.check, "node scripts/syntax-check.js");
+  assert.match(packageJson.description, /control plane/);
+  assert.equal(packageJson.description.includes("SuperAgent OS"), false);
   assert.match(ci, /npm run release:verify/);
   assert.match(checklist, /npm run release:verify/);
   assert.match(quickstart, /npm run release:verify/);
+  assert.match(quickstart, /npm run spruce -- onboard/);
+  assert.match(quickstart, /status\.daily/);
+  assert.match(quickstart, /run detail/);
+  assert.equal(quickstart.indexOf("npm run spruce -- onboard") < quickstart.indexOf("npm test"), true);
   assert.match(script, /RELEASE_VERIFICATION_CONTRACT/);
   assert.match(script, /persistReleaseVerificationReport/);
   assert.match(script, /scripts\/syntax-check\.js/);
+  assert.match(script, /scripts\/daily-smoke\.js/);
+  assert.match(packageJson.scripts["daily:smoke"], /daily-smoke/);
   const checkScript = fs.readFileSync(path.resolve("scripts", "syntax-check.js"), "utf8");
   assert.match(checkScript, /packages.*core.*src/);
   assert.match(checkScript, /apps/);
@@ -855,9 +988,45 @@ test("release verification gate is shared by package scripts, CI, and docs", () 
   assert.equal(executionTaskEventSchema.properties.interface.const, "spruceagent.execution-task-events");
   assert.ok(executionTaskEventSchema.properties.type.enum.includes("execution_task.handed_off"));
   assert.ok(executionTaskEventSchema.properties.type.enum.includes("execution_task.completed"));
-  for (const command of ["doctor", "deploy:preflight", "check", "test", "alpha:smoke"]) {
+  for (const command of ["doctor", "deploy:preflight", "check", "test", "daily:smoke", "alpha:smoke"]) {
     assert.match(script, new RegExp(command.replace(":", ":")));
   }
+});
+
+test("delivery docs put the three-step first result before contributor checks", () => {
+  const readme = fs.readFileSync(path.resolve("README.md"), "utf8");
+  const readmeZh = fs.readFileSync(path.resolve("README.zh-CN.md"), "utf8");
+  const contributing = fs.readFileSync(path.resolve("CONTRIBUTING.md"), "utf8");
+  const dailySmoke = fs.readFileSync(path.resolve("scripts", "daily-smoke.js"), "utf8");
+
+  assert.match(readme, /Is this for you\?/);
+  assert.match(readme, /npm run spruce -- onboard/);
+  assert.match(readme, /npm run spruce -- status/);
+  assert.match(readme, /run detail <traceId>/);
+  assert.equal(readme.indexOf("npm run spruce -- onboard") < readme.indexOf("npm test"), true);
+  assert.match(readmeZh, /这是不是给你用的/);
+  assert.equal(readmeZh.indexOf("npm run spruce -- onboard") < readmeZh.indexOf("npm test"), true);
+  assert.match(contributing, /daily surface/);
+  assert.match(dailySmoke, /runGatewayOnboarding/);
+  assert.match(dailySmoke, /getDailyLoopAttention/);
+  assert.match(dailySmoke, /getRunDetail/);
+  assert.match(dailySmoke, /listArtifacts/);
+});
+
+test("daily smoke onboard leaves an openable dry-run trace and artifact", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "spruceagent-"));
+  fs.writeFileSync(path.join(dir, "README.md"), "TrustKernel governs every action.", "utf8");
+  const store = ensureStore(createStore(dir));
+  const report = await runGatewayOnboarding(store);
+  const daily = getDailyLoopAttention(store);
+  const detail = getRunDetail(store, report.ledger.lastDryRunTraceId);
+  const artifacts = listArtifacts(store, { traceId: report.ledger.lastDryRunTraceId });
+
+  assert.equal(report.status, "ready");
+  assert.equal(report.dryRun.toolResultCount, 0);
+  assert.notEqual(daily.kind, "blocked");
+  assert.equal(detail.traceId, report.ledger.lastDryRunTraceId);
+  assert.ok(artifacts.items.some((item) => item.kind === "run_summary"));
 });
 
 test("memory add and search works", () => {
@@ -2668,9 +2837,9 @@ test("gateway serves workbench static assets without API auth", async () => {
     assert.equal(css.status, 200);
     assert.equal(js.status, 200);
     assert.equal(mark.status, 200);
-    assert.match(html.body, /System Overview|system-overview|Release Verification Records|release-verification-list|release-verification-panel|Release Artifact Manifests|release-artifact-list|release-artifact-panel|Launch Run|Context Evidence|context-evidence-list|context-evidence-panel|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Agent Adapters|agent-adapter-list|agent-plan-panel|Agent Workspaces|agent-workspace-list|agent-workspace-panel|Agent Launches|agent-launch-list|agent-launch-panel|Launch Reviews|launch-review-list|launch-review-panel|Agent Routing|capability-probe-button|task-route-button|task-route-list|task-route-panel|Fleet Runs|fleet-run-list|fleet-run-panel|Execution Tasks|Execution Task events are append-only local control-state records|execution-task-create-button|execution-task-list|execution-task-panel|Autopilots|autopilot-create-button|autopilot-run-due-button|autopilot-list|autopilot-panel|Workflow Versions|Workflow Runs|Decision Queue|decision-queue-list|Artifacts|artifact-list|artifact-panel|Run Detail/);
-    assert.match(css.body, /Agent Workbench|summary-grid|overview-grid|overview-item|work-section|detail-panel|run-form|draft-step-list|draft-step-fields|source-map-list|evaluation-preview|artifact-preview|evidence-preview|fleet-run-preview|agent-plan-preview|agent-workspace-preview|agent-launch-preview/);
-    assert.match(js.body, /submitRun|searchContextEvidenceFromWorkbench|renderSystemOverview|deploymentPreflightSummary|gatewayRuntimeSummary|\/v1\/deployment\/preflight|\/v1\/gateway\/runtime|renderContextEvidence|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|prepareAgentWorkspaceFromWorkbench|previewAgentLaunch|loadAgentWorkspace|loadAgentLaunch|createLaunchReviewFromWorkbench|loadLaunchReview|probeCapabilitiesFromWorkbench|routeTaskFromWorkbench|loadTaskRoute|renderAgentAdapters|renderAgentPlanPanel|renderAgentWorkspacePanel|renderAgentLaunches|renderAgentLaunchPanel|renderLaunchReviews|renderLaunchReviewPanel|renderCapabilityProbePanel|renderTaskRoutes|renderTaskRoutePanel|renderFleetRuns|renderFleetRunPanel|renderExecutionTasks|renderAutopilots|renderAutopilotPanel|runDueAutopilotsFromWorkbench|loadAutopilotTriggers|createExecutionTaskFromWorkbench|handleExecutionTaskAction|execution-task-links|execution-task-follow-up|execution-task-closure|execution-task-lineage|execution-task-events|\/v1\/execution-tasks\/.*\/events\?limit=50|execution-task-handoff|execution-task-cancel|execution-task-block|execution-task-resume|execution-task-reference-view|loadExecutionTaskReference|completionSummary|cancellationSummary|resumptionSummary|handoffSummary|ifUpdatedAt|blocker|loadExecutionTasks|fleetRunViewButton|loadFleetRun|taskRouteViewButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|agentWorkspaces|agentLaunches|launchReviews|capabilityProbes|taskRoutes|fleetRuns|executionTasks|autopilots|resume|inbox|approval/i);
+    assert.match(html.body, /nav-daily-label|nav-sidecar-label|daily-attention|Local control plane|Connect → Onboard|Not connected|System Overview|system-overview|onboarding-run-button|Onboarding|Release Verification Records|release-verification-list|release-verification-panel|Release Artifact Manifests|release-artifact-list|release-artifact-panel|Launch Run|Context Evidence|context-evidence-list|context-evidence-panel|Workflow Editor|Workflow Builder|Add Context|Add Skill|Add Memory|workflow-source-map|Approved Skills|SkillForge|Skill Evaluations|Workflows|Agent Adapters|agent-adapter-list|agent-plan-panel|Agent Workspaces|agent-workspace-list|agent-workspace-panel|Agent Launches|agent-launch-list|agent-launch-panel|Launch Reviews|launch-review-list|launch-review-panel|Agent Routing|capability-probe-button|task-route-button|task-route-list|task-route-panel|Fleet Runs|fleet-run-list|fleet-run-panel|Execution Tasks|Execution Task events are append-only local control-state records|execution-task-create-button|execution-task-list|execution-task-panel|Autopilots|autopilot-create-button|autopilot-run-due-button|autopilot-list|autopilot-panel|Workflow Versions|Workflow Runs|Decision Queue|decision-queue-list|Artifacts|artifact-list|artifact-panel|Run Detail/);
+    assert.match(css.body, /nav-group|daily-attention|Agent Workbench|summary-grid|overview-grid|overview-item|work-section|detail-panel|run-form|draft-step-list|draft-step-fields|source-map-list|evaluation-preview|artifact-preview|evidence-preview|fleet-run-preview|agent-plan-preview|agent-workspace-preview|agent-launch-preview/);
+    assert.match(js.body, /submitRun|searchContextEvidenceFromWorkbench|renderSystemOverview|runOnboardingFromWorkbench|renderOnboardingPanel|dailyLoopAttention|applyDailyLoopSurface|status\.daily|Daily loop ready|onboardingSummary|\/v1\/onboarding|deploymentPreflightSummary|gatewayRuntimeSummary|\/v1\/deployment\/preflight|\/v1\/gateway\/runtime|renderContextEvidence|createWorkflowFromWorkbench|draftWorkflowFromWorkbench|saveWorkflowDraftFromWorkbench|addWorkflowDraftStep|moveWorkflowDraftStep|removeWorkflowDraftStep|duplicateWorkflowDraftStep|runSkill|evaluateSkillFromWorkbench|promoteSkillFromWorkbench|loadSkillEvaluation|runWorkflowFromWorkbench|archiveWorkflowFromWorkbench|restoreWorkflowVersionFromWorkbench|resumeWorkflowRunFromWorkbench|planAgentAdapterRunFromWorkbench|prepareAgentWorkspaceFromWorkbench|previewAgentLaunch|loadAgentWorkspace|loadAgentLaunch|createLaunchReviewFromWorkbench|loadLaunchReview|probeCapabilitiesFromWorkbench|routeTaskFromWorkbench|loadTaskRoute|renderAgentAdapters|renderAgentPlanPanel|renderAgentWorkspacePanel|renderAgentLaunches|renderAgentLaunchPanel|renderLaunchReviews|renderLaunchReviewPanel|renderCapabilityProbePanel|renderTaskRoutes|renderTaskRoutePanel|renderFleetRuns|renderFleetRunPanel|renderExecutionTasks|renderAutopilots|renderAutopilotPanel|runDueAutopilotsFromWorkbench|loadAutopilotTriggers|createExecutionTaskFromWorkbench|handleExecutionTaskAction|execution-task-links|execution-task-follow-up|execution-task-closure|execution-task-lineage|execution-task-events|\/v1\/execution-tasks\/.*\/events\?limit=50|execution-task-handoff|execution-task-cancel|execution-task-block|execution-task-resume|execution-task-reference-view|loadExecutionTaskReference|completionSummary|cancellationSummary|resumptionSummary|handoffSummary|ifUpdatedAt|blocker|loadExecutionTasks|fleetRunViewButton|loadFleetRun|taskRouteViewButton|loadWorkflowDetail|loadArtifact|loadTraceReport|reportButton|downloadText|handleDecisionQueueAction|renderDecisionQueue|renderArtifacts|renderArtifactPanel|approvalQueue|artifacts|agentAdapters|agentWorkspaces|agentLaunches|launchReviews|capabilityProbes|taskRoutes|fleetRuns|executionTasks|autopilots|resume|inbox|approval/i);
     assert.match(js.body, /Release Verification|renderReleaseVerifications|renderReleaseVerificationPanel|releaseVerificationSummary|releaseVerificationStatus|releaseVerificationViewButton|loadReleaseVerification|\/v1\/release-verifications\?limit=10/);
     assert.match(js.body, /Release Artifacts|renderReleaseArtifactManifests|renderReleaseArtifactManifestPanel|releaseArtifactManifestSummary|releaseArtifactManifestStatus|releaseArtifactManifestViewButton|loadReleaseArtifactManifest|\/v1\/release-artifacts\?limit=10/);
     assert.match(js.body, /setAutopilotEnabledFromWorkbench|editAutopilotFromWorkbench|autopilot-edit|autopilot-enable|autopilot-disable|ifUpdatedAt/);
@@ -2699,7 +2868,7 @@ test("gateway serves showcase static assets without API auth", async () => {
     assert.equal(html.status, 200);
     assert.equal(css.status, 200);
     assert.equal(js.status, 200);
-    assert.match(html.body, /SpruceAgent|SuperAgent OS|ContextOS|SkillForge|TrustKernel|GatewayMesh|Run locally/);
+    assert.match(html.body, /SpruceAgent|local control plane|ContextOS|SkillForge|TrustKernel|GatewayMesh|Run locally/);
     assert.match(css.body, /product-scene|loop-track|plane-grid|feature-matrix|quickstart/);
     assert.match(js.body, /preferredLanguage|scrollIntoView/);
   } finally {
@@ -2813,6 +2982,8 @@ test("gateway client reads status and route contract", async () => {
     assert.equal(status.releaseArtifactManifestCount, 0);
     assert.equal(status.outcomeFixtureCount, 0);
     assert.equal(status.outcomeResultCount, 0);
+    assert.ok(["ok", "pending", "blocked"].includes(status.daily.kind));
+    assert.equal(typeof status.daily.text, "string");
     assert.equal(artifacts.status, "empty");
     assert.equal(workflowInbox.version, "0.1.0");
     assert.equal(workflowInboxContract.interface, "spruceagent.workflow-inbox");

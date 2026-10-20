@@ -33,6 +33,7 @@ Workbench:
 - add context, skill, and memory steps
 - edit step fields
 - move steps up or down
+- duplicate draft steps
 - remove draft steps
 - JSON preview for audit before saving
 - explicit `Save Draft` button

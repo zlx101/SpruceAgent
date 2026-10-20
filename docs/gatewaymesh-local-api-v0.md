@@ -97,6 +97,16 @@ Deployment preflight:
 curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/deployment/preflight
 ```
 
+Onboarding (mock dry-run, no tools, no model):
+
+```bash
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/onboarding/contract
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:7357/v1/onboarding
+curl -H "Authorization: Bearer <token>" -X POST http://127.0.0.1:7357/v1/onboarding -d "{}"
+```
+
+`POST /v1/onboarding` accepts `{ "saveWorkflow": true }` only as an extra. It does not accept endpoint, model, timeout, or credential fields.
+
 Gateway runtime state:
 
 ```bash

@@ -109,16 +109,13 @@ This layer does not add authority.
 
 ## Current Limits
 
-Workbench v0 still does not include:
+Workbench already includes workflow run detail, skill version restore, workflow continuation (resume), and Autopilot as a control-plane scheduler that only creates Execution Tasks.
+
+Still not provided:
 
 - skill editor
-- workflow trace detail view
-- skill rollback
-- workflow continuation
-- scheduled workflows
+- workflow-as-cron execution (Autopilot does not run workflows or tools)
 - team permission model
-
-Those should come after the run surfaces are stable.
 
 ## Why It Matters
 

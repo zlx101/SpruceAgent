@@ -34,6 +34,9 @@ The client includes high-level methods:
 
 - `health()`
 - `status()`
+- `onboardingContract()`
+- `onboardingStatus()`
+- `runOnboarding(input)`
 - `releaseVerifications(input)`
 - `releaseVerification(verificationId)`
 - `releaseVerificationContract()`
