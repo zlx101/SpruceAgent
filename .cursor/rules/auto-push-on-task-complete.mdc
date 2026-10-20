@@ -1,0 +1,13 @@
+---
+description: After each completed task, commit and push once
+alwaysApply: true
+---
+
+# 任务完成后自动推送
+
+一次完整任务做完、工作区有应提交的改动时：
+
+1. 提交一次（保留历史；不 force；不 amend；不跳过 hooks；不提交密钥）。
+2. 向当前跟踪的远端推送一次。
+3. 推送经 `127.0.0.1:10808` 代理，只用命令环境或 `git -c http.proxy=...`，不改 git config。
+4. 无改动则不空提交、不空推。
