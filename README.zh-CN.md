@@ -77,6 +77,7 @@ SpruceAgent 目前处于本地开源 alpha：信任治理控制平面已可在�
 
 - [公开展示页](apps/showcase/index.html)
 - [Public Showcase v0](docs/public-showcase-v0.md)
+- [控制面原则：日用闭环](docs/control-plane-daily-loop-principles.md)
 - [发布检查清单](docs/release-checklist.md)
 - [Repo Release Kit v0](docs/repo-release-kit-v0.md)
 - [SuperAgent 蓝图](docs/spruceagent-superagent-blueprint.md)

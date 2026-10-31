@@ -77,6 +77,7 @@ Also in this repository:
 
 - [Public Showcase](apps/showcase/index.html)
 - [Public Showcase v0](docs/public-showcase-v0.md)
+- [Control-plane principles for the daily loop](docs/control-plane-daily-loop-principles.md)
 - [Release Checklist](docs/release-checklist.md)
 - [Repo Release Kit v0](docs/repo-release-kit-v0.md)
 - [SuperAgent Blueprint](docs/spruceagent-superagent-blueprint.md)

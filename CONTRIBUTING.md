@@ -12,6 +12,8 @@ We prioritize work in this order:
 4. Product experience: desktop workbench, clear run state, trace review, and safe action controls.
 5. Ecosystem readiness: package import/export, localization, templates, examples, and public release assets.
 
+Before changing the daily loop, read [Control-plane principles for the daily loop](docs/control-plane-daily-loop-principles.md). It states the rules that must not be traded away and the two known gaps.
+
 ## Local Setup
 
 Requirements:
